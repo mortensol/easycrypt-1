@@ -460,10 +460,9 @@ let subst_instance (s : _subst) tci =
 
 (* -------------------------------------------------------------------- *)
 let subst_tc (s : _subst) tc =
-  let tc_prt = tc.tc_prt |> omap s.s_p in
   let tc_ops = List.map (snd_map s.s_ty) tc.tc_ops in
   let tc_axs = List.map (snd_map (subst_form s)) tc.tc_axs in
-    { tc_prt; tc_ops; tc_axs; }
+    { tc_ops; tc_axs; }
 
 (* -------------------------------------------------------------------- *)
 (* SUBSTITUTION OVER THEORIES *)

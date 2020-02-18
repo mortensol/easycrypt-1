@@ -268,7 +268,6 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) =
 
 (* -------------------------------------------------------------------- *)
 type typeclass = {
-  tc_prt : EcPath.path option;
   tc_ops : (EcIdent.t * EcTypes.ty) list;
   tc_axs : (EcSymbols.symbol * EcCoreFol.form) list;
 }

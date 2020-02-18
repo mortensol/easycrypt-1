@@ -1542,19 +1542,6 @@ module Ty = struct
     check_name_available scope tcd.ptc_name;
 
     let tclass =
-      let uptc =
-        tcd.ptc_inth |> omap
-          (fun { pl_loc = uploc; pl_desc = uptc } ->
-            match EcEnv.TypeClass.lookup_opt uptc scenv with
-            | None -> hierror ~loc:uploc "unknown type-class: `%s'"
-                        (string_of_qsymbol uptc)
-            | Some (tcp, _) -> tcp)
-      in
-
-      let asty  =
-        let body = ofold (fun p tc -> Sp.add p tc) Sp.empty uptc in
-          { tyd_params = []; tyd_type = `Abstract body; } in
-      let scenv = EcEnv.Ty.bind name asty scenv in
 
       (* Check for duplicated field names *)
       Msym.odup unloc (List.map fst tcd.ptc_ops)
@@ -1586,7 +1573,7 @@ module Ty = struct
           tcd.ptc_axs |> List.map check1 in
 
       (* Construct actual type-class *)
-      { tc_prt = uptc; tc_ops = operators; tc_axs = axioms; }
+      { tc_ops = operators; tc_axs = axioms; }
     in
       bindclass scope (name, tclass)
 

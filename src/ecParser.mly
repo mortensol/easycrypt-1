@@ -579,9 +579,9 @@
 %token WLOG
 %token WP
 %token ZETA
+%token EXTENDS
 %token <string> NOP LOP1 ROP1 LOP2 ROP2 LOP3 ROP3 LOP4 ROP4
 %token LTCOLON DASHLT GT LT GE LE LTSTARGT LTLTSTARGT LTSTARGTGT
-
 %nonassoc prec_below_comma
 %nonassoc COMMA ELSE
 
@@ -1595,17 +1595,20 @@ typedecl:
     { [mk_tydecl td (PTYD_Datatype te)] }
 
 (* -------------------------------------------------------------------- *)
-(* Type classes                                                         *)
-typeclass:
-| TYPE CLASS x=lident inth=tc_inth? EQ LBRACE body=tc_body RBRACE {
-    { ptc_name = x;
-      ptc_inth = inth;
-      ptc_ops  = fst body;
-      ptc_axs  = snd body; }
-  }
+(* Type classes*)
+extends:
+| EXTENDS td=tyd_name {td}
 
-tc_inth:
-| LTCOLON x=lqident { x }
+typeclass:
+| TYPE CLASS tca=typarams x=ident ex=extends? EQ LBRACE body=tc_body RBRACE
+  {
+    { ptc_params = tca;
+      ptc_name = x;
+      ptc_ex = ex;
+      ptc_ops  = fst body;
+      ptc_axs  = snd body;
+    }
+  }
 
 tc_body:
 | ops=tc_op* axs=tc_ax* { (ops, axs) }

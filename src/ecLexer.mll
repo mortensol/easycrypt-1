@@ -212,6 +212,8 @@
     "debug"       , DEBUG      ;        (* KW: internal *)
     "pragma"      , PRAGMA     ;        (* KW: internal *)
 
+    "extends"     , EXTENDS    ;        (* KW: global *)
+
     "Top"         , TOP        ;        (* KW: global *)
     "Self"        , SELF       ;        (* KW: global *)
   ]

@@ -1287,13 +1287,7 @@ module TypeClass = struct
     let obj = by_path p env in
       MC.import_typeclass p obj env
 
-  let rebind name tc env =
-    let env = MC.bind_typeclass name tc env in
-      match tc.tc_prt with
-      | None -> env
-      | Some prt ->
-          let myself = EcPath.pqname (root env) name in
-            { env with env_tc = TC.Graph.add ~src:myself ~dst:prt env.env_tc }
+  let rebind name tc env = env
 
   let bind name tc env =
     { (rebind name tc env) with
@@ -2862,10 +2856,6 @@ module Theory = struct
   (* ------------------------------------------------------------------ *)
   let bind_tc_cth =
     let for1 path base = function
-      | CTh_typeclass (x, tc) ->
-          tc.tc_prt |> omap (fun prt ->
-            let src = EcPath.pqname path x in
-            TC.Graph.add ~src ~dst:prt base)
       | _ -> None
 
     in bind_base_cth for1
