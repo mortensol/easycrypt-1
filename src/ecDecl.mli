@@ -153,6 +153,7 @@ val axiomatized_op :
 
 (* -------------------------------------------------------------------- *)
 type typeclass = {
+  tc_params : ty_params;
   tc_ops : (EcIdent.t * EcTypes.ty) list;
   tc_axs : (EcSymbols.symbol * form) list;
 }

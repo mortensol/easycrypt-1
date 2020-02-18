@@ -1542,6 +1542,15 @@ module Ty = struct
     check_name_available scope tcd.ptc_name;
 
     let tclass =
+      (*TODO: params checking*)
+      let params =
+        let check l =
+          let check2 (s1, s2) =
+
+          in
+            l |> List.map check2
+        in
+          tcd.ptc_params |> List.map check
 
       (* Check for duplicated field names *)
       Msym.odup unloc (List.map fst tcd.ptc_ops)
@@ -1573,7 +1582,7 @@ module Ty = struct
           tcd.ptc_axs |> List.map check1 in
 
       (* Construct actual type-class *)
-      { tc_ops = operators; tc_axs = axioms; }
+      { tc_params = params; tc_ops = operators; tc_axs = axioms; }
     in
       bindclass scope (name, tclass)
 
