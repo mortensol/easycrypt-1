@@ -1533,30 +1533,23 @@ module Ty = struct
       scope
 
   (* ------------------------------------------------------------------ *)
-  let add_class (scope : scope) { pl_desc = tcd } =
+  let add_class (scope : scope) info =
     assert (scope.sc_pr_uc = None);
 
-    let name  = unloc tcd.ptc_name in
+    let (args, name, pl_desc)  = info.pl_desc and loc = info.pl_loc in
     let scenv = (env scope) in
 
-    check_name_available scope tcd.ptc_name;
+    check_name_available scope name;
 
     let tclass =
       (*TODO: params checking*)
-      let params =
-        let check l =
-          let check2 (s1, s2) =
-
-          in
-            l |> List.map check2
-        in
-          tcd.ptc_params |> List.map check
-
+      let ue = TT.transtyvars scope.sc_env (loc, Some args) in
+      let params = EcUnify.UniEnv.tparams ue in
       (* Check for duplicated field names *)
-      Msym.odup unloc (List.map fst tcd.ptc_ops)
+      Msym.odup unloc (List.map fst pl_desc.ptc_ops)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated operator name: `%s'" x.pl_desc);
-      Msym.odup unloc (List.map fst tcd.ptc_axs)
+      Msym.odup unloc (List.map fst pl_desc.ptc_axs)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated axiom name: `%s'" x.pl_desc);
 
@@ -1568,7 +1561,7 @@ module Ty = struct
           let ty = Tuni.offun (EcUnify.UniEnv.close ue) ty in
             (EcIdent.create (unloc x), ty)
         in
-          tcd.ptc_ops |> List.map check1 in
+          pl_desc.ptc_ops |> List.map check1 in
 
       (* Check axioms *)
       let axioms =
@@ -1579,12 +1572,12 @@ module Ty = struct
           let ax = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) ax in
             (unloc x, ax)
         in
-          tcd.ptc_axs |> List.map check1 in
+          pl_desc.ptc_axs |> List.map check1 in
 
       (* Construct actual type-class *)
-      { tc_params = params; tc_ops = operators; tc_axs = axioms; }
+      { tc_params = params ; tc_ops = operators; tc_axs = axioms; }
     in
-      bindclass scope (name, tclass)
+      bindclass scope (unloc name, tclass)
 
   (* ------------------------------------------------------------------ *)
   let check_tci_operators env tcty ops reqs =

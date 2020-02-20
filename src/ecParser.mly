@@ -97,6 +97,14 @@
       pa_nosmt   = nosmt;
       pa_local   = local; }
 
+  let mk_typeclass_declare (tca_vars, name) (ex, ops, axs) = {
+      ptc_tcvars = tca_vars;
+      ptc_name = name;
+      ptc_ex = ex;
+      ptc_ops = ops;
+      ptc_axs = axs;
+    }
+
   let mk_simplify l =
     if l = [] then
       { pbeta  = true; pzeta  = true;
@@ -1600,15 +1608,8 @@ extends:
 | EXTENDS td=tyd_name {td}
 
 typeclass:
-| TYPE CLASS tca=typarams x=ident ex=extends? EQ LBRACE body=tc_body RBRACE
-  {
-    { ptc_params = tca;
-      ptc_name = x;
-      ptc_ex = ex;
-      ptc_ops  = fst body;
-      ptc_axs  = snd body;
-    }
-  }
+| TYPE CLASS tca=tyd_name ex=extends? EQ LBRACE body=tc_body RBRACE
+  {mk_typeclass_declare tca (ex, (fst body), (snd body)) }
 
 tc_body:
 | ops=tc_op* axs=tc_ax* { (ops, axs) }

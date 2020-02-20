@@ -118,7 +118,8 @@ end
 module Ty : sig
   val add : scope -> ptydname -> pqsymbol list -> scope
 
-  val add_class    : scope -> ptypeclass located -> scope
+  val add_class    : scope -> (EcParsetree.ptyparams * EcSymbols.symbol EcLocation.located *
+            EcParsetree.ptypeclass) located -> scope
   val add_instance : scope -> Ax.mode -> ptycinstance located -> scope
   val add_datatype : scope -> ptydname -> pdatatype -> scope
   val add_record   : scope -> ptydname -> precord -> scope

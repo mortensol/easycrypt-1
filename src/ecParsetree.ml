@@ -909,7 +909,7 @@ type prealize = {
 (* -------------------------------------------------------------------- *)
 
 type ptypeclass = {
-  ptc_params: ptyparams;
+  ptc_tcvars: ptyparams;
   ptc_name  : psymbol;
   ptc_ex    : (ptyparams * psymbol) option;
   ptc_ops   : (psymbol * pty) list;
