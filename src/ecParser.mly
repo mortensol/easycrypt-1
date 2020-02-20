@@ -1612,10 +1612,11 @@ typeclass:
   {mk_typeclass_declare tca (ex, (fst body), (snd body)) }
 
 tc_body:
-| ops=tc_op* axs=tc_ax* { (ops, axs) }
+| ops=tc_op axs=tc_ax* { (ops, axs) }
 
 tc_op:
-| OP x=oident COLON ty=loc(type_exp) { (x, ty) }
+| fields=rlist1(rec_field_def, SEMICOLON) SEMICOLON?
+                  { fields }
 
 tc_ax:
 | AXIOM x=ident COLON ax=form { (x, ax) }

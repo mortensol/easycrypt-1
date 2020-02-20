@@ -1556,7 +1556,6 @@ module Ty = struct
       (* Check operators types *)
       let operators =
         let check1 (x, ty) =
-          let ue = EcUnify.UniEnv.create (Some []) in
           let ty = transty tp_tydecl scenv ue ty in
           let ty = Tuni.offun (EcUnify.UniEnv.close ue) ty in
             (EcIdent.create (unloc x), ty)
@@ -1567,7 +1566,6 @@ module Ty = struct
       let axioms =
         let scenv = EcEnv.Var.bind_locals operators scenv in
         let check1 (x, ax) =
-          let ue = EcUnify.UniEnv.create (Some []) in
           let ax = trans_prop scenv ue ax in
           let ax = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) ax in
             (unloc x, ax)
