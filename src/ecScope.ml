@@ -1542,16 +1542,17 @@ module Ty = struct
     check_name_available scope name;
 
     let tclass =
-      (*TODO: params checking*)
       let ue = TT.transtyvars scope.sc_env (loc, Some args) in
       let params = EcUnify.UniEnv.tparams ue in
       (* Check for duplicated field names *)
       Msym.odup unloc (List.map fst pl_desc.ptc_ops)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated operator name: `%s'" x.pl_desc);
+      (*TODO: axiomatic*)
       Msym.odup unloc (List.map fst pl_desc.ptc_axs)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated axiom name: `%s'" x.pl_desc);
+
 
       (* Check operators types *)
       let operators =
@@ -1566,18 +1567,20 @@ module Ty = struct
       let axioms =
         let scenv = EcEnv.Var.bind_locals operators scenv in
         let check1 (x, ax) =
+          let ue = EcUnify.UniEnv.create (Some []) in
           let ax = trans_prop scenv ue ax in
           let ax = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) ax in
             (unloc x, ax)
         in
           pl_desc.ptc_axs |> List.map check1 in
-
+      (*TODO: extension fields*)
       (* Construct actual type-class *)
       { tc_params = params ; tc_ops = operators; tc_axs = axioms; }
     in
       bindclass scope (unloc name, tclass)
 
   (* ------------------------------------------------------------------ *)
+  (* TODO: typeclass instantation*)
   let check_tci_operators env tcty ops reqs =
     let ue   = EcUnify.UniEnv.create (Some (fst tcty)) in
     let rmap = Mstr.of_list reqs in

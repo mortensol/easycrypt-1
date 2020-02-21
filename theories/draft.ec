@@ -7,8 +7,8 @@ require import Int.
 (* A semigroup is a set A which supports a associative operation combine: A x A -> A *)
 (* We want to allow for the application of axioms on generic type-classes*)
 type class 'a SemiGroup = {
-  combine: 'a -> 'a -> 'a
-  (*law SemiGroupCombine (x y z: 'a) : combine( x (combine y z)) = combine(combine(x y) z)*)
+  op combine: 'a -> 'a -> 'a;
+  axiom SemiGroupCombine: forall (x y z), combine x (combine y z) = combine (combine x y) z
 }.
 
 (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
@@ -25,7 +25,7 @@ type class 'a SemiGroup = {
  * inheritance of type-classes to build a hierarchy.
   *)
 type class 'a Monoid extends 'a SemiGroup = {
-  id: 'a;
+  op id: 'a;
   (*TODO: remove the need for instantiating all subclasses *)
   (*law MonoidAdd0L  (x: 'a) : combine(id x) = x.*)
   (*law MonoidAdd0R  (x: 'a) : combine(x id) = x.*)

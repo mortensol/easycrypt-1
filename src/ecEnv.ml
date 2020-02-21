@@ -869,7 +869,7 @@ module MC = struct
           operators
       in
 
-      let axioms =
+     let axioms =
         List.map
           (fun (x, ax) ->
             let ax = Fsubst.f_subst fsubst ax in
