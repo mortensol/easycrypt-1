@@ -463,7 +463,8 @@ let subst_tc (s : _subst) tc =
   let tc_params = List.map (subst_typaram s) tc.tc_params in
   let tc_ops = List.map (snd_map s.s_ty) tc.tc_ops in
   let tc_axs = List.map (snd_map (subst_form s)) tc.tc_axs in
-    { tc_params; tc_ops; tc_axs; }
+  let tc_ext = [] in (*TODO: shouldn't be empty*)
+    { tc_params; tc_ops; tc_axs; tc_ext}
 
 (* -------------------------------------------------------------------- *)
 (* SUBSTITUTION OVER THEORIES *)

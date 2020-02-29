@@ -1544,6 +1544,8 @@ module Ty = struct
     let tclass =
       let ue = TT.transtyvars scope.sc_env (loc, Some args) in
       let params = EcUnify.UniEnv.tparams ue in
+      (*TODO: for inheritance, need to check that polymorphic parameters
+              , as well instantiate each typeclass*)
       (* Check for duplicated field names *)
       Msym.odup unloc (List.map fst pl_desc.ptc_ops)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
@@ -1575,12 +1577,50 @@ module Ty = struct
           pl_desc.ptc_axs |> List.map check1 in
       (*TODO: extension fields*)
       (* Construct actual type-class *)
-      { tc_params = params ; tc_ops = operators; tc_axs = axioms; }
+      { tc_params = params ; tc_ops = operators; tc_axs = axioms; tc_ext = []; (*Bringing extensions into definition*) }
     in
       bindclass scope (unloc name, tclass)
 
   (* ------------------------------------------------------------------ *)
   (* TODO: typeclass instantation*)
+  let bindtypeclass_instance (scope: scope) (x, tci) =
+    assert(scope.sc_pr_uc = None);
+    (*let scope ={scope with sc_env = EcEnv.TypeClass.add_instance x tci scope.sc_env; } in*)
+    (*let scope = maybe_add_to_section scope (EcTheory.CTh_instance (tci.tci_params, tci))**)
+    scope
+
+  let check_tci_instanceof env args name loc=
+    let typeclassInstances = EcEnv.TypeClass.lookup_opt in (*TODO: check existence of tc*)
+    match typeclassInstance with
+    | Some (path,tc) ->
+        let numOfArgs = List.length args in
+        let numOfExpectedArgs = List.length tc.tc_params in
+        match (numOfArgs == numOfExpectedArgs) with
+        | true -> tc
+        | false -> hierror ~loc:loc "creating instance with invalid number of parameters `%d' != `%d'" numOfArgs numOfExpectedArgs
+    | _ -> hierror ~loc:loc "creating instance of non-existant tclass: `%s'" (snd name)
+
+
+  let add_instance (scope: scope) (tci) =
+    let args = tci.pl_desc.pti_vars in
+    let name = tci.pl_desc.pti_name in
+    let scenv = (env scope) in
+    let loc = tci.pl_loc in
+
+    check_name_available scope name;
+
+    let tclassinstance  =
+      let (instanceOfArgs, instanceOfName) = args in
+      let tc = check_tci_instanceof scenv instanceOfArgs instanceOfName loc in
+
+      let ue = TT.transtyvars scope.sc_env (loc, Some instanceOfArgs) in
+      let params = EcUnify.UniEnv.tparams ue in
+      (*let ops = check_tci_operators env _ tci.pl_desc.pti_ops _ in*)
+
+      {tci_instanceOf = tc; tci_params=params; tci_ops = [];}
+    in bindtypeclass_instance scope (unloc name, tclassinstance)
+
+
   let check_tci_operators env tcty ops reqs =
     let ue   = EcUnify.UniEnv.create (Some (fst tcty)) in
     let rmap = Mstr.of_list reqs in
@@ -1624,7 +1664,7 @@ module Ty = struct
     in
       List.iter
         (fun (x, (req, _)) ->
-           if req && not (Mstr.mem x ops) then
+           if req  && not (Mstr.mem x ops) then
              hierror "no definition for operator `%s'" x)
         reqs;
       List.fold_left
@@ -1638,7 +1678,7 @@ module Ty = struct
         Mstr.empty reqs
 
   (* ------------------------------------------------------------------ *)
-  let check_tci_axioms scope mode axs reqs =
+ (* let check_tci_axioms scope mode axs reqs =
     let rmap = Mstr.of_list reqs in
     let symbs, axs =
       List.map_fold
@@ -1766,7 +1806,7 @@ module Ty = struct
     let subst = { ty_subst_id with ts_def = Mp.of_list [tcp, ([], ty)] } in
       List.map (fun (x, opty) ->
         (EcIdent.name x, (true, ty_subst subst opty)))
-        tc.tc_ops
+        tc.tc_ops**)
 
 (*
   (* ------------------------------------------------------------------ *)
@@ -1802,38 +1842,7 @@ module Ty = struct
 *)
 
   (* ------------------------------------------------------------------ *)
-  let add_instance (scope : scope) mode ({ pl_desc = tci } as toptci) =
-    match unloc tci.pti_name with
-    | ([], "bring") -> begin
-        if EcUtils.is_some tci.pti_args then
-          hierror "unsupported-option";
-        addring scope mode (`Boolean, toptci)
-    end
 
-    | ([], "ring") -> begin
-      let kind =
-        match tci.pti_args with
-        | None -> `Integer
-        | Some (`Ring (c, p)) ->
-            if odfl false (c |> omap (fun c -> c <^ BI.of_int 2)) then
-              hierror "invalid coefficient modulus";
-            if odfl false (p |> omap (fun p -> p <^ BI.of_int 2)) then
-              hierror "invalid power modulus";
-            if      opt_equal BI.equal c (Some (BI.of_int 2))
-                 && opt_equal BI.equal p (Some (BI.of_int 2))
-            then `Boolean
-            else `Modulus (c, p)
-      in addring scope mode (kind, toptci)
-    end
-
-    | ([], "field") -> addfield scope mode toptci
-
-    | _ ->
-        if EcUtils.is_some tci.pti_args then
-          hierror "unsupported-option";
-        failwith "unsupported"          (* FIXME *)
-
-  (* ------------------------------------------------------------------ *)
   let add_datatype (scope : scope) (tydname : ptydname) dt =
     let name = snd (unloc tydname) in
 

@@ -152,11 +152,21 @@ val axiomatized_op :
   -> axiom
 
 (* -------------------------------------------------------------------- *)
+
 type typeclass = {
-  tc_params : ty_params;
+  tc_params: ty_params;
   tc_ops : (EcIdent.t * EcTypes.ty) list;
-  tc_axs : (EcSymbols.symbol * form) list;
+  tc_axs : (EcSymbols.symbol * EcCoreFol.form) list;
+  tc_ext : ty_params;
 }
+
+type tcinstance = {
+  tci_instanceOf: typeclass;
+  tci_params: ty_params;
+  tci_ops : (EcIdent.t * (EcTypes.ty list * (EcIdent.t list * EcIdent.t))) list;
+}
+
+
 
 (* -------------------------------------------------------------------- *)
 type rkind = [

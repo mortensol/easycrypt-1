@@ -917,11 +917,11 @@ type ptypeclass = {
 }
 
 type ptycinstance = {
-  pti_name : pqsymbol;
-  pti_type : (psymbol * pqsymbol list) list * pty;
+  pti_name : psymbol;
+  pti_vars : (ptyparams * psymbol); (*What is it an instance of*)
+  (*pti_type : (psymbol * pqsymbol list) list * pty;*)
   pti_ops  : (psymbol * (pty list * pqsymbol)) list;
-  pti_axs  : (psymbol * ptactic_core) list;
-  pti_args : [`Ring of (zint option * zint option)] option;
+  (*pti_axs  : (psymbol * ptactic_core) list;*)
 }
 
 (* -------------------------------------------------------------------- *)

@@ -5,12 +5,15 @@
 require import Int.
 
 (* A semigroup is a set A which supports a associative operation combine: A x A -> A *)
-(* We want to allow for the application of axioms on generic type-classes*)
+  (* We want to allow for the application of axioms on generic type-classes*)
+
 type class 'a SemiGroup = {
-  op combine: 'a -> 'a -> 'a;
-  axiom SemiGroupCombine: forall (x y z), combine x (combine y z) = combine (combine x y) z
+  op (+): 'a -> 'a -> 'a;
+  axiom SemiGroupCombine: forall (x y z),  x + (y + z) =  (x + y) + z
 }.
 
+instance intSemigroup with int SemiGroup
+op combine = Int.(+).
 (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
 
 (* Instance declaration of semi-group *)
@@ -24,13 +27,12 @@ type class 'a SemiGroup = {
  * if done we have allowed for the instantiation of typeclasses through record types, and also for
  * inheritance of type-classes to build a hierarchy.
   *)
+
 type class 'a Monoid extends 'a SemiGroup = {
   op id: 'a;
-  (*TODO: remove the need for instantiating all subclasses *)
-  (*law MonoidAdd0L  (x: 'a) : combine(id x) = x.*)
-  (*law MonoidAdd0R  (x: 'a) : combine(x id) = x.*)
+  axiom RightId: forall(x),  x + id = x;
+  axiom LeftId: forall (x), id + x = x;
 }.
-
 (*axiom MonoidAdd0L ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine (m.` id) x = x.
 axiom MonoidAdd0R ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine x (m.` id) = x.*)
 

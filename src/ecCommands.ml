@@ -319,15 +319,13 @@ and process_types (scope : EcScope.scope) tyds =
 and process_typeclass (scope : EcScope.scope) (tcd : ptypeclass located) =
   EcScope.check_state `InTop "type class" scope;
   let tyname = (tcd.pl_desc.ptc_tcvars, tcd.pl_desc.ptc_name, tcd.pl_desc) in
-  let scope = EcScope.Ty.add_class scope (mk_loc tcd.pl_loc tyname)in
-    EcScope.notify scope `Info "added type class: `%s'" (unloc tcd.pl_desc.ptc_name);
-    scope
+  let scope = EcScope.Ty.add_class scope (mk_loc tcd.pl_loc tyname) in
+    EcScope.notify scope `Info "added type class: `%s'" (unloc tcd.pl_desc.ptc_name)
 
 (* -------------------------------------------------------------------- *)
 and process_tycinst (scope : EcScope.scope) (tci : ptycinstance located) =
   EcScope.check_state `InTop "type class instance" scope;
-  EcScope.Ty.add_instance scope (Pragma.get ()).pm_check tci
-
+  EcScope.Ty.add_instance scope tci
 (* -------------------------------------------------------------------- *)
 and process_module (scope : EcScope.scope) m =
   EcScope.check_state `InTop "module" scope;

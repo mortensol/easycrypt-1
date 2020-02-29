@@ -1624,25 +1624,28 @@ tc_ax:
 (* -------------------------------------------------------------------- *)
 (* Type classes (instances)                                             *)
 tycinstance:
-| INSTANCE x=qident
-    WITH typ=tyvars_decl? ty=loc(type_exp) ops=tyci_op* axs=tyci_ax*
+| INSTANCE x=tyd_name
+    WITH ty=tyd_name ops=tyci_op* axs=tyci_ax*
   {
-    { pti_name = x;
-      pti_type = (odfl [] typ, ty);
+    {
+      pti_name = (snd x);
+      (*pti_type = (odfl [] typ, ty);*)
+      pti_vars = ty;
       pti_ops  = ops;
-      pti_axs  = axs;
-      pti_args = None; }
+      (*pti_axs  = axs;*)
+    }
   }
 
-| INSTANCE x=qident c=uoption(UINT) p=uoption(UINT)
+(*| INSTANCE x=qident c=uoption(UINT) p=uoption(UINT)
     WITH typ=tyvars_decl? ty=loc(type_exp) ops=tyci_op* axs=tyci_ax*
   {
     { pti_name = x;
       pti_type = (odfl [] typ, ty);
       pti_ops  = ops;
       pti_axs  = axs;
-      pti_args = Some (`Ring (c, p)); }
+    }
   }
+  *)
 
 tyci_op:
 | OP x=oident EQ tg=qoident

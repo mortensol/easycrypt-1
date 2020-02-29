@@ -74,7 +74,7 @@ and ctheory_item =
   | CTh_module    of module_expr
   | CTh_theory    of (symbol * (ctheory * thmode))
   | CTh_export    of EcPath.path
-  | CTh_instance  of (ty_params * EcTypes.ty) * tcinstance
+  | CTh_instance  of(ty_params * EcTypes.ty) * tcinstance
   | CTh_typeclass of (symbol * typeclass)
   | CTh_baserw    of symbol
   | CTh_addrw     of EcPath.path * EcPath.path list
