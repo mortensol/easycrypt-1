@@ -1625,16 +1625,18 @@ tc_ax:
 (* Type classes (instances)                                             *)
 tycinstance:
 | INSTANCE x=tyd_name
-    WITH ty=tyd_name ops=tyci_op* axs=tyci_ax*
+    WITH iparams=ident* EQ LBRACE ops=tci_body RBRACE
   {
     {
       pti_name = (snd x);
       (*pti_type = (odfl [] typ, ty);*)
-      pti_vars = ty;
+      pti_vars = (List.rev (List.tl (List.rev iparams)), List.hd (List.rev iparams));
       pti_ops  = ops;
       (*pti_axs  = axs;*)
     }
   }
+tci_body:
+| ops=rlist1(operator, SEMICOLON) SEMICOLON? {ops}
 
 (*| INSTANCE x=qident c=uoption(UINT) p=uoption(UINT)
     WITH typ=tyvars_decl? ty=loc(type_exp) ops=tyci_op* axs=tyci_ax*
@@ -1648,10 +1650,10 @@ tycinstance:
   *)
 
 tyci_op:
-| OP x=oident EQ tg=qoident
+| OP x=ident EQ tg=qoident
     { (x, ([], tg)) }
 
-| OP x=oident EQ tg=qoident LTCOLON tvi=plist0(loc(type_exp), COMMA) GT
+| OP x=ident EQ tg=qoident LTCOLON tvi=plist0(loc(type_exp), COMMA) GT
     { (x, (tvi, tg)) }
 
 tyci_ax:

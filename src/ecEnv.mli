@@ -341,7 +341,7 @@ end
 (* -------------------------------------------------------------------- *)
 module TypeClass : sig
   type t = typeclass
-
+  type tci = tcinstance
   val add   : path -> env -> env
   val bind  : symbol -> t -> env -> env
   val graph : env -> EcTypeClass.graph
@@ -351,6 +351,7 @@ module TypeClass : sig
   val lookup      : qsymbol -> env -> path * t
   val lookup_opt  : qsymbol -> env -> (path * t) option
   val lookup_path : qsymbol -> env -> path
+  val match_instance : symbol -> env -> t list
 
   val add_instance  : (ty_params * ty) -> tcinstance -> env -> env
   val get_instances : env -> ((ty_params * ty) * tcinstance) list

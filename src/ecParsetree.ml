@@ -918,9 +918,9 @@ type ptypeclass = {
 
 type ptycinstance = {
   pti_name : psymbol;
-  pti_vars : (ptyparams * psymbol); (*What is it an instance of*)
+  pti_vars : (psymbol list * psymbol); (*What is it an instance of*)
   (*pti_type : (psymbol * pqsymbol list) list * pty;*)
-  pti_ops  : (psymbol * (pty list * pqsymbol)) list;
+  pti_ops  : poperator list;
   (*pti_axs  : (psymbol * ptactic_core) list;*)
 }
 

@@ -8,12 +8,13 @@ require import Int.
   (* We want to allow for the application of axioms on generic type-classes*)
 
 type class 'a SemiGroup = {
-  op (+): 'a -> 'a -> 'a;
-  axiom SemiGroupCombine: forall (x y z),  x + (y + z) =  (x + y) + z
+  op combine: 'a -> 'a -> 'a;
+  axiom SemiGroupCombine: forall (x y z), combine x (combine y z) =  combine (combine x  y) z
 }.
 
-instance intSemigroup with int SemiGroup
-op combine = Int.(+).
+instance intSemigroup with int SemiGroup = {
+  op combine = Int.(+);
+}.
 (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
 
 (* Instance declaration of semi-group *)
@@ -30,8 +31,8 @@ op combine = Int.(+).
 
 type class 'a Monoid extends 'a SemiGroup = {
   op id: 'a;
-  axiom RightId: forall(x),  x + id = x;
-  axiom LeftId: forall (x), id + x = x;
+  axiom RightId: forall x, combine x id = x;
+  axiom LeftId: forall x, combine id x = x;
 }.
 (*axiom MonoidAdd0L ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine (m.` id) x = x.
 axiom MonoidAdd0R ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine x (m.` id) = x.*)

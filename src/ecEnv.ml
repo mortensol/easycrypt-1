@@ -1272,7 +1272,7 @@ let try_lf f =
 (* ------------------------------------------------------------------ *)
 module TypeClass = struct
   type t = typeclass
-
+  type tci = tcinstance
   let by_path_opt (p : EcPath.path) (env : env) =
     omap
       check_not_suspended
@@ -1301,6 +1301,12 @@ module TypeClass = struct
 
   let lookup_path name env =
     fst (lookup name env)
+
+  let match_instance name env =
+    List.filter_map (
+      fun item -> match item with
+      | CTh_typeclass (n, tc) ->if (n = name ) then Some tc else None
+      | _ -> None) env.env_item
 
   let graph (env : env) =
     env.env_tc

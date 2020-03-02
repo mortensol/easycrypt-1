@@ -1589,16 +1589,12 @@ module Ty = struct
     (*let scope = maybe_add_to_section scope (EcTheory.CTh_instance (tci.tci_params, tci))**)
     scope
 
-  let check_tci_instanceof env args name loc=
-    let typeclassInstances = EcEnv.TypeClass.lookup_opt in (*TODO: check existence of tc*)
-    match typeclassInstance with
-    | Some (path,tc) ->
-        let numOfArgs = List.length args in
-        let numOfExpectedArgs = List.length tc.tc_params in
-        match (numOfArgs == numOfExpectedArgs) with
-        | true -> tc
-        | false -> hierror ~loc:loc "creating instance with invalid number of parameters `%d' != `%d'" numOfArgs numOfExpectedArgs
-    | _ -> hierror ~loc:loc "creating instance of non-existant tclass: `%s'" (snd name)
+  let check_tci_instanceof scope args name loc=
+    let name = unloc name in
+    let typeclassInstances = EcEnv.TypeClass.match_instance name (env scope) in (*TODO: check existence of tc*)
+    match typeclassInstances with
+    | [] -> hierror ~loc:loc "creating instance of non-existant tclass: `%s'" name
+    | _ -> List.hd typeclassInstances
 
 
   let add_instance (scope: scope) (tci) =
@@ -1611,10 +1607,9 @@ module Ty = struct
 
     let tclassinstance  =
       let (instanceOfArgs, instanceOfName) = args in
-      let tc = check_tci_instanceof scenv instanceOfArgs instanceOfName loc in
+      let tc = check_tci_instanceof scope instanceOfArgs instanceOfName loc in
 
-      let ue = TT.transtyvars scope.sc_env (loc, Some instanceOfArgs) in
-      let params = EcUnify.UniEnv.tparams ue in
+      let params = [] in
       (*let ops = check_tci_operators env _ tci.pl_desc.pti_ops _ in*)
 
       {tci_instanceOf = tc; tci_params=params; tci_ops = [];}

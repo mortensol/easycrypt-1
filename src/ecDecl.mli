@@ -162,7 +162,7 @@ type typeclass = {
 
 type tcinstance = {
   tci_instanceOf: typeclass;
-  tci_params: ty_params;
+  tci_params: EcSymbols.symbol list;
   tci_ops : (EcIdent.t * (EcTypes.ty list * (EcIdent.t list * EcIdent.t))) list;
 }
 
