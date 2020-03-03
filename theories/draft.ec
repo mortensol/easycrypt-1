@@ -6,7 +6,6 @@ require import Int.
 
 (* A semigroup is a set A which supports a associative operation combine: A x A -> A *)
   (* We want to allow for the application of axioms on generic type-classes*)
-
 type class 'a SemiGroup = {
   op combine: 'a -> 'a -> 'a;
   axiom SemiGroupCombine: forall (x y z), combine x (combine y z) =  combine (combine x  y) z

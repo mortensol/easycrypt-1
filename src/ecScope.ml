@@ -1589,9 +1589,18 @@ module Ty = struct
     (*let scope = maybe_add_to_section scope (EcTheory.CTh_instance (tci.tci_params, tci))**)
     scope
 
-  let check_tci_instanceof scope args name loc=
+  let check_tci_ops tc tci loc =
+    let mem = true in
+    let tci_op_names = List.map (fun x -> x.po_name) tci.pti_ops in
+    let tc_op_names = List.map (fun (x, _) -> EcIdent.name x) tc.tc_ops in
+    if (List.length tci_op_names = List.length tc_op_names ) then
+      List.fold_left (fun acc m -> acc && (List.mem (unloc m) tc_op_names)) mem tci_op_names
+    else
+      hierror ~loc:loc "defined wrong number of operators"
+
+  let check_tci_instanceof scope name loc=
     let name = unloc name in
-    let typeclassInstances = EcEnv.TypeClass.match_instance name (env scope) in (*TODO: check existence of tc*)
+    let typeclassInstances = EcEnv.TypeClass.match_instance name (env scope) in
     match typeclassInstances with
     | [] -> hierror ~loc:loc "creating instance of non-existant tclass: `%s'" name
     | _ -> List.hd typeclassInstances
@@ -1601,18 +1610,25 @@ module Ty = struct
     let args = tci.pl_desc.pti_vars in
     let name = tci.pl_desc.pti_name in
     let scenv = (env scope) in
-    let loc = tci.pl_loc in
+    let l = tci.pl_loc in
 
     check_name_available scope name;
 
     let tclassinstance  =
       let (instanceOfArgs, instanceOfName) = args in
-      let tc = check_tci_instanceof scope instanceOfArgs instanceOfName loc in
+      let tc = check_tci_instanceof scope instanceOfName l in
 
-      let params = [] in
-      (*let ops = check_tci_operators env _ tci.pl_desc.pti_ops _ in*)
+      let ue = TT.transtyvars (env scope) (l, Some instanceOfArgs ) in
+      let params =  EcUnify.UniEnv.tparams ue in
+      let ops = tci.pl_desc.pti_ops in
+      let ops = List.map (fun op -> mk_loc l op) ops in
+      let tc_ops_defined = check_tci_ops tc tci.pl_desc l in
+      let f = match tc_ops_defined with
+      | true -> List.map (fun op -> (fst (Op.add scope op)))
+      | _ -> hierror ~loc:l "defined operators that don't exist"
+      in
 
-      {tci_instanceOf = tc; tci_params=params; tci_ops = [];}
+      {tci_instanceOf = tc; tci_params=params; tci_ops = f ops;}
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 
 
