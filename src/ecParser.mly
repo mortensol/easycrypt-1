@@ -1631,7 +1631,7 @@ tycinstance:
       pti_name = (snd x);
       (*pti_type = (odfl [] typ, ty);*)
       pti_vars = iparams;
-      pti_ops  = ops;
+      pti_ops  = List.map (fun op -> {op with ptc = Some (snd x);}) ops;
       (*pti_axs  = axs;*)
     }
   }
@@ -1712,7 +1712,8 @@ operator:
       po_args    = odfl [] args;
       po_def     = opdef_of_opbody sty (omap (unloc |- fst) b);
       po_ax      = obind snd b;
-      po_nosmt   = st; } }
+      po_nosmt   = st;
+      ptc        = None;} }
 
 | k=op_or_const st=nosmt tags=bracket(ident*)? x=plist1(oident, COMMA)
     tyvars=tyvars_decl? args=ptybindings_decl?
@@ -1726,7 +1727,8 @@ operator:
       po_args    = odfl [] args;
       po_def     = opdef_of_opbody sty (Some (`Reft (rname, reft)));
       po_ax      = None;
-      po_nosmt   = st; } }
+      po_nosmt   = st;
+      ptc        = None; } }
 
 opbody:
 | e=expr   { `Expr e  }

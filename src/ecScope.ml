@@ -1123,7 +1123,7 @@ module Op = struct
     assert (scope.sc_pr_uc = None);
     let op = op.pl_desc and loc = op.pl_loc in
     let ue = TT.transtyvars scope.sc_env (loc, op.po_tyvars) in
-
+    let tci_opt = match op.ptc with | None -> None | Some x -> Some ( unloc x)in
     let (ty, body, refts) =
       match op.po_def with
       | PO_abstr pty ->
@@ -1179,6 +1179,7 @@ module Op = struct
     in
 
     let tyop   = EcDecl.mk_op tparams ty body in
+    let tyop = {tyop with op_tc = tci_opt;} in
     let opname = EcPath.pqname (EcEnv.root (env scope)) (unloc op.po_name) in
 
     if op.po_nosmt && (is_none op.po_ax) then
@@ -1626,7 +1627,11 @@ module Ty = struct
       let ops = List.map (fun op -> mk_loc l op) ops in
       let tc_ops_defined = check_tci_ops tc tci.pl_desc l in
       let f = match tc_ops_defined with
-      | true -> List.map (fun op -> (fst (Op.add scope op)))
+      | true -> List.map (fun op ->
+                                   let (op', scope') = (Op.add scope op) in
+                                   scope = scope';
+                                   op'
+                         )
       | _ -> hierror ~loc:l "defined operators that don't exist"
       in
 

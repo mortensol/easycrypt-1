@@ -413,7 +413,8 @@ let subst_op (s : _subst) (op : operator) =
   let kind    = subst_op_kind sty op.op_kind in
     { op_tparams = tparams;
       op_ty      = ty     ;
-      op_kind    = kind   ; }
+      op_kind    = kind   ;
+      op_tc      = op.op_tc;}
 
 (* -------------------------------------------------------------------- *)
 let subst_ax (s : _subst) (ax : axiom) =

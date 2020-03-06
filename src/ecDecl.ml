@@ -129,6 +129,7 @@ type operator = {
   op_tparams : ty_params;
   op_ty      : EcTypes.ty;
   op_kind    : operator_kind;
+  op_tc      : EcSymbols.symbol option;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -190,6 +191,7 @@ let gen_op tparams ty kind = {
   op_tparams = tparams;
   op_ty      = ty;
   op_kind    = kind;
+  op_tc      = None;
 }
 
 let mk_pred tparams dom body =

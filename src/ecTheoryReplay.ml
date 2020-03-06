@@ -306,7 +306,8 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
          let newpr   =
            { op_tparams = tparams;
              op_ty      = body.EcFol.f_ty;
-             op_kind    = OB_pred (Some (PR_Plain body)); } in
+             op_kind    = OB_pred (Some (PR_Plain body));
+             op_tc      = None;} in
 
           match prmode with
           | `Alias ->

@@ -334,6 +334,7 @@ type poperator = {
   po_def    : pop_def;
   po_ax     : osymbol_r;
   po_nosmt  : bool;
+  ptc       : psymbol option;
 }
 
 type ppred_def =

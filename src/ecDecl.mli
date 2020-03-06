@@ -104,6 +104,7 @@ type operator = {
   op_tparams : ty_params;
   op_ty      : EcTypes.ty;
   op_kind    : operator_kind;
+  op_tc      : EcSymbols.symbol option;
 }
 
 val op_ty     : operator -> ty
