@@ -1585,8 +1585,10 @@ module Ty = struct
   (* TODO: typeclass instantation*)
   let bindtypeclass_instance (scope: scope) (x, tci) =
     assert(scope.sc_pr_uc = None);
-    (*let scope ={scope with sc_env = EcEnv.TypeClass.add_instance x tci scope.sc_env; } in*)
-    (*let scope = maybe_add_to_section scope (EcTheory.CTh_instance (tci.tci_params, tci))**)
+    let params = (tci.tci_params, EcTypes.tunit) in
+    let tcinstance = `General (EcPath.psymbol x) in
+    let scope ={scope with sc_env = EcEnv.TypeClass.add_instance params tcinstance scope.sc_env; } in
+    let scope = maybe_add_to_section scope (EcTheory.CTh_instance (params, tcinstance)) in
     scope
 
   let check_tci_ops tc tci loc =
