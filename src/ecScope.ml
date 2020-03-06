@@ -1626,16 +1626,18 @@ module Ty = struct
       let ops = tci.pl_desc.pti_ops in
       let ops = List.map (fun op -> mk_loc l op) ops in
       let tc_ops_defined = check_tci_ops tc tci.pl_desc l in
-      let f = match tc_ops_defined with
-      | true -> List.map (fun op ->
-                                   let (op', scope') = (Op.add scope op) in
-                                   scope = scope';
-                                   op'
-                         )
+      let ops_acc = [] in
+      let scope = ref scope in
+      let res = match tc_ops_defined with
+      | true ->
+        (for i = 0 to (List.length ops) - 1 do
+           let (op', scope') = (Op.add !scope (List.nth ops i)) in
+           scope := scope';
+           List.cons op' ops_acc;
+         done)
       | _ -> hierror ~loc:l "defined operators that don't exist"
       in
-
-      {tci_instanceOf = tc; tci_params=params; tci_ops = f ops;}
+      {tci_instanceOf = tc; tci_params=params; tci_ops = ops_acc;}
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 
 
