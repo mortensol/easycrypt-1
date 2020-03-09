@@ -167,7 +167,7 @@ let process_clear symbols tc =
   with (ClearError _) as err -> tc_error_exn !!tc err
 
 (* -------------------------------------------------------------------- *)
-let process_algebra mode kind eqs (tc : tcenv1) =
+(*let process_algebra mode kind eqs (tc : tcenv1) =
   let (env, hyps, concl) = FApi.tc1_eflat tc in
 
   if not (EcAlgTactic.is_module_loaded env) then
@@ -219,7 +219,7 @@ let process_algebra mode kind eqs (tc : tcenv1) =
   in
 
   tactic tc
-
+*)
 (* -------------------------------------------------------------------- *)
 let t_apply_prept pt tc =
   EcLowGoal.Apply.t_apply_bwd_r (pt_of_prept tc pt) tc
@@ -743,12 +743,12 @@ let rec process_rewrite1_r ttenv ?target ri tc =
       | Some target -> process_apply_fwd ~implicits (fp, target) tc
     end
 
-  | RWTactic `Ring ->
+(*  | RWTactic `Ring ->
       process_algebra `Solve `Ring [] tc
 
   | RWTactic `Field ->
       process_algebra `Solve `Field [] tc
-
+*)
 (* -------------------------------------------------------------------- *)
 let rec process_rewrite1 ttenv ?target ri tc =
   EcCoreGoal.reloc (loc ri) (process_rewrite1_r ttenv ?target ri) tc

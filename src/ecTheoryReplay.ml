@@ -50,7 +50,7 @@ and 'a ovrhooks = {
   haddrw   : 'a -> EcPath.path * EcPath.path list -> 'a;
   hauto    : 'a -> bool * int * string option * EcPath.path list -> 'a;
   htycl    : 'a -> symbol * typeclass -> 'a;
-  hinst    : 'a -> (ty_params * ty) * tcinstance -> 'a;
+  hinst    : 'a -> (ty_params * ty * symbol) * EcDecl.tcinstance -> 'a;
   husered  : 'a -> (EcPath.path * EcTheory.rule option) list -> 'a;
   hthenter : 'a -> thmode -> symbol -> 'a;
   hthexit  : 'a -> [`Full | `ClearOnly | `No] -> 'a;
@@ -459,8 +459,12 @@ and replay_typeclass
 
 (* -------------------------------------------------------------------- *)
 and replay_instance
-  (ove : _ ovrenv) (subst, ops, proofs, scope) ((typ, ty), tc)
+  (ove : _ ovrenv) (subst, ops, proofs, scope) ((typ, ty, name), tci)
 =
+  let tci = EcSubst.subst_instance subst tci in
+  let scope = ove.ovre_hooks.hinst scope ((typ, ty, name), tci) in
+  (subst, ops, proofs, scope)
+(*
   let opath = ove.ovre_opath in
   let npath = ove.ovre_npath in
 
@@ -533,7 +537,7 @@ and replay_instance
 
   with E.InvInstPath ->
     (subst, ops, proofs, scope)
-
+*)
 (* -------------------------------------------------------------------- *)
 and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
   match item with
@@ -576,8 +580,8 @@ and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
   | CTh_typeclass (x, tc) ->
      replay_typeclass ove (subst, ops, proofs, scope) (x, tc)
 
-  | CTh_instance ((typ, ty), tc) ->
-     replay_instance ove (subst, ops, proofs, scope) ((typ, ty), tc)
+  | CTh_instance ((typ, ty, name), tc) ->
+     replay_instance ove (subst, ops, proofs, scope) ((typ, ty, name), tc)
 
   | CTh_theory (ox, (cth, thmode)) -> begin
       let (subst, x) = rename ove subst (`Theory, ox) in

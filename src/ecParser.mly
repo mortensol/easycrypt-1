@@ -1631,12 +1631,12 @@ tycinstance:
       pti_name = (snd x);
       (*pti_type = (odfl [] typ, ty);*)
       pti_vars = iparams;
-      pti_ops  = List.map (fun op -> {op with ptc = Some (snd x);}) ops;
+      pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some (snd x);}, name)) ops;
       (*pti_axs  = axs;*)
     }
   }
 tci_body:
-| ops=rlist1(operator, SEMICOLON) SEMICOLON? {ops}
+| ops=rlist1(operator, SEMICOLON) SEMICOLON? {List.map (fun op -> (op, op.po_name)) ops}
 tci_arg:
 | x=ident { (x, []) }
 

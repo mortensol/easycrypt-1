@@ -88,9 +88,9 @@ let rec unify_core (env : EcEnv.env) (tvtc : Sp.t Mid.t) (uf : UF.t) pb =
   let uf = ref uf in
   let pb = let x = Queue.create () in Queue.push pb x; x in
 
-  let instances_for_tcs tcs =
+(*  let instances_for_tcs tcs =
     let tcfilter (i, tc) =
-      match tc with `General p -> Some (i, p) | _ -> None
+      match tc with _ -> Some (i, p)
     in
       List.filter
         (fun (_, tc1) ->
@@ -107,7 +107,7 @@ let rec unify_core (env : EcEnv.env) (tvtc : Sp.t Mid.t) (uf : UF.t) pb =
           (fun src1 -> TC.Graph.has_path ~src:src1 ~dst:dst1 gr)
           src)
       dst
-  in
+  in*)
 
   let ocheck i t =
     let i   = UF.find i !uf in
@@ -201,13 +201,13 @@ let rec unify_core (env : EcEnv.env) (tvtc : Sp.t Mid.t) (uf : UF.t) pb =
           | Tunivar i ->
               uf := UF.set i (Sp.union tc tytc, None) !uf
 
-          | Tvar x ->
+(*          | Tvar x ->
               let xtcs = odfl Sp.empty (Mid.find_opt x tvtc) in
                 if not (has_tcs ~src:xtcs ~dst:tc) then
-                  failure ()
+                  failure ()*)
 
-          | _ ->
-              if not (has_tcs ~src:tytc ~dst:tc) then
+          | _ -> ()
+(*              if not (has_tcs ~src:tytc ~dst:tc) then
                 let module E = struct exception Failure end in
 
                 let inst = instances_for_tcs tc in
@@ -234,7 +234,7 @@ let rec unify_core (env : EcEnv.env) (tvtc : Sp.t Mid.t) (uf : UF.t) pb =
                      try  List.find_map for_inst inst
                      with Not_found -> failure ()
                 in
-                  uf := List.fold_left for1 !uf (Sp.elements tc)
+                  uf := List.fold_left for1 !uf (Sp.elements tc)*)
       end
     done
   in

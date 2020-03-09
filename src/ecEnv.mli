@@ -333,28 +333,29 @@ end
 val ty_hnorm : ty -> env -> ty
 
 (* -------------------------------------------------------------------- *)
-module Algebra : sig
+(*module Algebra : sig
   val add_ring  : ty -> EcDecl.ring  -> env -> env
   val add_field : ty -> EcDecl.field -> env -> env
-end
+end*)
 
 (* -------------------------------------------------------------------- *)
 module TypeClass : sig
   type t = typeclass
-  type tci = tcinstance
+  type tci = EcDecl.tcinstance
   val add   : path -> env -> env
   val bind  : symbol -> t -> env -> env
   val graph : env -> EcTypeClass.graph
 
   val by_path     : path -> env -> t
+  val by_path_tci : path -> env -> tci
   val by_path_opt : path -> env -> t option
   val lookup      : qsymbol -> env -> path * t
   val lookup_opt  : qsymbol -> env -> (path * t) option
   val lookup_path : qsymbol -> env -> path
   val match_instance : symbol -> env -> t list
 
-  val add_instance  : (ty_params * ty) -> tcinstance -> env -> env
-  val get_instances : env -> ((ty_params * ty) * tcinstance) list
+  val add_instance  : (ty_params * ty * symbol) ->tci -> env -> env
+  val get_instances : env -> ((ty_params * ty * symbol) * tci) list
 end
 (* -------------------------------------------------------------------- *)
 module BaseRw : sig

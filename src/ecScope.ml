@@ -1586,15 +1586,14 @@ module Ty = struct
   (* TODO: typeclass instantation*)
   let bindtypeclass_instance (scope: scope) (x, tci) =
     assert(scope.sc_pr_uc = None);
-    let params = (tci.tci_params, EcTypes.tunit) in
-    let tcinstance = `General (EcPath.psymbol x) in
-    let scope ={scope with sc_env = EcEnv.TypeClass.add_instance params tcinstance scope.sc_env; } in
-    let scope = maybe_add_to_section scope (EcTheory.CTh_instance (params, tcinstance)) in
+    let params = (tci.tci_params, EcTypes.tunit, x) in
+    let scope ={scope with sc_env = EcEnv.TypeClass.add_instance params tci scope.sc_env; } in
+    let scope = maybe_add_to_section scope (EcTheory.CTh_instance (params, tci)) in
     scope
 
   let check_tci_ops tc tci loc =
     let mem = true in
-    let tci_op_names = List.map (fun x -> x.po_name) tci.pti_ops in
+    let tci_op_names = List.map (fun x -> snd x) tci.pti_ops in
     let tc_op_names = List.map (fun (x, _) -> EcIdent.name x) tc.tc_ops in
     if (List.length tci_op_names = List.length tc_op_names ) then
       List.fold_left (fun acc m -> acc && (List.mem (unloc m) tc_op_names)) mem tci_op_names
@@ -1626,18 +1625,19 @@ module Ty = struct
       let ops = tci.pl_desc.pti_ops in
       let ops = List.map (fun op -> mk_loc l op) ops in
       let tc_ops_defined = check_tci_ops tc tci.pl_desc l in
-      let ops_acc = [] in
+      let ops_acc = ref [] in
       let scope = ref scope in
       let res = match tc_ops_defined with
       | true ->
         (for i = 0 to (List.length ops) - 1 do
-           let (op', scope') = (Op.add !scope (List.nth ops i)) in
+           let (op, op_name) = unloc (List.nth ops i) in
+           let (op', scope') = (Op.add !scope (mk_loc l op)) in
            scope := scope';
-           List.cons op' ops_acc;
+           ops_acc := List.cons (op', (EcIdent.create (unloc op_name))) !ops_acc;
          done)
       | _ -> hierror ~loc:l "defined operators that don't exist"
       in
-      {tci_instanceOf = tc; tci_params=params; tci_ops = ops_acc;}
+      {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc;}
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 
 

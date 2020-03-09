@@ -921,7 +921,7 @@ type ptycinstance = {
   pti_name : psymbol;
   pti_vars : (ptyparams * psymbol); (*What is it an instance of*)
   (*pti_type : (psymbol * pqsymbol list) list * pty;*)
-  pti_ops  : poperator list;
+  pti_ops  : (poperator * psymbol) list;
   (*pti_axs  : (psymbol * ptactic_core) list;*)
 }
 

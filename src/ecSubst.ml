@@ -453,12 +453,6 @@ let subst_field (s : _subst) cr =
     f_div  = cr.f_div |> omap s.s_p; }
 
 (* -------------------------------------------------------------------- *)
-let subst_instance (s : _subst) tci =
-  match tci with
-  | `Ring    cr -> `Ring  (subst_ring  s cr)
-  | `Field   cr -> `Field (subst_field s cr)
-  | `General p  -> `General (s.s_p p)
-
 (* -------------------------------------------------------------------- *)
 let subst_tc (s : _subst) tc =
   let tc_params = List.map (subst_typaram s) tc.tc_params in
@@ -467,6 +461,11 @@ let subst_tc (s : _subst) tc =
   let tc_ext = [] in (*TODO: shouldn't be empty*)
     { tc_params; tc_ops; tc_axs; tc_ext}
 
+let subst_instance (s : _subst) tci =
+  let tc = subst_tc s tci.tci_instanceOf in
+  let tci_params = List.map (subst_typaram s) tci.tci_params in
+  let tci_ops = List.map (fun (op, name)-> (subst_op s op, name)) tci.tci_ops in
+  {tci_instanceOf = tc; tci_params; tci_ops}
 (* -------------------------------------------------------------------- *)
 (* SUBSTITUTION OVER THEORIES *)
 let rec subst_theory_item (s : _subst) (item : theory_item) =
@@ -492,8 +491,9 @@ let rec subst_theory_item (s : _subst) (item : theory_item) =
   | Th_export p ->
       Th_export (s.s_p p)
 
-  | Th_instance (ty, tci) ->
-      Th_instance (subst_genty s ty, subst_instance s tci)
+  | Th_instance ((p, ty, x), tci) ->
+      let (p, ty) = subst_genty s (p, ty) in
+      Th_instance ( (p, ty, x), subst_instance s tci)
 
   | Th_typeclass (x, tc) ->
       Th_typeclass (x, subst_tc s tc)
@@ -540,8 +540,9 @@ and subst_ctheory_item (s : _subst) (item : ctheory_item) =
   | CTh_export p ->
       CTh_export (s.s_p p)
 
-  | CTh_instance (ty, cr) ->
-      CTh_instance (subst_genty s ty, subst_instance s cr)
+  | CTh_instance ((p, ty, x), cr) ->
+      let (p, ty) = subst_genty s (p, ty) in
+      CTh_instance ((p, ty, x), subst_instance s cr)
 
   | CTh_typeclass (x, tc) ->
       CTh_typeclass (x, subst_tc s tc)

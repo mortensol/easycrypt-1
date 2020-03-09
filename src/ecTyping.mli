@@ -208,5 +208,6 @@ val check_modtype_with_restrictions :
   env -> mpath -> module_sig -> module_type -> mod_restr -> unit
 
 (* -------------------------------------------------------------------- *)
-val get_ring  : (ty_params * ty) -> env -> EcDecl.ring  option
+(*val get_ring  : (ty_params * ty) -> env -> EcDecl.ring  option
 val get_field : (ty_params * ty) -> env -> EcDecl.field option
+*)

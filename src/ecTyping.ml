@@ -2711,11 +2711,10 @@ and trans_pattern env ps ue pf =
   trans_form_or_pattern env ~ps ue pf None
 
 (* -------------------------------------------------------------------- *)
-let get_instances (tvi, bty) env =
+(*let get_instances (tvi, bty) env =
   let inst = List.pmap
     (function
-     | (_, (`Ring _ | `Field _)) as x -> Some x
-     | _ -> None)
+     | (_, tci) as x -> Some x)
     (EcEnv.TypeClass.get_instances env) in
 
   List.pmap (fun ((typ, gty), cr) ->
@@ -2750,3 +2749,4 @@ let get_field (typ, ty) env =
         (get_instances (typ, ty) env);
       None
     with E.Found cr -> Some cr
+*)

@@ -2825,8 +2825,8 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   | EcTheory.CTh_typeclass _ ->
       Format.fprintf fmt "typeclass <FIXME>."
 
-  | EcTheory.CTh_instance ((typ, ty), tc) -> begin
-      let ppe = PPEnv.add_locals ppe (List.map fst typ) in (* FIXME *)
+  | EcTheory.CTh_instance ((typ, ty, name), tc) -> Format.fprintf fmt "instance <FIXME>"
+(*      let ppe = PPEnv.add_locals ppe (List.map fst typ) in (* FIXME *)
 
       match tc with
       | (`Ring _ | `Field _) as tc -> begin
@@ -2875,8 +2875,7 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
 
       | `General p ->
           Format.fprintf fmt "instance %a with %a."
-            (pp_type ppe) ty pp_path p
-  end
+            (pp_type ppe) ty pp_path p*)
 
   | EcTheory.CTh_baserw name ->
       Format.fprintf fmt "declare rewrite %s." name

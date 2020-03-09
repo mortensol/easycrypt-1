@@ -14,7 +14,12 @@ type class 'a SemiGroup = {
 instance intSemigroup with int SemiGroup = {
   op combine = Int.(+);
 }.
-(*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
+    (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
+print op combine.
+lemma semigroupAssociation: forall (x y z: int), combine x (combine y z) = combine (combine x y) z.
+    proof.
+    by [].
+  qed.
 
 (* Instance declaration of semi-group *)
 (*op intSemiGroup: int SemiGroup = {|combine = Int.(+)|}.*)
@@ -30,8 +35,8 @@ instance intSemigroup with int SemiGroup = {
 
 type class 'a Monoid extends 'a SemiGroup = {
   op id: 'a;
-  axiom RightId: forall x, combine x id = x;
-  axiom LeftId: forall x, combine id x = x;
+  axiom RightId: forall (x), combine x id = x;
+  axiom LeftId: forall (x), combine id x = x;
 }.
 (*axiom MonoidAdd0L ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine (m.` id) x = x.
 axiom MonoidAdd0R ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine x (m.` id) = x.*)

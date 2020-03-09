@@ -97,6 +97,8 @@ type obj = [
   | `Operator of EcDecl.operator
   | `Axiom    of EcDecl.axiom
   | `Theory   of (ctheory * thmode)
+  | `Typeclass of EcDecl.typeclass
+  | `Tcinstance of EcDecl.tcinstance
 ]
 
 type mc = {
@@ -112,6 +114,7 @@ type mc = {
   mc_typeclasses: (ipath * typeclass) MMsym.t;
   mc_rwbase     : (ipath * path) MMsym.t;
   mc_components : ipath MMsym.t;
+  mc_tcinstances: (ipath * EcDecl.tcinstance) MMsym.t;
 }
 
 type use = {
@@ -152,7 +155,7 @@ type preenv = {
   env_memories : EcMemory.memenv MMsym.t;
   env_actmem   : EcMemory.memory option;
   env_abs_st   : EcModules.abs_uses Mid.t;
-  env_tci      : ((ty_params * ty) * tcinstance) list;
+  env_tci      : ((ty_params * ty * symbol) * EcDecl.tcinstance) list;
   env_tc       : TC.graph;
   env_rwbase   : Sp.t Mip.t;
   env_atbase   : (path list Mint.t) Msym.t;
@@ -234,6 +237,7 @@ let empty_mc params = {
   mc_typeclasses= MMsym.empty;
   mc_rwbase     = MMsym.empty;
   mc_components = MMsym.empty;
+  mc_tcinstances= MMsym.empty;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -477,6 +481,7 @@ module MC = struct
   let _downpath_for_axiom     = _downpath_for_th
   let _downpath_for_typeclass = _downpath_for_th
   let _downpath_for_rwbase    = _downpath_for_th
+  let _downpath_for_tcinstance = _downpath_for_th
 
   (* ------------------------------------------------------------------ *)
   let _params_of_path p env =
@@ -672,10 +677,23 @@ module MC = struct
 
 
   (* -------------------------------------------------------------------- *)
+  let lookup_ops_in_instances qnx env =
+    match lookup (fun mc -> mc.mc_tcinstances) qnx env with
+    | None -> None
+    | Some (p, (args, obj)) ->Some (obj.tci_ops)
+
   let lookup_operator qnx env =
     match lookup (fun mc -> mc.mc_operators) qnx env with
     | None -> lookup_error (`QSymbol qnx)
-    | Some (p, (args, obj)) -> (_downpath_for_operator env p args, obj)
+    | Some (p, (args, obj)) ->
+      match obj.op_tc with
+      | None -> (_downpath_for_operator env p args, obj)
+      | Some x ->
+        let _ = match (lookup_ops_in_instances ([], x) env) with
+        | Some l -> Printf.printf "%d" (List.length l)
+        | _ -> ()
+        in
+        (_downpath_for_operator env p args, obj)
 
   let lookup_operators qnx env =
     List.map
@@ -896,6 +914,34 @@ module MC = struct
   let import_typeclass p ax env =
     import (_up_typeclass true) (IPPath p) ax env
 
+  let _up_tcinstance candup mc x obj =
+    if not candup && MMsym.last x mc.mc_tcinstances <> None then
+      raise (DuplicatedBinding x);
+    let mc = {mc with mc_tcinstances = MMsym.add x obj mc.mc_tcinstances } in
+      let mypath, tci =
+        match obj with IPPath p, x -> (p, x) | _, _ -> assert false in
+
+      let self = EcIdent.create"'self" in
+
+      let tsubst = { ty_subst_id with ts_def = Mp.add mypath ([], tvar self) Mp.empty} in
+
+      let xpath name = EcPath.pqoname (EcPath.prefix mypath) name in
+
+      let operators =
+        let on1 (opdecl, opid) =
+          let opname = EcIdent.name opid in
+          (opid, xpath opname, opdecl)
+        in
+          List.map on1 tci.tci_ops
+      in
+      let mc =
+        List.fold_left
+          (fun mc (_, fpath, fop) -> _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop)) mc operators
+      in
+      mc
+
+   let import_tcinstance p ax env = import (_up_tcinstance true) (IPPath p) ax env
+
   (* -------------------------------------------------------------------- *)
   let lookup_rwbase qnx env =
     match lookup (fun mc -> mc.mc_rwbase) qnx env with
@@ -1057,7 +1103,10 @@ module MC = struct
       | CTh_baserw x ->
           (add2mc _up_rwbase x (expath x) mc, None)
 
-      | CTh_export _ | CTh_addrw _ | CTh_instance _
+      | CTh_instance ((_, _, x), tci) ->
+          (add2mc _up_tcinstance x tci mc, None)
+
+      | CTh_export _ | CTh_addrw _
       | CTh_auto   _ | CTh_reduction _ ->
           (mc, None)
     in
@@ -1136,6 +1185,8 @@ module MC = struct
 
   and bind_typeclass x tc env =
     bind _up_typeclass x tc env
+  and bind_tcinstance x tci env =
+    bind _up_tcinstance x tci env
 
   and bind_rwbase x p env =
     bind _up_rwbase x p env
@@ -1272,7 +1323,7 @@ let try_lf f =
 (* ------------------------------------------------------------------ *)
 module TypeClass = struct
   type t = typeclass
-  type tci = tcinstance
+  type tci = EcDecl.tcinstance
   let by_path_opt (p : EcPath.path) (env : env) =
     omap
       check_not_suspended
@@ -1280,6 +1331,16 @@ module TypeClass = struct
 
   let by_path (p : EcPath.path) (env : env) =
     match by_path_opt p env with
+    | None -> lookup_error (`Path p)
+    | Some obj -> obj
+
+  let by_path_tci_opt (p: EcPath.path) (env: env) =
+    omap
+      check_not_suspended
+      (MC.by_path (fun mc -> mc.mc_tcinstances) (IPPath p) env)
+
+  let by_path_tci (p: EcPath.path) (env:env)=
+    match by_path_tci_opt p env with
     | None -> lookup_error (`Path p)
     | Some obj -> obj
 
@@ -1314,10 +1375,10 @@ module TypeClass = struct
   let bind_instance ty cr tci =
     (ty, cr) :: tci
 
-  let add_instance ty cr env =
+  let add_instance (p, ty, s) (cr: EcDecl.tcinstance) env =
     { env with
-        env_tci  = bind_instance ty cr env.env_tci;
-        env_item = CTh_instance (ty, cr) :: env.env_item; }
+        env_tci  = bind_instance (p, ty, s) cr env.env_tci;
+        env_item = CTh_instance ((p, ty, s), cr) :: env.env_item; }
 
   let get_instances env = env.env_tci
 end
@@ -1533,19 +1594,18 @@ module Ty = struct
 
   let rebind name ty env =
     let env = MC.bind_tydecl name ty env in
-
     match ty.tyd_type with
-    | `Abstract tc ->
+    (*| `Abstract tc ->
         let myty =
           let myp = EcPath.pqname (root env) name in
           let typ = List.map (fst_map EcIdent.fresh) ty.tyd_params in
             (typ, EcTypes.tconstr myp (List.map (tvar |- fst) typ)) in
         let instr =
           Sp.fold
-            (fun p inst -> TypeClass.bind_instance myty (`General p) inst)
+            (fun p inst -> TypeClass.bind_instance myty (TypeClass.by_path_tci p env) inst)
             tc env.env_tci
         in
-          { env with env_tci = instr }
+          { env with env_tci = instr }*)
 
     | _ -> env
 
@@ -2737,11 +2797,11 @@ module Ax = struct
 end
 
 (* -------------------------------------------------------------------- *)
-module Algebra = struct
+(*module Algebra = struct
   let bind_ring ty cr env =
     assert (Mid.is_empty ty.ty_fv);
     { env with env_tci =
-        TypeClass.bind_instance ([], ty) (`Ring cr) env.env_tci }
+        TypeClass.bind_instance ([], ty) () env.env_tci }
 
   let bind_field ty cr env =
     assert (Mid.is_empty ty.ty_fv);
@@ -2751,7 +2811,7 @@ module Algebra = struct
   let add_ring  ty cr env = TypeClass.add_instance ([], ty) (`Ring  cr) env
   let add_field ty cr env = TypeClass.add_instance ([], ty) (`Field cr) env
 end
-
+*)
 (* -------------------------------------------------------------------- *)
 module Theory = struct
   type t    = ctheory
@@ -2828,7 +2888,7 @@ module Theory = struct
 
     | CTh_theory (x, (cth, `Concrete)) ->
         bind_instance_cth (xpath x) inst cth
-
+(*
     | CTh_type (x, tyd) -> begin
         match tyd.tyd_type with
         | `Abstract tc ->
@@ -2837,11 +2897,11 @@ module Theory = struct
                 (typ, EcTypes.tconstr (xpath x) (List.map (tvar |- fst) typ))
             in
               Sp.fold
-                (fun p inst -> TypeClass.bind_instance myty (`General p) inst)
+                (fun p inst -> TypeClass.bind_instance myty (TypeClass.by_path_tci p env) inst)
                 tc inst
 
         | _ -> inst
-    end
+    end*)
 
     | _ -> inst
 
@@ -2973,10 +3033,13 @@ module Theory = struct
         | CTh_typeclass (x, tc) ->
             MC.import_typeclass (xpath x) tc env
 
+        | CTh_instance ((_, _, x), tci) ->
+            MC.import_tcinstance (xpath x) tci env
+
         | CTh_baserw x ->
             MC.import_rwbase (xpath x) env
 
-        | CTh_addrw _ | CTh_instance _ | CTh_auto _ | CTh_reduction _ ->
+        | CTh_addrw _ | CTh_auto _ | CTh_reduction _ ->
             env
 
       in

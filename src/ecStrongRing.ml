@@ -1,4 +1,4 @@
-(* --------------------------------------------------------------------
+(*(* --------------------------------------------------------------------
  * Copyright (c) - 2012--2016 - IMDEA Software Institute
  * Copyright (c) - 2012--2018 - Inria
  * Copyright (c) - 2012--2018 - Ecole Polytechnique
@@ -351,3 +351,4 @@ let t_alg_eq g =
   let env = tc1_env g in
   let info = init_einfo env in
   t_alg_eq info g
+*)
