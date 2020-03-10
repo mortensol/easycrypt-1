@@ -539,6 +539,7 @@ module MC = struct
       | None | Some [] -> None
       | Some (obj :: _) -> Some (_params_of_ipath p env, snd obj)
 
+
   (* ------------------------------------------------------------------ *)
   let path_of_qn (top : EcPath.path) (qn : symbol list) =
     List.fold_left EcPath.pqname top qn
@@ -676,24 +677,26 @@ module MC = struct
     import (_up_axiom true) (IPPath p) ax env
 
 
-  (* -------------------------------------------------------------------- *)
-  let lookup_ops_in_instances qnx env =
-    match lookup (fun mc -> mc.mc_tcinstances) qnx env with
-    | None -> None
-    | Some (p, (args, obj)) ->Some (obj.tci_ops)
+(*  (* -------------------------------------------------------------------- *)
+  let lookup_all proj (qn, x) env =
+    let mc = lookup_mc qn env in
+      omap
+        (fun (p, obj) -> (p, (_params_of_ipath p env, obj)))
+        (mc |> obind (fun mc -> MMsym.last x (proj mc)))*)
+
+  let find_in_instances (qname: qsymbol) (env: env) =
+    let (qn, name) = qname in
+    let instances = env.env_tci in
+    let ops = List.flatten( List.map (fun (_, tci) -> tci.tci_ops) instances)in
+    let ops = List.filter (fun (op, id) -> EcIdent.name id = name) ops in
+    let ops = List.map (fun (op, id) -> ((EcPath.psymbol (EcIdent.name id)),op)) ops in
+    ops
 
   let lookup_operator qnx env =
+    let (qn, x) = qnx in
     match lookup (fun mc -> mc.mc_operators) qnx env with
     | None -> lookup_error (`QSymbol qnx)
-    | Some (p, (args, obj)) ->
-      match obj.op_tc with
-      | None -> (_downpath_for_operator env p args, obj)
-      | Some x ->
-        let _ = match (lookup_ops_in_instances ([], x) env) with
-        | Some l -> Printf.printf "%d" (List.length l)
-        | _ -> ()
-        in
-        (_downpath_for_operator env p args, obj)
+    | Some (p, obj) -> (_downpath_for_operator env p args, obj)
 
   let lookup_operators qnx env =
     List.map
@@ -1374,7 +1377,6 @@ module TypeClass = struct
 
   let bind_instance ty cr tci =
     (ty, cr) :: tci
-
   let add_instance (p, ty, s) (cr: EcDecl.tcinstance) env =
     { env with
         env_tci  = bind_instance (p, ty, s) cr env.env_tci;
@@ -2650,11 +2652,18 @@ module Op = struct
   let rebind name op env =
     MC.bind_operator name op env
 
-  let all ?check (qname : qsymbol) (env : env) =
+  let find_in_instances (qname: qsymbol) (env: env) =
+    MC.find_in_instances qname env
+
+  let all ?check (qname : qsymbol) (env : env)=
     let ops = MC.lookup_operators qname env in
     match check with
     | None -> ops
-    | Some check -> List.filter (check |- snd) ops
+    | Some check ->
+      let ops = List.filter (check |- snd) ops in
+      match ops with
+      | [] -> find_in_instances qname env
+      | _  -> ops
 
   let reducible env p =
     try

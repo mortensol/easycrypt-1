@@ -28,6 +28,7 @@ module MMsym : sig
   val empty  : 'a t
   val add    : symbol -> 'a -> 'a t -> 'a t
   val last   : symbol -> 'a t -> 'a option
+  val last_iter : symbol -> 'a t -> ('a option) list
   val all    : symbol -> 'a t -> 'a list
   val fold   : (symbol -> 'a list -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val map_at : ('a list -> 'a list) -> symbol -> 'a t -> 'a t

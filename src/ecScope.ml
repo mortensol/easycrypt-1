@@ -1123,7 +1123,7 @@ module Op = struct
     assert (scope.sc_pr_uc = None);
     let op = op.pl_desc and loc = op.pl_loc in
     let ue = TT.transtyvars scope.sc_env (loc, op.po_tyvars) in
-    let tci_opt = match op.ptc with | None -> None | Some x -> Some ( unloc x)in
+    let tci_opt = match op.ptc with | None -> None | Some x ->  Some ( unloc x)in
     let (ty, body, refts) =
       match op.po_def with
       | PO_abstr pty ->

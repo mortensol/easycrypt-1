@@ -34,6 +34,7 @@ module MMsym : sig
   val fold   : (symbol -> 'a list -> 'b -> 'b) -> 'a t -> 'b -> 'b
   val map_at : ('a list -> 'a list) -> symbol -> 'a t -> 'a t
   val iter   : (symbol -> 'a -> unit) -> 'a t -> unit
+  val last_iter : symbol -> 'a t -> ('a option) list
 end = struct
   type 'a t = ('a list) Msym.t
 
@@ -48,6 +49,11 @@ end = struct
     | None          -> None
     | Some []       -> None
     | Some (v :: _) -> Some v
+
+  let last_iter (x: symbol) (m: 'a t) =
+    match Msym.find_opt x m with
+    | None | Some [] -> []
+    | Some (v::vs) -> (Some v) :: List.map (fun x -> Some x) vs
 
   let all (x : symbol) (m : 'a t) =
     EcUtils.odfl [] (Msym.find_opt x m)

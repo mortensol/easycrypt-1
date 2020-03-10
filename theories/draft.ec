@@ -15,7 +15,6 @@ instance intSemigroup with int SemiGroup = {
   op combine = Int.(+);
 }.
     (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
-print op combine.
 lemma semigroupAssociation: forall (x y z: int), combine x (combine y z) = combine (combine x y) z.
     proof.
     by [].

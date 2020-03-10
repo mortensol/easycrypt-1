@@ -326,8 +326,7 @@ and process_typeclass (scope : EcScope.scope) (tcd : ptypeclass located) =
 (* -------------------------------------------------------------------- *)
 and process_tycinst (scope : EcScope.scope) (tci : ptycinstance located) =
   EcScope.check_state `InTop "type class instance" scope;
-  EcScope.Ty.add_instance scope tci;
-  scope
+  EcScope.Ty.add_instance scope tci
 (* -------------------------------------------------------------------- *)
 and process_module (scope : EcScope.scope) m =
   EcScope.check_state `InTop "module" scope;
