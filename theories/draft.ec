@@ -8,7 +8,7 @@ require import Int.
   (* We want to allow for the application of axioms on generic type-classes*)
 type class 'a SemiGroup = {
   op combine: 'a -> 'a -> 'a;
-  axiom SemiGroupCombine: forall (x y z), combine x (combine y z) =  combine (combine x  y) z
+  axiom SemiGroupCombine['a]: forall (x y z: 'a), combine x (combine y z) =  combine (combine x  y) z
 }.
 
 instance intSemigroup with int SemiGroup = {
@@ -17,7 +17,7 @@ instance intSemigroup with int SemiGroup = {
     (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
 lemma semigroupAssociation: forall (x y z: int), combine x (combine y z) = combine (combine x y) z.
     proof.
-    by [].
+    rewrite SemiGroupCombine.
   qed.
 
 (* Instance declaration of semi-group *)

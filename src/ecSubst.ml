@@ -456,8 +456,8 @@ let subst_field (s : _subst) cr =
 (* -------------------------------------------------------------------- *)
 let subst_tc (s : _subst) tc =
   let tc_params = List.map (subst_typaram s) tc.tc_params in
-  let tc_ops = List.map (snd_map s.s_ty) tc.tc_ops in
-  let tc_axs = List.map (snd_map (subst_form s)) tc.tc_axs in
+  let tc_ops = tc.tc_ops in
+  let tc_axs = tc.tc_axs in
   let tc_ext = [] in (*TODO: shouldn't be empty*)
     { tc_params; tc_ops; tc_axs; tc_ext}
 
@@ -465,7 +465,8 @@ let subst_instance (s : _subst) tci =
   let tc = subst_tc s tci.tci_instanceOf in
   let tci_params = List.map (subst_typaram s) tci.tci_params in
   let tci_ops = List.map (fun (op, name)-> (subst_op s op, name)) tci.tci_ops in
-  {tci_instanceOf = tc; tci_params; tci_ops}
+  let tci_axs = [] in (*List.map (fst_map (subst_ax s)) tci.tci_axs in*)
+  {tci_instanceOf = tc; tci_params; tci_ops; tci_axs;}
 (* -------------------------------------------------------------------- *)
 (* SUBSTITUTION OVER THEORIES *)
 let rec subst_theory_item (s : _subst) (item : theory_item) =

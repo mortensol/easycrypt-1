@@ -696,7 +696,7 @@ module MC = struct
     let (qn, x) = qnx in
     match lookup (fun mc -> mc.mc_operators) qnx env with
     | None -> lookup_error (`QSymbol qnx)
-    | Some (p, obj) -> (_downpath_for_operator env p args, obj)
+    | Some (p, (args, obj)) -> (_downpath_for_operator env p args, obj)
 
   let lookup_operators qnx env =
     List.map
@@ -872,43 +872,33 @@ module MC = struct
       in
 
       let operators =
-        let on1 (opid, optype) =
+        let on1 (opdecl, opid) =
           let opname = EcIdent.name opid in
-          let optype = ty_subst tsubst optype in
-          let opdecl = mk_op [(self, Sp.singleton mypath)] optype (Some OP_TC) in
-            (opid, xpath opname, optype, opdecl)
+            (opid, xpath opname, opdecl)
         in
           List.map on1 tc.tc_ops
       in
 
-      let fsubst =
+      (*let fsubst =
         List.fold_left
           (fun s (x, xp, xty, _) ->
             let fop = EcCoreFol.f_op xp [tvar self] xty in
               Fsubst.f_bind_local s x fop)
           (Fsubst.f_subst_init ~sty:tsubst ())
           operators
-      in
+      in**)
 
-     let axioms =
-        List.map
-          (fun (x, ax) ->
-            let ax = Fsubst.f_subst fsubst ax in
-              (x, { ax_tparams = [(self, Sp.singleton mypath)];
-                    ax_spec    = ax;
-                    ax_kind    = `Axiom (Ssym.empty, false);
-                    ax_nosmt   = true; }))
-          tc.tc_axs
+     let axioms = tc.tc_axs
       in
 
       let mc =
         List.fold_left
-          (fun mc (_, fpath, _, fop) ->
+          (fun mc (_, fpath, fop) ->
             _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop))
           mc operators
       in
         List.fold_left
-          (fun mc (x, ax) ->
+          (fun mc (ax, x) -> let x = EcIdent.name x in
             _up_axiom candup mc x (IPPath (xpath x), ax))
           mc axioms
     in
@@ -1377,6 +1367,7 @@ module TypeClass = struct
 
   let bind_instance ty cr tci =
     (ty, cr) :: tci
+
   let add_instance (p, ty, s) (cr: EcDecl.tcinstance) env =
     { env with
         env_tci  = bind_instance (p, ty, s) cr env.env_tci;

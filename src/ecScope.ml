@@ -1548,37 +1548,36 @@ module Ty = struct
       (*TODO: for inheritance, need to check that polymorphic parameters
               , as well instantiate each typeclass*)
       (* Check for duplicated field names *)
-      Msym.odup unloc (List.map fst pl_desc.ptc_ops)
+      Msym.odup unloc (List.map snd pl_desc.ptc_ops)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated operator name: `%s'" x.pl_desc);
       (*TODO: axiomatic*)
-      Msym.odup unloc (List.map fst pl_desc.ptc_axs)
+      Msym.odup unloc (List.map snd pl_desc.ptc_axs)
         |> oiter (fun (x, y) -> hierror ~loc:y.pl_loc
                     "duplicated axiom name: `%s'" x.pl_desc);
 
 
       (* Check operators types *)
-      let operators =
-        let check1 (x, ty) =
-          let ty = transty tp_tydecl scenv ue ty in
-          let ty = Tuni.offun (EcUnify.UniEnv.close ue) ty in
-            (EcIdent.create (unloc x), ty)
-        in
-          pl_desc.ptc_ops |> List.map check1 in
-
+      let scope = ref scope in
+      let operators = ref [] in
+      let defs = pl_desc.ptc_ops in
+      for i = 0 to (List.length defs) - 1 do
+        let (op, op_name) = (List.nth defs i) in
+        let (op, scope') = Op.add !scope (mk_loc loc op) in
+        scope := scope';
+        operators := List.cons (op, (EcIdent.create (unloc op_name))) !operators;
+      done;
       (* Check axioms *)
-      let axioms =
-        let scenv = EcEnv.Var.bind_locals operators scenv in
-        let check1 (x, ax) =
-          let ue = EcUnify.UniEnv.create (Some []) in
-          let ax = trans_prop scenv ue ax in
-          let ax = EcFol.Fsubst.uni (EcUnify.UniEnv.close ue) ax in
-            (unloc x, ax)
-        in
-          pl_desc.ptc_axs |> List.map check1 in
+      let axioms = ref [] in
+      for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
+        let (ax, ax_name) = (List.nth pl_desc.ptc_axs i) in
+        let (ax, scope') = Ax.add !scope `WeakCheck (mk_loc loc ax) in
+        scope := scope';
+
+      done;
       (*TODO: extension fields*)
       (* Construct actual type-class *)
-      { tc_params = params ; tc_ops = operators; tc_axs = axioms; tc_ext = []; (*Bringing extensions into definition*) }
+      { tc_params = params ; tc_ops = !operators; tc_axs = !axioms; tc_ext = []; (*Bringing extensions into definition*) }
     in
       bindclass scope (unloc name, tclass)
 
@@ -1594,7 +1593,7 @@ module Ty = struct
   let check_tci_ops tc tci loc =
     let mem = true in
     let tci_op_names = List.map (fun x -> snd x) tci.pti_ops in
-    let tc_op_names = List.map (fun (x, _) -> EcIdent.name x) tc.tc_ops in
+    let tc_op_names = List.map (fun (_, x) -> EcIdent.name x) tc.tc_ops in
     if (List.length tci_op_names = List.length tc_op_names ) then
       List.fold_left (fun acc m -> acc && (List.mem (unloc m) tc_op_names)) mem tci_op_names
     else
@@ -1637,7 +1636,13 @@ module Ty = struct
          done)
       | _ -> hierror ~loc:l "defined operators that don't exist"
       in
-      {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc;}
+      let ax_acc = ref [] in
+      let tc_name = instanceOfName in
+      let tc_axioms =
+        let tcs = EcEnv.TypeClass.match_instance (unloc name) (env !scope) in
+        List.map (fun tc -> tc.tc_axs) tcs
+      in
+      {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !ax_acc; }
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 
 

@@ -913,16 +913,14 @@ type ptypeclass = {
   ptc_tcvars: ptyparams;
   ptc_name  : psymbol;
   ptc_ex    : (ptyparams * psymbol) option;
-  ptc_ops   : (psymbol * pty) list;
-  ptc_axs   : (psymbol * pformula) list;
+  ptc_ops   : (poperator * psymbol) list;
+  ptc_axs   : (paxiom * psymbol)list;
 }
 
 type ptycinstance = {
   pti_name : psymbol;
   pti_vars : (ptyparams * psymbol); (*What is it an instance of*)
-  (*pti_type : (psymbol * pqsymbol list) list * pty;*)
   pti_ops  : (poperator * psymbol) list;
-  (*pti_axs  : (psymbol * ptactic_core) list;*)
 }
 
 (* -------------------------------------------------------------------- *)

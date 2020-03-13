@@ -1612,14 +1612,14 @@ typeclass:
   {mk_typeclass_declare tca (ex, (fst body), (snd body)) }
 
 tc_body:
-| ops=tc_op axs=tc_ax* { (ops, axs) }
+| ops=tc_op axs=tc_ax { (ops, axs)}
 
 tc_op:
-| OP fields=rlist1(rec_field_def, SEMICOLON) SEMICOLON?
-                  { fields }
+| fields=rlist1(operator, SEMICOLON) SEMICOLON?
+                  { List.map (fun op -> (op, op.po_name)) fields }
 
 tc_ax:
-| AXIOM x=ident COLON ax=form { (x, ax) }
+| axs=rlist1(axiom, SEMICOLON) SEMICOLON? {List.map(fun ax -> (ax, ax.pa_name)) axs}
 
 (* -------------------------------------------------------------------- *)
 (* Type classes (instances)                                             *)
@@ -1629,10 +1629,8 @@ tycinstance:
   {
     {
       pti_name = (snd x);
-      (*pti_type = (odfl [] typ, ty);*)
       pti_vars = iparams;
       pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some (snd x);}, name)) ops;
-      (*pti_axs  = axs;*)
     }
   }
 tci_body:

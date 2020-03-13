@@ -271,15 +271,16 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) =
 (* -------------------------------------------------------------------- *)
 type typeclass = {
   tc_params: ty_params;
-  tc_ops : (EcIdent.t * EcTypes.ty) list;
-  tc_axs : (EcSymbols.symbol * EcCoreFol.form) list;
+  tc_ops : (operator * EcIdent.t) list;
+  tc_axs : (axiom * EcIdent.t) list;
   tc_ext : ty_params;
 }
 
 type tcinstance = {
   tci_instanceOf: typeclass;
-  tci_params: ty_params;
-  tci_ops : (operator*EcIdent.t) list;
+  tci_params    : ty_params;
+  tci_ops       : (operator*EcIdent.t) list;
+  tci_axs       : (axiom * EcIdent.t) list;
 }
 
 (* -------------------------------------------------------------------- *)
