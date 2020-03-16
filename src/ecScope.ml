@@ -1573,7 +1573,11 @@ module Ty = struct
         let (ax, ax_name) = (List.nth pl_desc.ptc_axs i) in
         let (ax, scope') = Ax.add !scope `WeakCheck (mk_loc loc ax) in
         scope := scope';
-
+        match ax with
+        | Some ax_name ->
+          let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
+          axioms := (ax, (EcIdent.create ax_name)) :: !axioms;
+        | _ -> hierror ~loc:loc "axiom failed to be created in type class definition `s" ax_name;
       done;
       (*TODO: extension fields*)
       (* Construct actual type-class *)
@@ -1639,8 +1643,13 @@ module Ty = struct
       let ax_acc = ref [] in
       let tc_name = instanceOfName in
       let tc_axioms =
-        let tcs = EcEnv.TypeClass.match_instance (unloc name) (env !scope) in
-        List.map (fun tc -> tc.tc_axs) tcs
+        let tcs = EcEnv.TypeClass.match_instance (unloc tc_name) (env !scope) in
+        let tc_axs = List.concat (List.map (fun tc -> tc.tc_axs) tcs)in
+        for i = 0 to (List.length tc_axs) - 1 do
+          let (ax, id)= List.nth tc_axs i in
+          let ax = {ax with ax_tparams = params} in
+          ax_acc := (ax, id) :: !ax_acc;
+        done;
       in
       {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !ax_acc; }
     in bindtypeclass_instance scope (unloc name, tclassinstance)

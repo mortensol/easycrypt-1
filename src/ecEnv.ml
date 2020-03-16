@@ -658,9 +658,24 @@ module MC = struct
     import (_up_mod true) p mod_ env
 
   (* -------------------------------------------------------------------- *)
+
+  let lookup_axiom_instances qname env =
+    let (qn, name) = qname in
+    let instances = env.env_tci in
+    let axs = List.flatten(List.map ( fun (_, tci) -> tci.tci_axs) instances) in
+    let axs = List.filter (fun (ax, id) -> EcIdent.name id = name) axs in
+    let axs = List.map (fun (ax, id) -> ((EcPath.psymbol (EcIdent.name id)), ax)) axs in
+    axs
+
   let lookup_axiom qnx env =
     match lookup (fun mc -> mc.mc_axioms) qnx env with
-    | None -> lookup_error (`QSymbol qnx)
+    | None ->
+      let instance_axioms = lookup_axiom_instances qnx env in
+      Printf.printf "here name=%s, matches=%d\n" (snd qnx ) (List.length instance_axioms);
+      if List.length instance_axioms > 0 then
+        List.hd instance_axioms
+      else
+        lookup_error (`QSymbol qnx)
     | Some (p, (args, obj)) -> (_downpath_for_axiom env p args, obj)
 
   let lookup_axioms qnx env =
@@ -675,7 +690,6 @@ module MC = struct
 
   let import_axiom p ax env =
     import (_up_axiom true) (IPPath p) ax env
-
 
 (*  (* -------------------------------------------------------------------- *)
   let lookup_all proj (qn, x) env =

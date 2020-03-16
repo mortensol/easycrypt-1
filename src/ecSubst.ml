@@ -465,7 +465,7 @@ let subst_instance (s : _subst) tci =
   let tc = subst_tc s tci.tci_instanceOf in
   let tci_params = List.map (subst_typaram s) tci.tci_params in
   let tci_ops = List.map (fun (op, name)-> (subst_op s op, name)) tci.tci_ops in
-  let tci_axs = [] in (*List.map (fst_map (subst_ax s)) tci.tci_axs in*)
+  let tci_axs = tci.tci_axs in (*List.map (fst_map (subst_ax s)) tci.tci_axs i *)
   {tci_instanceOf = tc; tci_params; tci_ops; tci_axs;}
 (* -------------------------------------------------------------------- *)
 (* SUBSTITUTION OVER THEORIES *)
