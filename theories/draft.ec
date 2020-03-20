@@ -6,19 +6,20 @@ require import Int.
   (* We want to allow for the application of axioms on generic type-classes*)
 type class 'a SemiGroup = {
   op combine: 'a -> 'a -> 'a;
-  axiom SemiGroupCombine: forall (x y z: 'a), combine x (combine y z) =  combine (combine x  y) z
+  axiom SemiGroupCombine(x y z: 'a):  combine x (combine y z) =  combine (combine x  y) z;
 }.
 
 instance intSemigroup with int SemiGroup = {
   op combine = Int.(+);
-}.
-    (*axiom SemiGroupCombine ['a] (s: 'a SemiGroup)(x y z: 'a): s.` combine x (s.`combine y z) = s.` combine (s.` combine x y) z.*)
-lemma semigroupAssociation: forall (x y z: int), combine x (combine y z) = combine (combine x y) z.
-    proof.
-    rewrite SemiGroupCombine.
-  qed.
 
-(* Instance declaration of semi-group *)
+}.
+
+    (*TODO: Need to implement a one-to-one mapping of type class parameters i.e. 'a -> int*)
+lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
+    proof.
+      apply SemiGroupCombine. (* Shouldn't this work? *)
+    qed.
+      (* Instance declaration of semi-group *)
 (*op intSemiGroup: int SemiGroup = {|combine = Int.(+)|}.*)
 
 (* A monoid can be considered a semigroup with an identity *)

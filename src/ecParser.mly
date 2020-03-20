@@ -88,6 +88,11 @@
   let pflist loc ti (es : pformula    list) : pformula    =
     List.fold_right (fun e1 e2 -> pf_cons loc ti e1 e2) es (pf_nil loc ti)
 
+  (*Axiom parse, axiom name, typeclass name*)
+  let tc_axioms: ((paxiom * psymbol )* psymbol) list ref = ref []
+  let filter tc_name =  List.filter (fun (ax, tc) -> unloc tc = unloc tc_name) !tc_axioms
+  let replace_params params =
+    List.map (fun ((ax, name), tc) -> (({ax with pa_tyvars = params;}, name), tc))
   let mk_axiom ?(local = false) ?(nosmt = false) (x, ty, vd, f) k =
     { pa_name    = x;
       pa_tyvars  = ty;
@@ -1609,7 +1614,14 @@ extends:
 
 typeclass:
 | TYPE CLASS tca=tyd_name ex=extends? EQ LBRACE body=tc_body RBRACE
-  {mk_typeclass_declare tca (ex, (fst body), (snd body)) }
+  {
+    mk_typeclass_declare
+      tca
+      (ex,
+       (fst body),
+       List.map (fun ax -> tc_axioms := (ax, (snd tca))::!tc_axioms; ax) (snd body)
+      )
+  }
 
 tc_body:
 | ops=tc_op axs=tc_ax { (ops, axs)}
@@ -1622,7 +1634,7 @@ tc_ax:
 | axs=rlist1(axiom, SEMICOLON) SEMICOLON? {List.map(fun ax -> (ax, ax.pa_name)) axs}
 
 (* -------------------------------------------------------------------- *)
-(* Type classes (instances)                                             *)
+        (* Type classes (instances)*)
 tycinstance:
 | INSTANCE x=tyd_name
     WITH iparams=tci_params EQ LBRACE ops=tci_body RBRACE
@@ -1631,6 +1643,7 @@ tycinstance:
       pti_name = (snd x);
       pti_vars = iparams;
       pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some (snd x);}, name)) ops;
+      pti_axs  = (filter (snd iparams));
     }
   }
 tci_body:

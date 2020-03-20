@@ -1568,20 +1568,20 @@ module Ty = struct
         operators := List.cons (op, (EcIdent.create (unloc op_name))) !operators;
       done;
       (* Check axioms *)
-      let axioms = ref [] in
+      (*let axioms = ref [] in
       for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
-        let (ax, ax_name) = (List.nth pl_desc.ptc_axs i) in
-        let (ax, scope') = Ax.add !scope `WeakCheck (mk_loc loc ax) in
+        let (axp, ax_name) = (List.nth pl_desc.ptc_axs i) in
+        let (ax, scope') = Ax.add !scope `Check (mk_loc loc axp) in
         scope := scope';
         match ax with
         | Some ax_name ->
           let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
           axioms := (ax, (EcIdent.create ax_name)) :: !axioms;
         | _ -> hierror ~loc:loc "axiom failed to be created in type class definition `s" ax_name;
-      done;
+      done;*)
       (*TODO: extension fields*)
       (* Construct actual type-class *)
-      { tc_params = params ; tc_ops = !operators; tc_axs = !axioms; tc_ext = []; (*Bringing extensions into definition*) }
+      { tc_params = params ; tc_ops = !operators; tc_axs = []; tc_ext = []; (*Bringing extensions into definition*) }
     in
       bindclass scope (unloc name, tclass)
 
@@ -1593,6 +1593,9 @@ module Ty = struct
     let scope ={scope with sc_env = EcEnv.TypeClass.add_instance params tci scope.sc_env; } in
     let scope = maybe_add_to_section scope (EcTheory.CTh_instance (params, tci)) in
     scope
+
+  let tci_ops_id (x: symbol) tc =
+    snd (List.hd ( List.filter (fun pair -> EcIdent.name (snd pair) = x) tc.tc_ops))
 
   let check_tci_ops tc tci loc =
     let mem = true in
@@ -1610,11 +1613,36 @@ module Ty = struct
     | [] -> hierror ~loc:loc "creating instance of non-existant tclass: `%s'" name
     | _ -> List.hd typeclassInstances
 
+  let enumerate (l: _ list) =
+    let counter = ref 0 in
+    List.map (fun x -> counter := !counter + 1; (x,!counter)) l
+
+  let replace_var_bind (binding: pgtybinding) (tc_param_enum: (_ * int) list) tci_args =
+    let (symbols, ty) = binding in
+    let ty = match ty with
+    | PGTY_Type t ->
+      let loc_ty = loc t in
+      let ty = unloc t in
+      match ty with
+      | PTvar   s ->
+        let loc_s = loc s in
+        let (_, i) =
+          List.hd (List.filter (fun (v, i) -> EcIdent.name (fst v) = (unloc s)) tc_param_enum) in
+        let (t, _) = List.nth tci_args (i - 1) in
+
+        PGTY_Type (mk_loc loc_ty (PTvar t))
+      | _ -> PGTY_Type t
+
+    | _ -> hierror "invalid axiom declaration in type class declaration"
+    in
+    (symbols, ty)
+
 
   let add_instance (scope: scope) (tci) =
     let args = tci.pl_desc.pti_vars in
     let name = tci.pl_desc.pti_name in
     let scenv = (env scope) in
+    let tc_axs = tci.pl_desc.pti_axs in
     let l = tci.pl_loc in
 
     check_name_available scope name;
@@ -1628,30 +1656,48 @@ module Ty = struct
       let ops = tci.pl_desc.pti_ops in
       let ops = List.map (fun op -> mk_loc l op) ops in
       let tc_ops_defined = check_tci_ops tc tci.pl_desc l in
+      let ops_ids = List.map (fun pair -> tci_ops_id (unloc (snd pair)) tc) tci.pl_desc.pti_ops in
       let ops_acc = ref [] in
       let scope = ref scope in
       let res = match tc_ops_defined with
       | true ->
         (for i = 0 to (List.length ops) - 1 do
            let (op, op_name) = unloc (List.nth ops i) in
+           let op_id = List.nth ops_ids i in
            let (op', scope') = (Op.add !scope (mk_loc l op)) in
            scope := scope';
-           ops_acc := List.cons (op', (EcIdent.create (unloc op_name))) !ops_acc;
+           ops_acc := List.cons (op', op_id) !ops_acc;
          done)
       | _ -> hierror ~loc:l "defined operators that don't exist"
       in
-      let ax_acc = ref [] in
-      let tc_name = instanceOfName in
-      let tc_axioms =
-        let tcs = EcEnv.TypeClass.match_instance (unloc tc_name) (env !scope) in
-        let tc_axs = List.concat (List.map (fun tc -> tc.tc_axs) tcs)in
-        for i = 0 to (List.length tc_axs) - 1 do
-          let (ax, id)= List.nth tc_axs i in
-          let ax = {ax with ax_tparams = params} in
-          ax_acc := (ax, id) :: !ax_acc;
-        done;
-      in
-      {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !ax_acc; }
+
+
+      let axioms = ref [] in
+      let args_enumerated = enumerate instanceOfArgs in
+      let tc_args = enumerate tc.tc_params in
+      match (List.length args_enumerated = List.length tc_args) with
+      | false -> hierror "defined wrong number of arguments in type class instance declaration"
+      | _ -> ();
+
+      for i = 0 to (List.length tc_axs) - 1 do
+        let ((axp, ax_name), _) = (List.nth tc_axs i) in
+        let new_vars = match axp.pa_vars with
+        | Some x -> Some (List.map (fun binding -> replace_var_bind binding tc_args instanceOfArgs) x)
+        | _ -> None
+        in
+        let axp = {axp with pa_vars = new_vars;} in
+        let (ax, scope') = Ax.add !scope `WeakCheck (mk_loc l axp) in
+        Printf.printf "here\n";
+        scope := scope';
+        match ax with
+        | Some ax_name ->
+          let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
+          axioms := (ax, (EcIdent.create ax_name)) :: !axioms;
+        | _ -> hierror ~loc:l "axiom failed to be created in type class instance definition `s" ax_name;
+      done;
+
+
+      {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !axioms; }
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 
 

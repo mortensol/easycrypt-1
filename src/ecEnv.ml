@@ -280,6 +280,7 @@ let empty gstate =
 let copy (env : env) =
   { env with env_gstate = EcGState.copy env.env_gstate }
 
+let tcis (env: env) = env.env_tci
 (* -------------------------------------------------------------------- *)
 type lookup_error = [
   | `XPath   of xpath
@@ -671,7 +672,6 @@ module MC = struct
     match lookup (fun mc -> mc.mc_axioms) qnx env with
     | None ->
       let instance_axioms = lookup_axiom_instances qnx env in
-      Printf.printf "here name=%s, matches=%d\n" (snd qnx ) (List.length instance_axioms);
       if List.length instance_axioms > 0 then
         List.hd instance_axioms
       else
@@ -679,9 +679,11 @@ module MC = struct
     | Some (p, (args, obj)) -> (_downpath_for_axiom env p args, obj)
 
   let lookup_axioms qnx env =
-    List.map
+    let l1 = List.map
       (fun (p, (args, obj)) -> (_downpath_for_axiom env p args, obj))
-      (lookup_all (fun mc -> mc.mc_axioms) qnx env)
+      (lookup_all (fun mc -> mc.mc_axioms) qnx env) in
+    let l2 = lookup_axiom_instances qnx env in
+    List.append l1 l2
 
   let _up_axiom candup mc x obj =
     if not candup && MMsym.last x mc.mc_axioms <> None then
@@ -713,9 +715,11 @@ module MC = struct
     | Some (p, (args, obj)) -> (_downpath_for_operator env p args, obj)
 
   let lookup_operators qnx env =
-    List.map
+    let l1 = List.map
       (fun (p, (args, obj)) -> (_downpath_for_operator env p args, obj))
-      (lookup_all (fun mc -> mc.mc_operators) qnx env)
+      (lookup_all (fun mc -> mc.mc_operators) qnx env) in
+    let l2 = find_in_instances qnx env in
+    List.append l1 l2
 
   let _up_operator candup mc x obj =
     let module ELI = EcInductive in

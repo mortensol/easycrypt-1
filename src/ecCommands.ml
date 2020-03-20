@@ -32,6 +32,7 @@ let dpragma = {
   pm_check   = `Check;
 }
 
+
 module Pragma : sig
   val get : unit -> pragma
   val set : pragma -> unit
@@ -319,6 +320,7 @@ and process_types (scope : EcScope.scope) tyds =
 and process_typeclass (scope : EcScope.scope) (tcd : ptypeclass located) =
   EcScope.check_state `InTop "type class" scope;
   let tyname = (tcd.pl_desc.ptc_tcvars, tcd.pl_desc.ptc_name, tcd.pl_desc) in
+  let axioms = tcd.pl_desc.ptc_axs in
   let scope = EcScope.Ty.add_class scope (mk_loc tcd.pl_loc tyname) in
     EcScope.notify scope `Info "added type class: `%s'" (unloc tcd.pl_desc.ptc_name);
   scope
@@ -326,6 +328,7 @@ and process_typeclass (scope : EcScope.scope) (tcd : ptypeclass located) =
 (* -------------------------------------------------------------------- *)
 and process_tycinst (scope : EcScope.scope) (tci : ptycinstance located) =
   EcScope.check_state `InTop "type class instance" scope;
+  let tc_name = snd tci.pl_desc.pti_vars in
   EcScope.Ty.add_instance scope tci
 (* -------------------------------------------------------------------- *)
 and process_module (scope : EcScope.scope) m =
