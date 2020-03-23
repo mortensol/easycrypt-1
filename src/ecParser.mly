@@ -1648,12 +1648,11 @@ tycinstance:
   }
 tci_body:
 | ops=rlist1(operator, SEMICOLON) SEMICOLON? {List.map (fun op -> (op, op.po_name)) ops}
-tci_arg:
-| x=ident { (x, []) }
+
 
 tci_args:
 | empty { []  }
-| x=ident { [(x, [])] }
+| x=ident {[(x, [])]}
 | xs=paren(plist1(typaram, COMMA)) { xs }
 
 %inline tci_params:

@@ -693,12 +693,7 @@ module MC = struct
   let import_axiom p ax env =
     import (_up_axiom true) (IPPath p) ax env
 
-(*  (* -------------------------------------------------------------------- *)
-  let lookup_all proj (qn, x) env =
-    let mc = lookup_mc qn env in
-      omap
-        (fun (p, obj) -> (p, (_params_of_ipath p env, obj)))
-        (mc |> obind (fun mc -> MMsym.last x (proj mc)))*)
+ (* -------------------------------------------------------------------- *)
 
   let find_in_instances (qname: qsymbol) (env: env) =
     let (qn, name) = qname in
@@ -945,9 +940,20 @@ module MC = struct
         in
           List.map on1 tci.tci_ops
       in
+      let axioms =
+        let on1 (axdecl, axid) =
+          let axname = EcIdent.name axid in
+          (axid, xpath axname , axdecl)
+        in
+          List.map on1 tci.tci_axs
+      in
       let mc =
         List.fold_left
           (fun mc (_, fpath, fop) -> _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop)) mc operators
+      in
+      let mc =
+        List.fold_left
+          (fun mc (_, axpath, axop) -> _up_axiom candup mc (EcPath.basename axpath) (IPPath axpath, axop)) mc axioms
       in
       mc
 

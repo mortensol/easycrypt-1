@@ -1568,9 +1568,10 @@ module Ty = struct
         operators := List.cons (op, (EcIdent.create (unloc op_name))) !operators;
       done;
       (* Check axioms *)
-      (*let axioms = ref [] in
-      for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
+      let axioms = ref [] in
+      (*for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
         let (axp, ax_name) = (List.nth pl_desc.ptc_axs i) in
+        let bindings = match axp.pa_vars with Some x -> x | _ -> [] in
         let (ax, scope') = Ax.add !scope `Check (mk_loc loc axp) in
         scope := scope';
         match ax with
@@ -1629,8 +1630,10 @@ module Ty = struct
         let (_, i) =
           List.hd (List.filter (fun (v, i) -> EcIdent.name (fst v) = (unloc s)) tc_param_enum) in
         let (t, _) = List.nth tci_args (i - 1) in
+        let t_loc = loc t in
+        let new_t = PTnamed (mk_loc t_loc ([], (unloc t))) in
 
-        PGTY_Type (mk_loc loc_ty (PTvar t))
+        PGTY_Type (mk_loc loc_ty new_t)
       | _ -> PGTY_Type t
 
     | _ -> hierror "invalid axiom declaration in type class declaration"
@@ -1687,7 +1690,6 @@ module Ty = struct
         in
         let axp = {axp with pa_vars = new_vars;} in
         let (ax, scope') = Ax.add !scope `WeakCheck (mk_loc l axp) in
-        Printf.printf "here\n";
         scope := scope';
         match ax with
         | Some ax_name ->

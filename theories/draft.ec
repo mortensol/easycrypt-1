@@ -11,9 +11,7 @@ type class 'a SemiGroup = {
 
 instance intSemigroup with int SemiGroup = {
   op combine = Int.(+);
-
 }.
-
     (*TODO: Need to implement a one-to-one mapping of type class parameters i.e. 'a -> int*)
 lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
     proof.
@@ -36,10 +34,6 @@ type class 'a Monoid extends 'a SemiGroup = {
   axiom RightId: forall (x), combine x id = x;
   axiom LeftId: forall (x), combine id x = x;
 }.
-(*axiom MonoidAdd0L ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine (m.` id) x = x.
-axiom MonoidAdd0R ['a] (m: 'a Monoid)(x: 'a) : m.`s.` combine x (m.` id) = x.*)
-
-(*op intMonoid: int Monoid = {|id = Int.zero; s = intSemiGroup|}.*)
 
 (* We would also like allow for the compositionality of type-classes. i.e. a type-class
  * can inherit from two different typeclasses. I illustrate this expected behaviour with the
