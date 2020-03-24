@@ -1693,8 +1693,8 @@ module Ty = struct
         scope := scope';
         match ax with
         | Some ax_name ->
-          let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
-          axioms := (ax, (EcIdent.create ax_name)) :: !axioms;
+          let (path, ax) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
+          axioms := (ax, (EcIdent.create ax_name), path) :: !axioms;
         | _ -> hierror ~loc:l "axiom failed to be created in type class instance definition `s" ax_name;
       done;
 

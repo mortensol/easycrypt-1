@@ -12,6 +12,8 @@ type class 'a SemiGroup = {
 instance intSemigroup with int SemiGroup = {
   op combine = Int.(+);
 }.
+
+
     (*TODO: Need to implement a one-to-one mapping of type class parameters i.e. 'a -> int*)
 lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
     proof.

@@ -664,8 +664,9 @@ module MC = struct
     let (qn, name) = qname in
     let instances = env.env_tci in
     let axs = List.flatten(List.map ( fun (_, tci) -> tci.tci_axs) instances) in
-    let axs = List.filter (fun (ax, id) -> EcIdent.name id = name) axs in
-    let axs = List.map (fun (ax, id) -> ((EcPath.psymbol (EcIdent.name id)), ax)) axs in
+    let axs = List.filter (fun (ax, id, _) -> EcIdent.name id = name) axs in
+    let axs = List.map (fun (ax, id, p) -> (IPPath p , ax)) axs in
+
     axs
 
   let lookup_axiom qnx env =
@@ -673,16 +674,23 @@ module MC = struct
     | None ->
       let instance_axioms = lookup_axiom_instances qnx env in
       if List.length instance_axioms > 0 then
-        List.hd instance_axioms
+        let (p, ax) = List.hd instance_axioms in
+        let args = _params_of_ipath p env in
+        (_downpath_for_axiom env p args, ax)
       else
         lookup_error (`QSymbol qnx)
-    | Some (p, (args, obj)) -> (_downpath_for_axiom env p args, obj)
+    | Some (p, (args, obj)) -> 
+        (_downpath_for_axiom env p args, obj)
 
   let lookup_axioms qnx env =
     let l1 = List.map
       (fun (p, (args, obj)) -> (_downpath_for_axiom env p args, obj))
       (lookup_all (fun mc -> mc.mc_axioms) qnx env) in
     let l2 = lookup_axiom_instances qnx env in
+    let l2 = List.map (
+      fun (p, ax) -> 
+      let args = _params_of_ipath p env in
+      (_downpath_for_axiom env p args, ax)) l2 in
     List.append l1 l2
 
   let _up_axiom candup mc x obj =
@@ -695,25 +703,37 @@ module MC = struct
 
  (* -------------------------------------------------------------------- *)
 
-  let find_in_instances (qname: qsymbol) (env: env) =
+  let lookup_op_instances (qname: qsymbol) (env: env) =
     let (qn, name) = qname in
     let instances = env.env_tci in
     let ops = List.flatten( List.map (fun (_, tci) -> tci.tci_ops) instances)in
     let ops = List.filter (fun (op, id) -> EcIdent.name id = name) ops in
-    let ops = List.map (fun (op, id) -> ((EcPath.psymbol (EcIdent.name id)),op)) ops in
+    let ops = List.map (fun (op, id) -> (IPPath (EcPath.psymbol name) ,op)) ops in
     ops
 
   let lookup_operator qnx env =
     let (qn, x) = qnx in
     match lookup (fun mc -> mc.mc_operators) qnx env with
-    | None -> lookup_error (`QSymbol qnx)
+    | None -> 
+      let instance_ops = lookup_op_instances qnx env in 
+      if List.length instance_ops > 0 then
+        let (p, op) = List.hd instance_ops in
+        let args = _params_of_ipath p env in
+        (_downpath_for_operator env p args, op)
+      else
+        lookup_error (`QSymbol qnx)
     | Some (p, (args, obj)) -> (_downpath_for_operator env p args, obj)
 
   let lookup_operators qnx env =
     let l1 = List.map
       (fun (p, (args, obj)) -> (_downpath_for_operator env p args, obj))
       (lookup_all (fun mc -> mc.mc_operators) qnx env) in
-    let l2 = find_in_instances qnx env in
+    let l2 = lookup_op_instances qnx env in
+    let l2 = List.map (
+      fun (p, op) -> 
+        let args = _params_of_ipath p env in
+        (_downpath_for_operator env p args, op)) l2
+    in
     List.append l1 l2
 
   let _up_operator candup mc x obj =
@@ -892,18 +912,7 @@ module MC = struct
           List.map on1 tc.tc_ops
       in
 
-      (*let fsubst =
-        List.fold_left
-          (fun s (x, xp, xty, _) ->
-            let fop = EcCoreFol.f_op xp [tvar self] xty in
-              Fsubst.f_bind_local s x fop)
-          (Fsubst.f_subst_init ~sty:tsubst ())
-          operators
-      in**)
-
-     let axioms = tc.tc_axs
-      in
-
+      let axioms = tc.tc_axs in
       let mc =
         List.fold_left
           (fun mc (_, fpath, fop) ->
@@ -911,7 +920,8 @@ module MC = struct
           mc operators
       in
         List.fold_left
-          (fun mc (ax, x) -> let x = EcIdent.name x in
+          (fun mc (ax, x) ->
+            let x = EcIdent.name x in
             _up_axiom candup mc x (IPPath (xpath x), ax))
           mc axioms
     in
@@ -933,27 +943,27 @@ module MC = struct
 
       let xpath name = EcPath.pqoname (EcPath.prefix mypath) name in
 
-      let operators =
+       let operators =
         let on1 (opdecl, opid) =
           let opname = EcIdent.name opid in
-          (opid, xpath opname, opdecl)
+            (opid, xpath opname, opdecl)
         in
           List.map on1 tci.tci_ops
       in
-      let axioms =
-        let on1 (axdecl, axid) =
-          let axname = EcIdent.name axid in
-          (axid, xpath axname , axdecl)
-        in
-          List.map on1 tci.tci_axs
-      in
+
+      let axioms = tci.tci_axs in
+
       let mc =
         List.fold_left
-          (fun mc (_, fpath, fop) -> _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop)) mc operators
+          (fun mc (_, fpath, fop) ->
+            _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop))
+          mc operators
       in
-      let mc =
-        List.fold_left
-          (fun mc (_, axpath, axop) -> _up_axiom candup mc (EcPath.basename axpath) (IPPath axpath, axop)) mc axioms
+      let mc = List.fold_left
+          (fun mc (ax, x, _) ->
+            let x = EcIdent.name x in
+            _up_axiom candup mc x (IPPath (xpath x), ax))
+          mc axioms
       in
       mc
 
@@ -2647,7 +2657,7 @@ module Op = struct
   let lookup_opt name env =
     try_lf (fun () -> lookup name env)
 
-  let lookup_path name env =
+ let lookup_path name env =
     fst (lookup name env)
 
   let bind name op env =
@@ -2667,18 +2677,11 @@ module Op = struct
   let rebind name op env =
     MC.bind_operator name op env
 
-  let find_in_instances (qname: qsymbol) (env: env) =
-    MC.find_in_instances qname env
-
-  let all ?check (qname : qsymbol) (env : env)=
+  let all ?check (qname : qsymbol) (env : env) =
     let ops = MC.lookup_operators qname env in
     match check with
     | None -> ops
-    | Some check ->
-      let ops = List.filter (check |- snd) ops in
-      match ops with
-      | [] -> find_in_instances qname env
-      | _  -> ops
+    | Some check -> List.filter (check |- snd) ops
 
   let reducible env p =
     try
