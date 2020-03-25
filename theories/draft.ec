@@ -9,15 +9,21 @@ type class 'a SemiGroup = {
   axiom SemiGroupCombine(x y z: 'a):  combine x (combine y z) =  combine (combine x  y) z;
 }.
 
-instance intSemigroup with int SemiGroup = {
+lemma assocaddition(x y z: int): x + (y + z) = (x + y) + z.
+    proof.
+      simplify.
+      
+    qed.
+instance intsg with int SemiGroup = {
   op combine = Int.(+);
+  realize SemiGroupCombine = assocaddition;
 }.
 
 
     (*TODO: Need to implement a one-to-one mapping of type class parameters i.e. 'a -> int*)
 lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
     proof.
-      apply SemiGroupCombine. (* Shouldn't this work? *)
+     apply SemiGroupCombine. (* Shouldn't this work? *)
     qed.
       (* Instance declaration of semi-group *)
 (*op intSemiGroup: int SemiGroup = {|combine = Int.(+)|}.*)

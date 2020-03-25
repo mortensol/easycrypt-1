@@ -666,7 +666,6 @@ module MC = struct
     let axs = List.flatten(List.map ( fun (_, tci) -> tci.tci_axs) instances) in
     let axs = List.filter (fun (ax, id, _) -> EcIdent.name id = name) axs in
     let axs = List.map (fun (ax, id, p) -> (IPPath p , ax)) axs in
-
     axs
 
   let lookup_axiom qnx env =
@@ -676,7 +675,8 @@ module MC = struct
       if List.length instance_axioms > 0 then
         let (p, ax) = List.hd instance_axioms in
         let args = _params_of_ipath p env in
-        (_downpath_for_axiom env p args, ax)
+        let ret = (_downpath_for_axiom env p args, ax) in
+        ret
       else
         lookup_error (`QSymbol qnx)
     | Some (p, (args, obj)) -> 
@@ -706,9 +706,13 @@ module MC = struct
   let lookup_op_instances (qname: qsymbol) (env: env) =
     let (qn, name) = qname in
     let instances = env.env_tci in
-    let ops = List.flatten( List.map (fun (_, tci) -> tci.tci_ops) instances)in
-    let ops = List.filter (fun (op, id) -> EcIdent.name id = name) ops in
-    let ops = List.map (fun (op, id) -> (IPPath (EcPath.psymbol name) ,op)) ops in
+    let ops = List.map (fun ((_, _,name), tci) -> (name, tci.tci_ops)) instances in
+    let f target = List.filter (fun (_, id, _) -> EcIdent.name id = target) in
+    let ops = List.flatten(List.map (
+      fun (s, ops) -> 
+        let target = String.concat "" [s;name] in
+        f target ops) ops) in
+    let ops = List.map (fun (op, id, p) -> (IPPath p ,op)) ops in
     ops
 
   let lookup_operator qnx env =
@@ -719,10 +723,13 @@ module MC = struct
       if List.length instance_ops > 0 then
         let (p, op) = List.hd instance_ops in
         let args = _params_of_ipath p env in
-        (_downpath_for_operator env p args, op)
+        let ret = (_downpath_for_operator env p args, op) in
+        ret
       else
         lookup_error (`QSymbol qnx)
-    | Some (p, (args, obj)) -> (_downpath_for_operator env p args, obj)
+    | Some (p, (args, obj)) -> 
+      let res = (_downpath_for_operator env p args, obj) in
+      res
 
   let lookup_operators qnx env =
     let l1 = List.map
@@ -732,7 +739,8 @@ module MC = struct
     let l2 = List.map (
       fun (p, op) -> 
         let args = _params_of_ipath p env in
-        (_downpath_for_operator env p args, op)) l2
+        (_downpath_for_operator env p args, op)
+        ) l2
     in
     List.append l1 l2
 
@@ -892,7 +900,8 @@ module MC = struct
     if not candup && MMsym.last x mc.mc_typeclasses <> None then
       raise (DuplicatedBinding x);
     let mc = { mc with mc_typeclasses = MMsym.add x obj mc.mc_typeclasses } in
-    let mc =
+    mc
+    (* let mc =
       let mypath, tc =
         match obj with IPPath p, x -> (p, x) | _, _ -> assert false in
       let xpath name = EcPath.pqoname (EcPath.prefix mypath) name in
@@ -904,7 +913,7 @@ module MC = struct
             ts_def = Mp.add mypath ([], tvar self) Mp.empty }
       in
 
-      let operators =
+      (* let operators =
         let on1 (opdecl, opid) =
           let opname = EcIdent.name opid in
             (opid, xpath opname, opdecl)
@@ -924,8 +933,8 @@ module MC = struct
             let x = EcIdent.name x in
             _up_axiom candup mc x (IPPath (xpath x), ax))
           mc axioms
-    in
-      mc
+    in *)
+      mc *)
 
   let import_typeclass p ax env =
     import (_up_typeclass true) (IPPath p) ax env
@@ -934,6 +943,8 @@ module MC = struct
     if not candup && MMsym.last x mc.mc_tcinstances <> None then
       raise (DuplicatedBinding x);
     let mc = {mc with mc_tcinstances = MMsym.add x obj mc.mc_tcinstances } in
+    let tci_base_path = x in
+    let mc = 
       let mypath, tci =
         match obj with IPPath p, x -> (p, x) | _, _ -> assert false in
 
@@ -941,17 +952,23 @@ module MC = struct
 
       let tsubst = { ty_subst_id with ts_def = Mp.add mypath ([], tvar self) Mp.empty} in
 
-      let xpath name = EcPath.pqoname (EcPath.prefix mypath) name in
+      let xpath name = EcPath.pqoname (EcPath.prefix mypath) (String.concat "" [tci_base_path; name]) in
 
-       let operators =
-        let on1 (opdecl, opid) =
+      let operators =
+        let on1 (opdecl, opid, p) =
           let opname = EcIdent.name opid in
             (opid, xpath opname, opdecl)
         in
           List.map on1 tci.tci_ops
       in
 
-      let axioms = tci.tci_axs in
+      let axioms = 
+        let on1 (axdecl, axid, p) = 
+          let axname = EcIdent.name axid in
+            (axid, p, axdecl)
+        in
+        List.map on1 tci.tci_axs 
+      in 
 
       let mc =
         List.fold_left
@@ -959,13 +976,12 @@ module MC = struct
             _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop))
           mc operators
       in
-      let mc = List.fold_left
-          (fun mc (ax, x, _) ->
-            let x = EcIdent.name x in
-            _up_axiom candup mc x (IPPath (xpath x), ax))
+        List.fold_left
+          (fun mc (x, p, ax) ->
+            _up_axiom candup mc (EcIdent.name x) (IPPath p, ax))
           mc axioms
       in
-      mc
+        mc
 
    let import_tcinstance p ax env = import (_up_tcinstance true) (IPPath p) ax env
 
@@ -1375,7 +1391,8 @@ module TypeClass = struct
     let obj = by_path p env in
       MC.import_typeclass p obj env
 
-  let rebind name tc env = env
+  let rebind name tc env = 
+    MC.bind_typeclass name tc env
 
   let bind name tc env =
     { (rebind name tc env) with
@@ -1399,11 +1416,14 @@ module TypeClass = struct
   let graph (env : env) =
     env.env_tc
 
+  let rebind_instance name tci env = 
+    MC.bind_tcinstance name tci env
+
   let bind_instance ty cr tci =
     (ty, cr) :: tci
 
   let add_instance (p, ty, s) (cr: EcDecl.tcinstance) env =
-    { env with
+    { (rebind_instance s cr env) with
         env_tci  = bind_instance (p, ty, s) cr env.env_tci;
         env_item = CTh_instance ((p, ty, s), cr) :: env.env_item; }
 
@@ -2640,7 +2660,10 @@ module Op = struct
   let by_path_opt (p : EcPath.path) (env : env) =
     omap
       check_not_suspended
-      (MC.by_path (fun mc -> mc.mc_operators) (IPPath p) env)
+      (MC.by_path (fun mc -> mc.mc_operators) (IPPath p) env) 
+    (* match res with
+    | None -> Printf.printf "(failure) EcPath.tostring p = %s\n" (EcPath.tostring p); res
+    | x -> Printf.printf "(success) EcPath.tostring p = %s\n" (EcPath.tostring p); x *)
 
   let by_path (p : EcPath.path) (env : env) =
     match by_path_opt p env with

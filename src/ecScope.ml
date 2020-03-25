@@ -1537,13 +1537,13 @@ module Ty = struct
   let add_class (scope : scope) info =
     assert (scope.sc_pr_uc = None);
 
-    let (args, name, pl_desc)  = info.pl_desc and loc = info.pl_loc in
+    let (args, name, pl_desc)  = info.pl_desc and l = info.pl_loc in
     let scenv = (env scope) in
-
+    let tc_base_path = unloc name in
     check_name_available scope name;
 
     let tclass =
-      let ue = TT.transtyvars scope.sc_env (loc, Some args) in
+      let ue = TT.transtyvars scope.sc_env (l, Some args) in
       let params = EcUnify.UniEnv.tparams ue in
       (*TODO: for inheritance, need to check that polymorphic parameters
               , as well instantiate each typeclass*)
@@ -1563,9 +1563,14 @@ module Ty = struct
       let defs = pl_desc.ptc_ops in
       for i = 0 to (List.length defs) - 1 do
         let (op, op_name) = (List.nth defs i) in
-        let (op, scope') = Op.add !scope (mk_loc loc op) in
+        let original_name = unloc op_name in
+        let shadowed_name =(String.concat "" [tc_base_path; (unloc op_name)]) in
+        let op_name = mk_loc (loc op_name) shadowed_name in
+        let op = {op with po_name = op_name; } in
+        let (op, scope') = Op.add !scope (mk_loc l op) in
+        let op_id = EcIdent.create original_name in
         scope := scope';
-        operators := List.cons (op, (EcIdent.create (unloc op_name))) !operators;
+        operators := (op, op_id) :: !operators;
       done;
       (* Check axioms *)
       let axioms = ref [] in
@@ -1653,7 +1658,7 @@ module Ty = struct
     let tclassinstance  =
       let (instanceOfArgs, instanceOfName) = args in
       let tc = check_tci_instanceof scope instanceOfName l in
-
+      let tci_base_path = unloc name in
       let ue = TT.transtyvars (env scope) (l, Some instanceOfArgs ) in
       let params =  EcUnify.UniEnv.tparams ue in
       let ops = tci.pl_desc.pti_ops in
@@ -1667,9 +1672,14 @@ module Ty = struct
         (for i = 0 to (List.length ops) - 1 do
            let (op, op_name) = unloc (List.nth ops i) in
            let op_id = List.nth ops_ids i in
+           let concat =(String.concat "" [tci_base_path; (unloc op_name)]) in
+           let op_name = mk_loc (loc op_name) concat in
+           let op_id = EcIdent.create concat in
+           let op = {op with po_name = op_name; } in
            let (op', scope') = (Op.add !scope (mk_loc l op)) in
            scope := scope';
-           ops_acc := List.cons (op', op_id) !ops_acc;
+           let (p, _) = EcEnv.Op.lookup ([], (unloc op_name)) (env !scope) in
+           ops_acc := (op', op_id, p) :: !ops_acc;
          done)
       | _ -> hierror ~loc:l "defined operators that don't exist"
       in
@@ -1682,7 +1692,7 @@ module Ty = struct
       | false -> hierror "defined wrong number of arguments in type class instance declaration"
       | _ -> ();
 
-      for i = 0 to (List.length tc_axs) - 1 do
+      (* for i = 0 to (List.length tc_axs) - 1 do
         let ((axp, ax_name), _) = (List.nth tc_axs i) in
         let new_vars = match axp.pa_vars with
         | Some x -> Some (List.map (fun binding -> replace_var_bind binding tc_args instanceOfArgs) x)
@@ -1696,7 +1706,7 @@ module Ty = struct
           let (path, ax) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
           axioms := (ax, (EcIdent.create ax_name), path) :: !axioms;
         | _ -> hierror ~loc:l "axiom failed to be created in type class instance definition `s" ax_name;
-      done;
+      done; *)
 
 
       {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !axioms; }
