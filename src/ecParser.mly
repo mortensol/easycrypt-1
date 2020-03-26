@@ -93,9 +93,13 @@
   let filter tc_name =  List.filter (fun (ax, tc) -> unloc tc = unloc tc_name) !tc_axioms
   let replace_params params =
     List.map (fun ((ax, name), tc) -> (({ax with pa_tyvars = params;}, name), tc))
-  let mk_tci_instance_axiom x kind =
-    let ((lemma, xname), name) = List.hd (filter x) in
-    (({lemma with pa_kind=kind; }, xname), name)
+
+  let mk_tci_instance_axiom tc axname kind =
+    let tc = filter tc in
+    let axs = List.filter (fun ((ax, name), _) -> unloc name = unloc axname) tc in
+    let ((lemma, axname), _) = List.hd axs in
+    (({lemma with pa_kind=kind; }, axname))
+
   let mk_axiom ?(local = false) ?(nosmt = false) (x, ty, vd, f) k =
     { pa_name    = x;
       pa_tyvars  = ty;
@@ -1650,12 +1654,12 @@ tycinstance:
     }
   }
 tci_body:
-| ops=rlist1(operator, SEMICOLON) SEMICOLON axs=tci_axs* {(List.map (fun op -> (op, op.po_name)) ops, axs)}
+| ops=rlist1(operator, SEMICOLON) SEMICOLON axs=tci_ax* SEMICOLON? {(List.map (fun op -> (op, op.po_name)) ops, axs)}
 
-tci_axs:
-| l=local LEMMA o=nosmt x=ident ao=axiom_tc
+tci_ax:
+| l=local LEMMA axname=ident tc=ident ao=axiom_tc
   {
-    mk_tci_instance_axiom x ao
+    mk_tci_instance_axiom tc axname ao
   }
 
 tci_args:
@@ -1676,7 +1680,7 @@ tci_args:
       pti_axs  = axs;
     }
   }
-  
+
 
 tyci_op:
 | OP x=ident EQ tg=qoident

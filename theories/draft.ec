@@ -6,20 +6,21 @@ require import Int.
   (* We want to allow for the application of axioms on generic type-classes*)
 type class 'a SemiGroup = {
   op combine: 'a -> 'a -> 'a;
-  axiom SemiGroupCombine(x y z: 'a):  combine x (combine y z) =  combine (combine x  y) z;
+  axiom combineassoc(x y z: 'a):  combine x (combine y z) =  combine (combine x  y) z;
 }.
 
 axiom assocaddition(x y z: int): (Int.(+)) x (Int.(+) y z) = Int.(+) (Int.(+) x y )  z.
 
 instance intsg with int SemiGroup = {
   op combine = Int.(+);
-  lemma SemiGroupCombine by apply assocaddition.
+  lemma combineassoc SemiGroup by apply assocaddition
+  lemma combineassoc SemiGroup by []
 }.
 
 
 lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
     proof.
-     apply SemiGroupCombine. (* Shouldn't this work? *)
+      apply SemiGroupCombine. (* Shouldn't this work? *)
     qed.
       (* Instance declaration of semi-group *)
 (*op intSemiGroup: int SemiGroup = {|combine = Int.(+)|}.*)
