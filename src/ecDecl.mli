@@ -164,7 +164,7 @@ type typeclass = {
 type tcinstance = {
   tci_instanceOf: typeclass;
   tci_params: ty_params;
-  tci_ops : (operator*EcIdent.t * EcPath.path) list;
+  tci_ops : (operator*EcIdent.t * EcPath.path ) list;
   tci_axs : (axiom * EcIdent.t * EcPath.path) list;
 }
 

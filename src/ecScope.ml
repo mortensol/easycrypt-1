@@ -1564,7 +1564,7 @@ module Ty = struct
       for i = 0 to (List.length defs) - 1 do
         let (op, op_name) = (List.nth defs i) in
         let original_name = unloc op_name in
-        let shadowed_name =(String.concat "" [tc_base_path; (unloc op_name)]) in
+        let shadowed_name =(String.concat "." [tc_base_path; (unloc op_name)]) in
         let op_name = mk_loc (loc op_name) shadowed_name in
         let op = {op with po_name = op_name; } in
         let (op, scope') = Op.add !scope (mk_loc l op) in
@@ -1574,20 +1574,20 @@ module Ty = struct
       done;
       (* Check axioms *)
       let axioms = ref [] in
-      (*for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
-        let (axp, ax_name) = (List.nth pl_desc.ptc_axs i) in
-        let bindings = match axp.pa_vars with Some x -> x | _ -> [] in
-        let (ax, scope') = Ax.add !scope `Check (mk_loc loc axp) in
-        scope := scope';
-        match ax with
-        | Some ax_name ->
-          let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
-          axioms := (ax, (EcIdent.create ax_name)) :: !axioms;
-        | _ -> hierror ~loc:loc "axiom failed to be created in type class definition `s" ax_name;
-      done;*)
+      (* for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
+        let (axp, name) = (List.nth pl_desc.ptc_axs i)
+        (* let bindings = match axp.pa_vars with Some x -> x | _ -> [] in *)
+        (* let (ax, scope') = Ax.add !scope `Check (mk_loc l axp) in *)
+        (* scope := scope'; *)
+        (* match ax with *)
+        (* | Some ax_name -> *)
+          (* let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in *)
+        (* axioms := (axp, (EcIdent.create (unloc name))) :: !axioms; *)
+        (* | _ -> hierror ~loc:l "axiom failed to be created in type class definition `s" ax_name; *)
+      done;  *)
       (*TODO: extension fields*)
       (* Construct actual type-class *)
-      { tc_params = params ; tc_ops = !operators; tc_axs = []; tc_ext = []; (*Bringing extensions into definition*) }
+      { tc_params = params ; tc_ops = !operators; tc_axs = !axioms; tc_ext = []; (*Bringing extensions into definition*) }
     in
       bindclass scope (unloc name, tclass)
 
@@ -1672,7 +1672,7 @@ module Ty = struct
         (for i = 0 to (List.length ops) - 1 do
            let (op, op_name) = unloc (List.nth ops i) in
            let op_id = List.nth ops_ids i in
-           let concat =(String.concat "" [tci_base_path; (unloc op_name)]) in
+           let concat =(String.concat "." [tci_base_path; (unloc op_name)]) in
            let op_name = mk_loc (loc op_name) concat in
            let op_id = EcIdent.create concat in
            let op = {op with po_name = op_name; } in
@@ -1691,8 +1691,8 @@ module Ty = struct
       match (List.length args_enumerated = List.length tc_args) with
       | false -> hierror "defined wrong number of arguments in type class instance declaration"
       | _ -> ();
-
-      (* for i = 0 to (List.length tc_axs) - 1 do
+(* 
+      for i = 0 to (List.length tc_axs) - 1 do
         let ((axp, ax_name), _) = (List.nth tc_axs i) in
         let new_vars = match axp.pa_vars with
         | Some x -> Some (List.map (fun binding -> replace_var_bind binding tc_args instanceOfArgs) x)
@@ -1707,8 +1707,6 @@ module Ty = struct
           axioms := (ax, (EcIdent.create ax_name), path) :: !axioms;
         | _ -> hierror ~loc:l "axiom failed to be created in type class instance definition `s" ax_name;
       done; *)
-
-
       {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !axioms; }
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 

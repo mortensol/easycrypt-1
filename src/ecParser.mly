@@ -93,6 +93,9 @@
   let filter tc_name =  List.filter (fun (ax, tc) -> unloc tc = unloc tc_name) !tc_axioms
   let replace_params params =
     List.map (fun ((ax, name), tc) -> (({ax with pa_tyvars = params;}, name), tc))
+  let mk_tci_instance_axiom x kind =
+    let ((lemma, xname), name) = List.hd (filter x) in
+    (({lemma with pa_kind=kind; }, xname), name)
   let mk_axiom ?(local = false) ?(nosmt = false) (x, ty, vd, f) k =
     { pa_name    = x;
       pa_tyvars  = ty;
@@ -1637,18 +1640,23 @@ tc_ax:
         (* Type classes (instances)*)
 tycinstance:
 | INSTANCE x=tyd_name
-    WITH iparams=tci_params EQ LBRACE ops=tci_body RBRACE
+    WITH iparams=tci_params EQ LBRACE body=tci_body RBRACE
   {
     {
       pti_name = (snd x);
       pti_vars = iparams;
-      pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some (snd x);}, name)) ops;
-      pti_axs  = (filter (snd iparams));
+      pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some (snd x);}, name)) (fst body);
+      pti_axs  = snd body;
     }
   }
 tci_body:
-| ops=rlist1(operator, SEMICOLON) SEMICOLON? {List.map (fun op -> (op, op.po_name)) ops}
+| ops=rlist1(operator, SEMICOLON) SEMICOLON axs=tci_axs* {(List.map (fun op -> (op, op.po_name)) ops, axs)}
 
+tci_axs:
+| l=local LEMMA o=nosmt x=ident ao=axiom_tc
+  {
+    mk_tci_instance_axiom x ao
+  }
 
 tci_args:
 | empty { []  }
@@ -1668,7 +1676,7 @@ tci_args:
       pti_axs  = axs;
     }
   }
-  *)
+  
 
 tyci_op:
 | OP x=ident EQ tg=qoident
@@ -1676,10 +1684,8 @@ tyci_op:
 
 | OP x=ident EQ tg=qoident LTCOLON tvi=plist0(loc(type_exp), COMMA) GT
     { (x, (tvi, tg)) }
+    *)
 
-tyci_ax:
-| PROOF x=ident BY tg=tactic_core
-    { (x, tg) }
 
 (* -------------------------------------------------------------------- *)
 (* Operator definitions                                                 *)

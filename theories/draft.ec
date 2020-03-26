@@ -9,18 +9,14 @@ type class 'a SemiGroup = {
   axiom SemiGroupCombine(x y z: 'a):  combine x (combine y z) =  combine (combine x  y) z;
 }.
 
-lemma assocaddition(x y z: int): x + (y + z) = (x + y) + z.
-    proof.
-      simplify.
-      
-    qed.
+axiom assocaddition(x y z: int): (Int.(+)) x (Int.(+) y z) = Int.(+) (Int.(+) x y )  z.
+
 instance intsg with int SemiGroup = {
   op combine = Int.(+);
-  realize SemiGroupCombine = assocaddition;
+  lemma SemiGroupCombine by apply assocaddition.
 }.
 
 
-    (*TODO: Need to implement a one-to-one mapping of type class parameters i.e. 'a -> int*)
 lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
     proof.
      apply SemiGroupCombine. (* Shouldn't this work? *)

@@ -710,7 +710,7 @@ module MC = struct
     let f target = List.filter (fun (_, id, _) -> EcIdent.name id = target) in
     let ops = List.flatten(List.map (
       fun (s, ops) -> 
-        let target = String.concat "" [s;name] in
+        let target = String.concat "." [s;name] in
         f target ops) ops) in
     let ops = List.map (fun (op, id, p) -> (IPPath p ,op)) ops in
     ops
@@ -899,42 +899,7 @@ module MC = struct
   let _up_typeclass candup mc x obj =
     if not candup && MMsym.last x mc.mc_typeclasses <> None then
       raise (DuplicatedBinding x);
-    let mc = { mc with mc_typeclasses = MMsym.add x obj mc.mc_typeclasses } in
-    mc
-    (* let mc =
-      let mypath, tc =
-        match obj with IPPath p, x -> (p, x) | _, _ -> assert false in
-      let xpath name = EcPath.pqoname (EcPath.prefix mypath) name in
-
-      let self = EcIdent.create "'self" in
-
-      let tsubst =
-        { ty_subst_id with
-            ts_def = Mp.add mypath ([], tvar self) Mp.empty }
-      in
-
-      (* let operators =
-        let on1 (opdecl, opid) =
-          let opname = EcIdent.name opid in
-            (opid, xpath opname, opdecl)
-        in
-          List.map on1 tc.tc_ops
-      in
-
-      let axioms = tc.tc_axs in
-      let mc =
-        List.fold_left
-          (fun mc (_, fpath, fop) ->
-            _up_operator candup mc (EcPath.basename fpath) (IPPath fpath, fop))
-          mc operators
-      in
-        List.fold_left
-          (fun mc (ax, x) ->
-            let x = EcIdent.name x in
-            _up_axiom candup mc x (IPPath (xpath x), ax))
-          mc axioms
-    in *)
-      mc *)
+    { mc with mc_typeclasses = MMsym.add x obj mc.mc_typeclasses }
 
   let import_typeclass p ax env =
     import (_up_typeclass true) (IPPath p) ax env
@@ -952,7 +917,7 @@ module MC = struct
 
       let tsubst = { ty_subst_id with ts_def = Mp.add mypath ([], tvar self) Mp.empty} in
 
-      let xpath name = EcPath.pqoname (EcPath.prefix mypath) (String.concat "" [tci_base_path; name]) in
+      let xpath name = EcPath.pqoname (EcPath.prefix mypath) (String.concat "." [tci_base_path; name]) in
 
       let operators =
         let on1 (opdecl, opid, p) =
