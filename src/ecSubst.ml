@@ -525,6 +525,8 @@ and subst_ctheory_item (s : _subst) (item : ctheory_item) =
 
   | CTh_operator (x, op) ->
       CTh_operator (x, subst_op s op)
+  | CTh_tc_operator (x, op) ->
+      CTh_tc_operator (x, subst_op s op)
 
   | CTh_axiom (x, ax) ->
       CTh_axiom (x, subst_ax s ax)

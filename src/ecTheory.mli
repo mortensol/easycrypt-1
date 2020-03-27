@@ -64,7 +64,7 @@ and ctheory_struct = ctheory_item list
 
 and ctheory_item =
   | CTh_type      of (symbol * tydecl)
-  | CTh_operator  of (symbol * operator)
+  | CTh_operator  of (symbol * operator )
   | CTh_axiom     of (symbol * axiom)
   | CTh_modtype   of (symbol * module_sig)
   | CTh_module    of module_expr
@@ -76,7 +76,7 @@ and ctheory_item =
   | CTh_addrw     of EcPath.path * EcPath.path list
   | CTh_reduction of (EcPath.path * rule option) list
   | CTh_auto      of (bool * int * symbol option * path list)
-
+  | CTh_tc_operator  of (symbol * operator)
 and ctheory_clone = {
   cthc_base : EcPath.path;
   cthc_ext  : (EcIdent.t * ctheory_override) list;

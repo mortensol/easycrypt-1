@@ -1117,7 +1117,9 @@ module Op = struct
 
     let scope = { scope with sc_env = EcEnv.Op.bind x op scope.sc_env } in
     let scope = maybe_add_to_section scope (EcTheory.CTh_operator (x, op)) in
-      scope
+    match op.op_tc with
+    | Some _ -> maybe_add_to_section scope (EcTheory.CTh_tc_operator (x, op))
+    | _      -> scope
 
   let add (scope : scope) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
@@ -1691,9 +1693,9 @@ module Ty = struct
       match (List.length args_enumerated = List.length tc_args) with
       | false -> hierror "defined wrong number of arguments in type class instance declaration"
       | _ -> ();
-(* 
+ 
       for i = 0 to (List.length tc_axs) - 1 do
-        let ((axp, ax_name), _) = (List.nth tc_axs i) in
+        let (axp, ax_name) = (List.nth tc_axs i) in
         let new_vars = match axp.pa_vars with
         | Some x -> Some (List.map (fun binding -> replace_var_bind binding tc_args instanceOfArgs) x)
         | _ -> None
@@ -1706,7 +1708,7 @@ module Ty = struct
           let (path, ax) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in
           axioms := (ax, (EcIdent.create ax_name), path) :: !axioms;
         | _ -> hierror ~loc:l "axiom failed to be created in type class instance definition `s" ax_name;
-      done; *)
+      done; 
       {tci_instanceOf = tc; tci_params=params; tci_ops = !ops_acc; tci_axs = !axioms; }
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 

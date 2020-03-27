@@ -14,7 +14,6 @@ axiom assocaddition(x y z: int): (Int.(+)) x (Int.(+) y z) = Int.(+) (Int.(+) x 
 instance intsg with int SemiGroup = {
   op combine = Int.(+);
   lemma combineassoc SemiGroup by apply assocaddition
-  lemma combineassoc SemiGroup by []
 }.
 
 

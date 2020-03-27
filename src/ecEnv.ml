@@ -703,6 +703,14 @@ module MC = struct
 
  (* -------------------------------------------------------------------- *)
 
+  let substring search target =
+    if String.length search > String.length target then
+      let re = Str.regexp_string target in
+        try ignore (Str.search_forward re search 0); true
+        with Not_found -> false
+    else
+      false
+
   let lookup_op_instances (qname: qsymbol) (env: env) =
     let (qn, name) = qname in
     let instances = env.env_tci in
@@ -713,13 +721,32 @@ module MC = struct
         let target = String.concat "." [s;name] in
         f target ops) ops) in
     let ops = List.map (fun (op, id, p) -> (IPPath p ,op)) ops in
-    ops
+    let ops = ref ops in
+    let ctheories = env.env_item in
+    let map_f ct= 
+      match ct with
+      | CTh_tc_operator (s, op) -> substring s name
+      | _ -> false
+    in 
+    let ctheory_names = List.filter map_f ctheories in
+    let ctheory_names = List.map (
+      fun x -> match x with 
+      | CTh_tc_operator (s, op) -> CTh_operator (s, op)
+      | _ -> x
+    ) ctheory_names in
+    let additional_ops = List.map (
+      fun x -> match x with
+        | CTh_operator (s, _) -> lookup (fun mc -> mc.mc_operators) (qn, s) env
+        | _ -> None
+        ) ctheory_names in
+    let additional_ops = List.map (omap (fun (p, (args, obj)) -> ops := (p, obj) :: !ops)) additional_ops in
+    !ops
 
   let lookup_operator qnx env =
     let (qn, x) = qnx in
     match lookup (fun mc -> mc.mc_operators) qnx env with
-    | None -> 
-      let instance_ops = lookup_op_instances qnx env in 
+    | None ->
+      let instance_ops = lookup_op_instances qnx env in
       if List.length instance_ops > 0 then
         let (p, op) = List.hd instance_ops in
         let args = _params_of_ipath p env in
@@ -742,6 +769,7 @@ module MC = struct
         (_downpath_for_operator env p args, op)
         ) l2
     in
+    let l2 = List.filter (fun x -> (List.mem x l1) <> true) l2 in 
     List.append l1 l2
 
   let _up_operator candup mc x obj =
@@ -1084,6 +1112,8 @@ module MC = struct
           (add2mc _up_tydecl xtydecl tydecl mc, None)
 
       | CTh_operator (xop, op) ->
+          (add2mc _up_operator xop op mc, None)
+      | CTh_tc_operator (xop, op) -> 
           (add2mc _up_operator xop op mc, None)
 
       | CTh_axiom (xax, ax) ->
@@ -2658,9 +2688,12 @@ module Op = struct
       | _ -> None
     in
 
-    { env with
+    let env = { env with
         env_ntbase = ofold List.cons env.env_ntbase nt;
-        env_item   = CTh_operator(name, op) :: env.env_item; }
+        env_item   = CTh_operator(name, op) :: env.env_item; } in
+    match op.op_tc with
+    | Some _ -> {env with env_item = CTh_tc_operator(name, op) :: env.env_item;}
+    | _      -> env
 
   let rebind name op env =
     MC.bind_operator name op env
@@ -3021,6 +3054,8 @@ module Theory = struct
             MC.import_tydecl (xpath x) ty env
 
         | CTh_operator (x, op) ->
+            MC.import_operator (xpath x) op env
+        | CTh_tc_operator (x, op) ->
             MC.import_operator (xpath x) op env
 
         | CTh_axiom (x, ax) ->
