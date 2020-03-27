@@ -9,20 +9,16 @@ type class 'a SemiGroup = {
   axiom combineassoc(x y z: 'a):  combine x (combine y z) =  combine (combine x  y) z;
 }.
 
-axiom assocaddition(x y z: int): (Int.(+)) x (Int.(+) y z) = Int.(+) (Int.(+) x y )  z.
-
+axiom assocaddition(x y z: int):  x + ( y + z) =  x + y + z.
 instance intsg with int SemiGroup = {
   op combine = Int.(+);
   lemma combineassoc SemiGroup by apply assocaddition
 }.
 
-
 lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (combine x y) z.
     proof.
-      apply SemiGroupCombine. (* Shouldn't this work? *)
+      apply intsg_combineassoc. 
     qed.
-      (* Instance declaration of semi-group *)
-(*op intSemiGroup: int SemiGroup = {|combine = Int.(+)|}.*)
 
 (* A monoid can be considered a semigroup with an identity *)
 (* We can consider extends to essentially copy the definition of semigroup into the target type-class,
@@ -35,9 +31,17 @@ lemma semigroupAssociation (x y z: int): combine x (combine y z) = combine (comb
 
 type class 'a Monoid extends 'a SemiGroup = {
   op id: 'a;
-  axiom RightId: forall (x), combine x id = x;
-  axiom LeftId: forall (x), combine id x = x;
+  axiom rightid(x: 'a): combine x id = x;
+  axiom leftid(x: 'a) : combine id x = x;
 }.
+
+lemma intidr(x: int): x + 0 = x by simplify.
+lemma intidl(x: int): 0 + x = x by simplify.
+instance intmonoid with int monoid = {
+  op id = Int.zero;
+  lemma rightid Monoid by apply intidr 
+  lemma leftid Monoid by apply intidl
+}
 
 (* We would also like allow for the compositionality of type-classes. i.e. a type-class
  * can inherit from two different typeclasses. I illustrate this expected behaviour with the

@@ -1693,14 +1693,23 @@ module Ty = struct
       match (List.length args_enumerated = List.length tc_args) with
       | false -> hierror "defined wrong number of arguments in type class instance declaration"
       | _ -> ();
- 
+      (*TODO: check that axiom provided exists in typeclass definition and provide error message in parser *)
+      (*TODO: uniquley tag axioms to their type class instance *)
+      (*TODO: check ALL axioms are defined *)
+      (*TODO: (inheritance) implicit renaming of type class axioms inherited from others *)
+      (*TODO: (inheritance) checking that type classes inherited have instances that matche*)
+      (*TODO: (inheritance) implicitly copy operations from type class instances and rename/check they exist*)
+      (*TODO: (inheritance) checking that an inherited class has access to methods it references 
+              i.e. monoid without extension shouldn't access combine*)
       for i = 0 to (List.length tc_axs) - 1 do
         let (axp, ax_name) = (List.nth tc_axs i) in
         let new_vars = match axp.pa_vars with
         | Some x -> Some (List.map (fun binding -> replace_var_bind binding tc_args instanceOfArgs) x)
         | _ -> None
         in
-        let axp = {axp with pa_vars = new_vars;} in
+        let new_name = (String.concat "_" [tci_base_path; (unloc ax_name)]) in
+        let new_name = mk_loc (loc ax_name) new_name in
+        let axp = {axp with pa_name = new_name; pa_vars = new_vars;} in
         let (ax, scope') = Ax.add !scope `WeakCheck (mk_loc l axp) in
         scope := scope';
         match ax with
