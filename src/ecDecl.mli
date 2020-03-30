@@ -157,8 +157,6 @@ val axiomatized_op :
 type typeclass = {
   tc_params: ty_params;
   tc_ops : (operator * EcIdent.t) list;
-  tc_axs : (axiom * EcIdent.t) list;
-  tc_ext : ty_params;
 }
 
 type tcinstance = {

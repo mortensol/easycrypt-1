@@ -90,13 +90,14 @@
 
   (*Axiom parse, axiom name, typeclass name*)
   let tc_axioms: ((paxiom * psymbol )* psymbol) list ref = ref []
-  let filter tc_name =  List.filter (fun (ax, tc) -> unloc tc = unloc tc_name) !tc_axioms
+  let filter_tc tc_name =  List.filter (fun (ax, tc) -> unloc tc = unloc tc_name) !tc_axioms
   let replace_params params =
     List.map (fun ((ax, name), tc) -> (({ax with pa_tyvars = params;}, name), tc))
 
-  let mk_tci_instance_axiom tc axname kind =
-    let tc = filter tc in
+  let mk_tci_instance_axiom tc_name axname kind =
+    let tc = filter_tc tc_name in
     let axs = List.filter (fun ((ax, name), _) -> unloc name = unloc axname) tc in
+    if List.length axs = 0 then parse_error (loc tc_name) (Some "there doesn't exist a type class definiton for this instance");
     let ((lemma, axname), _) = List.hd axs in
     (({lemma with pa_kind=kind; }, axname))
 
@@ -109,10 +110,9 @@
       pa_nosmt   = nosmt;
       pa_local   = local; }
 
-  let mk_typeclass_declare (tca_vars, name) (ex, ops, axs) = {
+  let mk_typeclass_declare (tca_vars, name) (ops, axs) = {
       ptc_tcvars = tca_vars;
       ptc_name = name;
-      ptc_ex = ex;
       ptc_ops = ops;
       ptc_axs = axs;
     }
@@ -1620,11 +1620,11 @@ extends:
 | EXTENDS td=tyd_name {td}
 
 typeclass:
-| TYPE CLASS tca=tyd_name ex=extends? EQ LBRACE body=tc_body RBRACE
+| TYPE CLASS tca=tyd_name EQ LBRACE body=tc_body RBRACE
   {
     mk_typeclass_declare
       tca
-      (ex,
+      (
        (fst body),
        List.map (fun ax -> tc_axioms := (ax, (snd tca))::!tc_axioms; ax) (snd body)
       )

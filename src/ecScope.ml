@@ -1574,22 +1574,8 @@ module Ty = struct
         scope := scope';
         operators := (op, op_id) :: !operators;
       done;
-      (* Check axioms *)
-      let axioms = ref [] in
-      (* for i = 0 to (List.length pl_desc.ptc_axs) - 1 do
-        let (axp, name) = (List.nth pl_desc.ptc_axs i)
-        (* let bindings = match axp.pa_vars with Some x -> x | _ -> [] in *)
-        (* let (ax, scope') = Ax.add !scope `Check (mk_loc l axp) in *)
-        (* scope := scope'; *)
-        (* match ax with *)
-        (* | Some ax_name -> *)
-          (* let ((_, ax)) = EcEnv.Ax.lookup ([], ax_name) (env !scope) in *)
-        (* axioms := (axp, (EcIdent.create (unloc name))) :: !axioms; *)
-        (* | _ -> hierror ~loc:l "axiom failed to be created in type class definition `s" ax_name; *)
-      done;  *)
-      (*TODO: extension fields*)
       (* Construct actual type-class *)
-      { tc_params = params ; tc_ops = !operators; tc_axs = !axioms; tc_ext = []; (*Bringing extensions into definition*) }
+      { tc_params = params ; tc_ops = !operators; }
     in
       bindclass scope (unloc name, tclass)
 
@@ -1693,8 +1679,8 @@ module Ty = struct
       match (List.length args_enumerated = List.length tc_args) with
       | false -> hierror "defined wrong number of arguments in type class instance declaration"
       | _ -> ();
+      (*TODO: provide nicer error message when type class doesn't exist *)
       (*TODO: check that axiom provided exists in typeclass definition and provide error message in parser *)
-      (*TODO: uniquley tag axioms to their type class instance *)
       (*TODO: check ALL axioms are defined *)
       (*TODO: (inheritance) implicit renaming of type class axioms inherited from others *)
       (*TODO: (inheritance) checking that type classes inherited have instances that matche*)

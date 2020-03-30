@@ -457,9 +457,7 @@ let subst_field (s : _subst) cr =
 let subst_tc (s : _subst) tc =
   let tc_params = List.map (subst_typaram s) tc.tc_params in
   let tc_ops = List.map (fun (op, name) -> (subst_op s op, name)) tc.tc_ops in
-  let tc_axs = List.map (fun (ax, name) -> (subst_ax s ax, name)) tc.tc_axs in
-  let tc_ext = [] in (*TODO: shouldn't be empty*)
-    { tc_params; tc_ops; tc_axs; tc_ext}
+    { tc_params; tc_ops;} 
 
 let subst_instance (s : _subst) tci =
   let tc = subst_tc s tci.tci_instanceOf in

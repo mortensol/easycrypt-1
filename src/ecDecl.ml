@@ -272,8 +272,6 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) =
 type typeclass = {
   tc_params: ty_params;
   tc_ops : (operator * EcIdent.t) list;
-  tc_axs : (axiom * EcIdent.t) list;
-  tc_ext : ty_params;
 }
 
 type tcinstance = {

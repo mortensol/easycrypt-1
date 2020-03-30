@@ -912,7 +912,6 @@ type prealize = {
 type ptypeclass = {
   ptc_tcvars: ptyparams;
   ptc_name  : psymbol;
-  ptc_ex    : (ptyparams * psymbol) option;
   ptc_ops   : (poperator * psymbol) list;
   ptc_axs   : (paxiom * psymbol)list;
 }
@@ -922,7 +921,6 @@ type ptycinstance = {
   pti_vars : (ptyparams * psymbol); (*What is it an instance of*)
   pti_ops  : (poperator * psymbol) list;
   pti_axs  : (paxiom * psymbol) list;
-  (* pti_axs : paxiom list; *)
 }
 
 (* -------------------------------------------------------------------- *)
