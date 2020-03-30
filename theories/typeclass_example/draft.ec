@@ -29,8 +29,15 @@ type class 'a Monoid = {
 
 lemma intidr(x: int): x + 0 = x by simplify.
 lemma intidl(x: int): 0 + x = x by simplify.
-instance intmonoid with int Monoid = {
+instance intm with int Monoid = {
   op id = Int.zero;
   lemma rightid Monoid by apply intidr
   lemma leftid Monoid by apply intidl
 }.
+
+lemma idcomm (x: int): combine id x = combine x id.
+    proof.
+      rewrite intm_rightid.
+      rewrite intm_leftid.
+      reflexivity.
+    qed.
