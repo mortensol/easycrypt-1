@@ -1679,14 +1679,7 @@ module Ty = struct
       match (List.length args_enumerated = List.length tc_args) with
       | false -> hierror "defined wrong number of arguments in type class instance declaration"
       | _ -> ();
-      (*TODO: provide nicer error message when type class doesn't exist *)
-      (*TODO: check that axiom provided exists in typeclass definition and provide error message in parser *)
-      (*TODO: check ALL axioms are defined *)
-      (*TODO: (inheritance) implicit renaming of type class axioms inherited from others *)
-      (*TODO: (inheritance) checking that type classes inherited have instances that matche*)
-      (*TODO: (inheritance) implicitly copy operations from type class instances and rename/check they exist*)
-      (*TODO: (inheritance) checking that an inherited class has access to methods it references 
-              i.e. monoid without extension shouldn't access combine*)
+
       for i = 0 to (List.length tc_axs) - 1 do
         let (axp, ax_name) = (List.nth tc_axs i) in
         let new_vars = match axp.pa_vars with
@@ -1708,7 +1701,7 @@ module Ty = struct
     in bindtypeclass_instance scope (unloc name, tclassinstance)
 
 
-  let check_tci_operators env tcty ops reqs =
+  (* let check_tci_operators env tcty ops reqs =
     let ue   = EcUnify.UniEnv.create (Some (fst tcty)) in
     let rmap = Mstr.of_list reqs in
 
@@ -1762,7 +1755,7 @@ module Ty = struct
                if not (EcReduction.EqTest.for_type env ty opty) then
                  hierror ~loc "invalid type for operator `%s'" x;
                Mstr.add x p m)
-        Mstr.empty reqs
+        Mstr.empty reqs *)
 
   (* ------------------------------------------------------------------ *)
  (* let check_tci_axioms scope mode axs reqs =
