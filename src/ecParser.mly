@@ -1616,8 +1616,8 @@ typedecl:
 
 (* -------------------------------------------------------------------- *)
 (* Type classes*)
-extends:
-| EXTENDS td=tyd_name {td}
+/* extends:
+| EXTENDS td=tyd_name {td} */
 
 typeclass:
 | TYPE CLASS tca=tyd_name EQ LBRACE body=tc_body RBRACE
@@ -1643,13 +1643,13 @@ tc_ax:
 (* -------------------------------------------------------------------- *)
         (* Type classes (instances)*)
 tycinstance:
-| INSTANCE x=tyd_name
+| INSTANCE x=ident
     WITH iparams=tci_params EQ LBRACE body=tci_body RBRACE
   {
     {
-      pti_name = (snd x);
+      pti_name = x;
       pti_vars = iparams;
-      pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some (snd x);}, name)) (fst body);
+      pti_ops  = List.map (fun (op,name) -> ({op with ptc = Some x;}, name)) (fst body);
       pti_axs  = snd body;
     }
   }
@@ -1662,10 +1662,12 @@ tci_ax:
     mk_tci_instance_axiom tc axname ao
   }
 
+multi:
+    | x=ident COMMA? {x}
 tci_args:
 | empty { []  }
 | x=ident {[(x, [])]}
-| xs=paren(plist1(typaram, COMMA)) { xs }
+| LPAREN xs=multi* RPAREN { List.map (fun x -> (x, [])) xs}
 
 %inline tci_params:
 | tya=tci_args x=ident { (tya, x) }
