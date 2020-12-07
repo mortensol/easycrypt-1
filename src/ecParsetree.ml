@@ -118,6 +118,10 @@ and pinstr = pinstr_r located
 and pstmt  = pinstr list
 
 (* -------------------------------------------------------------------- *)
+
+type locality = Local | Declare | Global
+
+(* -------------------------------------------------------------------- *)
 type pmodule_type = pqsymbol
 type pmodule_type_restr = pqsymbol * pmsymbol located list
 
@@ -161,7 +165,7 @@ and pfunction_decl = {
 and pmodule_def = {
   ptm_header : pmodule_header;
   ptm_body   : pmodule_expr;
-  ptm_local  : bool;
+  ptm_locality : locality;
 }
 
 and pmodule_header =
@@ -205,6 +209,12 @@ type pmodule_decl = {
   ptmd_modty : pmodule_type_restr;
 }
 
+type pinterface = {
+    pi_name : psymbol;
+    pi_sig : pmodule_sig;
+    pi_locality : locality;
+  }
+
 (* -------------------------------------------------------------------- *)
 type ptyparams = (psymbol * pqsymbol list) list
 type ptydname  = (ptyparams * psymbol) located
@@ -213,6 +223,7 @@ type ptydecl = {
   pty_name   : psymbol;
   pty_tyvars : ptyparams;
   pty_body   : ptydbody;
+  pty_locality : locality;
 }
 
 and ptydbody =
@@ -333,6 +344,7 @@ type poperator = {
   po_def    : pop_def;
   po_ax     : osymbol_r;
   po_nosmt  : bool;
+  po_locality : locality;
 }
 
 type ppred_def =
@@ -352,6 +364,7 @@ type ppredicate = {
   pp_name   : psymbol;
   pp_tyvars : (psymbol * pqsymbol list) list option;
   pp_def    : ppred_def;
+  pp_locality  : locality;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -362,6 +375,7 @@ type pnotation = {
   nt_args  : (psymbol * (psymbol list * pty option)) list;
   nt_codom : pty;
   nt_body  : pexpr;
+  nt_local : bool;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -369,16 +383,13 @@ type abrvopt  = [`Printing]
 type abrvopts = (bool * abrvopt) list
 
 type pabbrev = {
-  ab_name : psymbol;
-  ab_tv   : ptyvardecls option;
-  ab_args : ptybindings;
-  ab_def  : pty * pexpr;
-  ab_opts : abrvopts;
+  ab_name  : psymbol;
+  ab_tv    : ptyvardecls option;
+  ab_args  : ptybindings;
+  ab_def   : pty * pexpr;
+  ab_opts  : abrvopts;
+  ab_local : bool;
 }
-
-(* -------------------------------------------------------------------- *)
-type pdeclare =
-| PDCL_Module of pmodule_decl
 
 (* -------------------------------------------------------------------- *)
 type 'a ppt_head =
@@ -898,7 +909,7 @@ type paxiom = {
   pa_formula : pformula;
   pa_kind    : paxiom_kind;
   pa_nosmt   : bool;
-  pa_local   : bool;
+  pa_locality : locality;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -1082,9 +1093,8 @@ type threquire =
 
 (* -------------------------------------------------------------------- *)
 type global_action =
-  | Gdeclare     of pdeclare
   | Gmodule      of pmodule_def
-  | Ginterface   of (psymbol * pmodule_sig)
+  | Ginterface   of pinterface
   | Goperator    of poperator
   | Gpredicate   of ppredicate
   | Gnotation    of pnotation
