@@ -1357,8 +1357,8 @@ let trans_gamepath (env : EcEnv.env) gp =
         EcPath.xpath_fun mpath funsymb
 
 (* -------------------------------------------------------------------- *)
-let rec transmodsig (env : EcEnv.env) (name : symbol) (modty : pmodule_sig) =
-  let Pmty_struct modty = modty in
+let rec transmodsig (env : EcEnv.env) (intf : pinterface) =
+  let Pmty_struct modty = intf.pi_sig in
 
   let margs =
     List.map (fun (x, i) ->
@@ -1368,7 +1368,7 @@ let rec transmodsig (env : EcEnv.env) (name : symbol) (modty : pmodule_sig) =
   let sa =
     List.fold_left (fun sa (x,_) -> Sm.add (EcPath.mident x) sa) Sm.empty margs
   in
-  let env  = EcEnv.Mod.enter name margs env in
+  let env  = EcEnv.Mod.enter (unloc intf.pi_name) margs env in
   let body = transmodsig_body env sa modty.pmsig_body in
   { mis_params = margs;
     mis_body   = body; }
@@ -1651,9 +1651,8 @@ and transstruct1 (env : EcEnv.env) (st : pstructure_item located) =
   match unloc st with
   | Pst_mod  (x,cast, me) ->
     let pe = {
-      ptm_header = if List.is_empty cast then Pmh_ident x else Pmh_cast(Pmh_ident x, cast);
-      ptm_body   = me;
-      ptm_local  = true } in
+      ptm_header   = if List.is_empty cast then Pmh_ident x else Pmh_cast(Pmh_ident x, cast);
+      ptm_body     = me; } in
 
     let me = transmod ~attop:false env pe in
     [], [me.me_name, MI_Module me]

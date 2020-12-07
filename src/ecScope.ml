@@ -875,7 +875,7 @@ module Ax = struct
     let loc = ax.pl_loc and ax = ax.pl_desc in
     let ue  = TT.transtyvars scope.sc_env (loc, ax.pa_tyvars) in
 
-    if ax.pa_local && not (EcSection.in_section scope.sc_section) then
+    if ax.pa_locality = Local && not (EcSection.in_section scope.sc_section) then (* FIXME: section *)
       hierror "cannot declare a local lemma outside of a section";
 
     let (pconcl, tintro) =
@@ -914,10 +914,10 @@ module Ax = struct
     in
 
     let check    = Check_mode.check scope.sc_options in
-    let pucflags = { puc_nosmt = ax.pa_nosmt; puc_local = ax.pa_local; } in
+    let pucflags = { puc_nosmt = ax.pa_nosmt; puc_local = true (* ax.pa_local; *) } in (* FIXME: section *)
     let pucflags = (([], None), pucflags) in
 
-    if not ax.pa_local then begin
+    if not (ax.pa_locality = Local) then begin (* FIXME: section *)
       match EcSection.olocals scope.sc_section with
       | None -> ()
       | Some locals ->
@@ -928,7 +928,7 @@ module Ax = struct
         | None -> ()
       end;
 
-    if ax.pa_local && EcDecl.is_axiom axd.ax_kind then
+    if (ax.pa_locality = Local) && EcDecl.is_axiom axd.ax_kind then (* FIXME: section *)
       hierror "an axiom cannot be local";
 
     match ax.pa_kind with
@@ -1408,15 +1408,15 @@ module Mod = struct
     in
       scope
 
-  let add (scope : scope) (ptm : pmodule_def) =
+  let add_concrete (scope : scope) (lc : locality) (ptm : pmodule_def) =
     assert (scope.sc_pr_uc = None);
 
-    if ptm.ptm_local && not (EcSection.in_section scope.sc_section) then
+    if (lc = Local) && not (EcSection.in_section scope.sc_section) then (* FIXME: section *)
       hierror "cannot declare a local module outside of a section";
 
     let m = TT.transmod scope.sc_env ~attop:true ptm in
 
-    if not ptm.ptm_local then begin
+    if not (lc = Local) then begin (* FIXME: section *)
       match EcSection.olocals scope.sc_section with
       | None -> ()
       | Some locals ->
@@ -1442,16 +1442,16 @@ module Mod = struct
         (EcPrinting.pp_list "@," pp) ur
     end;
 
-    bind scope ptm.ptm_local m
+    bind scope (lc = Local) m (* FIXME: section *)
 
-  let declare (scope : scope) m =
+  let declare (scope : scope) (m : pmodule_decl) =
     if not (EcSection.in_section scope.sc_section) then
       hierror "cannot declare an abstract module outside of a section";
 
-    let modty = m.ptmd_modty in
+    let modty = m.ptm_modty in
     let tysig = fst (TT.transmodtype scope.sc_env (fst modty)) in
     let restr = List.map (TT.trans_topmsymbol scope.sc_env) (snd modty) in
-    let name  = EcIdent.create (unloc m.ptmd_name) in
+    let name  = EcIdent.create (unloc m.ptm_name) in
     let scope =
       let restr = Sx.empty, Sm.of_list restr in
       { scope with
@@ -1461,6 +1461,17 @@ module Mod = struct
             name (tysig, restr) scope.sc_section }
     in
       scope
+
+  let add (scope : scope) (m : pmodule_def_or_decl) =
+    match m with
+    | { ptm_locality = lc; ptm_def = `Concrete def } ->
+      add_concrete scope lc def
+
+    | { ptm_locality = lc; ptm_def = `Abstract decl } ->
+      if lc <> Declare then
+        hierror ~loc:(loc decl.ptm_name)
+          "abstract module must be flagged with `declare`";
+      declare scope decl
 
   let import (scope : scope) (m : pmsymbol located) : scope =
     let m, _ = EcTyping.trans_msymbol (env scope) m in
@@ -1478,10 +1489,11 @@ module ModType = struct
     let scope = maybe_add_to_section scope (EcTheory.CTh_modtype (x, tysig)) in
       scope
 
-  let add (scope : scope) (name : symbol) (i : pmodule_sig) =
+  let add (scope : scope) (intf : pinterface) =
+    (* FIXME: section (locality) *)
     assert (scope.sc_pr_uc = None);
-    let tysig = EcTyping.transmodsig scope.sc_env name i in
-      bind scope (name, tysig)
+    let tysig = EcTyping.transmodsig scope.sc_env intf in
+      bind scope (unloc intf.pi_name, tysig)
 end
 
 (* -------------------------------------------------------------------- *)

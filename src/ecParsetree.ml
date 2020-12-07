@@ -162,10 +162,19 @@ and pfunction_decl = {
 }
 
 (* -------------------------------------------------------------------- *)
+and pmodule_def_or_decl = {
+  ptm_locality : locality;
+  ptm_def      : [`Concrete of pmodule_def | `Abstract of pmodule_decl];
+}
+
+and pmodule_decl = {
+  ptm_name  : psymbol;
+  ptm_modty : pmodule_type_restr;
+}
+
 and pmodule_def = {
   ptm_header : pmodule_header;
   ptm_body   : pmodule_expr;
-  ptm_locality : locality;
 }
 
 and pmodule_header =
@@ -203,17 +212,11 @@ and pfunction_local = {
   pfl_init  : pexpr option;
 }
 
-
-type pmodule_decl = {
-  ptmd_name  : psymbol;
-  ptmd_modty : pmodule_type_restr;
-}
-
 type pinterface = {
-    pi_name : psymbol;
-    pi_sig : pmodule_sig;
-    pi_locality : locality;
-  }
+  pi_name : psymbol;
+  pi_sig : pmodule_sig;
+  pi_locality : locality;
+}
 
 (* -------------------------------------------------------------------- *)
 type ptyparams = (psymbol * pqsymbol list) list
@@ -1093,7 +1096,7 @@ type threquire =
 
 (* -------------------------------------------------------------------- *)
 type global_action =
-  | Gmodule      of pmodule_def
+  | Gmodule      of pmodule_def_or_decl
   | Ginterface   of pinterface
   | Goperator    of poperator
   | Gpredicate   of ppredicate

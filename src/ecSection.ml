@@ -21,16 +21,18 @@ module MSym = EcSymbols.Msym
 (* -------------------------------------------------------------------- *)
 exception NoSectionOpened
 
-type lvl = [`Local | `Global] * [`Axiom | `Lemma]
-
 type locals = {
-  lc_env       : EcEnv.env;
-  lc_name      : symbol option;
-  lc_lemmas    : (path * lvl) list * lvl Mp.t;
-  lc_modules   : Sp.t;
-  lc_abstracts : (EcIdent.t * (module_type * mod_restr)) list * Sid.t;
-  lc_items     : EcTheory.ctheory_item list;
+  lc_env     : EcEnv.env;
+  lc_name    : symbol option;
+  lc_declare : declare list;
+  lc_items   : (bool * EcTheory.ctheory_item) list;
 }
+
+and declare =
+  | DC_Module of EcIdent.t
+  | DC_Type   of EcPath.path
+  | DC_Op     of EcPath.path
+  | DC_Pred   of EcPath.path
 
 let env_of_locals (lc : locals) = lc.lc_env
 

@@ -128,14 +128,14 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Mod : sig
-  val add : scope -> pmodule_def -> scope
+  val add : scope -> pmodule_def_or_decl -> scope
   val declare : scope -> pmodule_decl -> scope
   val import : scope -> pmsymbol located -> scope
 end
 
 (* -------------------------------------------------------------------- *)
 module ModType : sig
-  val add : scope -> symbol -> pmodule_sig -> scope
+  val add : scope -> pinterface -> scope
 end
 
 (* -------------------------------------------------------------------- *)

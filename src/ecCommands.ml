@@ -333,17 +333,9 @@ and process_module (scope : EcScope.scope) m =
   EcScope.Mod.add scope m
 
 (* -------------------------------------------------------------------- *)
-and process_declare (scope : EcScope.scope) x =
-  match x with
-  | PDCL_Module m -> begin
-      EcScope.check_state `InTop "module" scope;
-      EcScope.Mod.declare scope m
-  end
-
-(* -------------------------------------------------------------------- *)
-and process_interface (scope : EcScope.scope) (x, i) =
+and process_interface (scope : EcScope.scope) intf =
   EcScope.check_state `InTop "interface" scope;
-  EcScope.ModType.add scope x.pl_desc i
+  EcScope.ModType.add scope intf
 
 (* -------------------------------------------------------------------- *)
 and process_operator (scope : EcScope.scope) (pop : poperator located) =
@@ -651,7 +643,6 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Gtypeclass   t    -> `Fct   (fun scope -> process_typeclass  scope  (mk_loc loc t))
       | Gtycinstance t    -> `Fct   (fun scope -> process_tycinst    scope  (mk_loc loc t))
       | Gmodule      m    -> `Fct   (fun scope -> process_module     scope  m)
-      | Gdeclare     m    -> `Fct   (fun scope -> process_declare    scope  m)
       | Ginterface   i    -> `Fct   (fun scope -> process_interface  scope  i)
       | Goperator    o    -> `Fct   (fun scope -> process_operator   scope  (mk_loc loc o))
       | Gpredicate   p    -> `Fct   (fun scope -> process_predicate  scope  (mk_loc loc p))
