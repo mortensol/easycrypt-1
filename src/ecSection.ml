@@ -758,6 +758,13 @@ let generalize_export _env to_gen locality _prefix p =
   if locality = EcParsetree.Local then to_gen, None
   else to_gen, Some (CTh_export p)
 
+let generalize_instance env to_gen locality prefix (ty,tci) =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local then to_gen, None
+  (* FIXME: be sure that we have no dep to declare or local,
+     or fix this code *)
+  else to_gen, Some (CTh_instance (ty,tci))
+
 let generalize_baserw _env to_gen locality prefix s =
   assert (locality <> EcParsetree.Declare);
   if locality = EcParsetree.Local then
@@ -790,6 +797,8 @@ let generalize_auto _env to_gen locality _prefix (b,n,s,ps) =
     if ps = [] then to_gen, None
     else to_gen, Some (CTh_auto (b,n,s,ps))
 
+
+
 (* FIXME : add locality for baserw addrw reduction auto *)
 let rec generalize_th_item env to_gen locality prefix th_item =
   match th_item with
@@ -800,10 +809,10 @@ let rec generalize_th_item env to_gen locality prefix th_item =
   | CTh_module me       -> generalize_module env to_gen locality prefix me
   | CTh_theory cth      -> generalize_ctheory env to_gen locality prefix cth
   | CTh_export p        -> generalize_export env to_gen locality prefix p
-  | CTh_instance  _     -> assert false
+  | CTh_instance (ty,i) -> generalize_instance env to_gen locality prefix (ty,i)
   | CTh_typeclass _     -> assert false
   | CTh_baserw  s       -> generalize_baserw env to_gen locality prefix s
-  | CTh_addrw  (p,ps)   -> generalize_addrw env to_gen locality prefix p ps
+  | CTh_addrw (p,ps)    -> generalize_addrw env to_gen locality prefix p ps
   | CTh_reduction rl    -> generalize_reduction env to_gen locality prefix rl
   | CTh_auto hints      -> generalize_auto env to_gen locality prefix hints
 
