@@ -784,6 +784,7 @@ module Auto = struct
   let add_rw scope ~local ~base l =
     let env = env scope in
 
+    (* FIXME section *)
     if local then
       hierror "rewrite hints cannot be local";
 
