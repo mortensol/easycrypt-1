@@ -591,6 +591,7 @@ and subst_ctheory (s : _subst) (cth : ctheory) =
     cth_struct = subst_ctheory_struct s cth.cth_struct; }
 
 (* -------------------------------------------------------------------- *)
+let subst_branches     s = subst_branches (e_subst_of_subst (_subst_of_subst s))
 let subst_ax           s = subst_ax (_subst_of_subst s)
 let subst_op           s = subst_op (_subst_of_subst s)
 let subst_tydecl       s = subst_tydecl (_subst_of_subst s)

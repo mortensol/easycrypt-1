@@ -13,6 +13,8 @@ open EcPath
 open EcTypes
 open EcDecl
 open EcModules
+open EcTheory
+open EcFol
 
 module Sid  = EcIdent.Sid
 module Mid  = EcIdent.Mid
@@ -21,18 +23,32 @@ module MSym = EcSymbols.Msym
 (* -------------------------------------------------------------------- *)
 exception NoSectionOpened
 
+type locality = EcParsetree.locality
+
 type locals = {
   lc_env     : EcEnv.env;
   lc_name    : symbol option;
   lc_declare : declare list;
-  lc_items   : (bool * EcTheory.ctheory_item) list;
+  lc_items   : lc_item list;
 }
+
+and lc_item =
+  | LC_th_item of locality * EcTheory.ctheory_item
+  | LC_decl_mod of EcIdent.t * module_type * mod_restr
+
 
 and declare =
   | DC_Module of EcIdent.t
   | DC_Type   of EcPath.path
   | DC_Op     of EcPath.path
   | DC_Pred   of EcPath.path
+
+let is_declared_type (lc: locals) p =
+  List.exists (function DC_Type p' -> p_equal p p' | _ -> false) lc.lc_declare
+
+let is_declared_op (lc:locals) p =
+  List.exists (function DC_Op p' | DC_Pred p' -> p_equal p p' | _ -> false)
+    lc.lc_declare
 
 let env_of_locals (lc : locals) = lc.lc_env
 
@@ -389,6 +405,455 @@ let tydecl_use_local_or_abs tydecl lc =
   with UseLocal _ -> true
 
 (* -------------------------------------------------------------------- *)
+
+type to_gen = {
+    tg_params  : (EcIdent.t * Sp.t) list;
+    tg_binds  : bind list;
+    tg_subst : EcSubst.subst;
+    tg_clear : Sp.t;
+  }
+
+and bind =
+  | Binding of binding
+  | Imply    of form
+
+
+let add_bind binds bd = binds @ [Binding bd]
+let add_imp binds f   = binds @ [Imply f]
+let add_clear to_gen p =
+  { to_gen with tg_clear = Sp.add p to_gen.tg_clear }
+
+let to_keep to_gen p = Sp.mem p to_gen.tg_clear
+
+let generalize_type to_gen ty =
+  EcSubst.subst_ty to_gen.tg_subst ty
+
+let add_declared_mod to_gen id modty restr =
+  { to_gen with
+    tg_binds  = add_bind to_gen.tg_binds (id, gtmodty modty restr);
+    tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs id [])
+  }
+
+let add_declared_ty env to_gen path =
+  let tydecl = EcEnv.Ty.by_path path env in
+  assert (
+      tydecl.tyd_params = [] &&
+      match tydecl.tyd_type with
+      | `Abstract _ -> true
+      | _ -> false );
+
+  let name = "'" ^ basename path in
+  let id = EcIdent.create name in
+  { to_gen with
+    tg_params = to_gen.tg_params @ [id, Sp.empty];
+    tg_subst  = EcSubst.add_tydef to_gen.tg_subst path ([], tvar id);
+  }
+
+let add_declared_op env to_gen path =
+  let opdecl = EcEnv.Op.by_path path env in
+  assert (
+      opdecl.op_tparams = [] &&
+      match opdecl.op_kind with
+      | OB_oper None | OB_pred None -> true
+      | _ -> false);
+  let name = basename path in
+  let id = EcIdent.create name in
+  let ty = generalize_type to_gen opdecl.op_ty in
+  {
+    to_gen with
+    tg_binds = add_bind to_gen.tg_binds (id, gtty ty);
+    tg_subst =
+      match opdecl.op_kind with
+      | OB_oper _ -> EcSubst.add_opdef to_gen.tg_subst path ([], e_local id ty)
+      | OB_pred _ ->  EcSubst.add_pddef to_gen.tg_subst path ([], f_local id ty)
+      | _ -> assert false }
+
+let tydecl_fv tyd =
+  let fv =
+    match tyd.tyd_type with
+    | `Concrete ty -> ty.ty_fv
+    | `Abstract _ -> Mid.empty
+    | `Datatype tydt ->
+      List.fold_left (fun fv (_, l) ->
+        List.fold_left (fun fv ty ->
+            EcIdent.fv_union fv ty.ty_fv) fv l) Mid.empty tydt.tydt_ctors
+    | `Record (_f, l) ->
+      List.fold_left (fun fv (_, ty) ->
+          EcIdent.fv_union fv ty.ty_fv) Mid.empty l in
+  List.fold_left (fun fv (id, _) -> Mid.remove id fv) fv tyd.tyd_params
+
+let op_body_fv body ty =
+  let fv = ty.ty_fv in
+  match body with
+  | OP_Plain (e, _) -> EcIdent.fv_union fv e.e_fv
+  | OP_Constr _ | OP_Record _ | OP_Proj _ | OP_TC -> fv
+  | OP_Fix opfix ->
+    let fv =
+      List.fold_left (fun fv (_, ty) -> EcIdent.fv_union fv ty.ty_fv)
+        fv opfix.opf_args in
+    let fv = EcIdent.fv_union fv opfix.opf_resty.ty_fv in
+    let rec fv_branches fv = function
+      | OPB_Leaf (l, e) ->
+        let fv = EcIdent.fv_union fv e.e_fv in
+        List.fold_left (fun fv l ->
+            List.fold_left (fun fv (_, ty) ->
+                EcIdent.fv_union fv ty.ty_fv) fv l) fv l
+      | OPB_Branch p ->
+        Parray.fold_left (fun fv ob -> fv_branches fv ob.opb_sub) fv p in
+    fv_branches fv opfix.opf_branches
+
+let pr_body_fv body ty =
+  let fv = ty.ty_fv in
+  match body with
+  | PR_Plain f -> EcIdent.fv_union fv f.f_fv
+  | PR_Ind pri ->
+    let fv =
+      List.fold_left (fun fv (_, ty) -> EcIdent.fv_union fv ty.ty_fv)
+        fv pri.pri_args in
+    let fv_prctor fv ctor =
+      let fv1 =
+        List.fold_left (fun fv f -> EcIdent.fv_union fv f.f_fv)
+          Mid.empty ctor.prc_spec in
+      let fv1 = List.fold_left (fun fv (id, gty) ->
+          EcIdent.fv_union (Mid.remove id fv) (gty_fv gty)) fv1 ctor.prc_bds in
+      EcIdent.fv_union fv fv1 in
+    List.fold_left fv_prctor fv pri.pri_ctors
+
+let notation_fv nota =
+  let fv = EcIdent.fv_union nota.ont_body.e_fv nota.ont_resty.ty_fv in
+  List.fold_left (fun fv (id,ty) ->
+      EcIdent.fv_union (Mid.remove id fv) ty.ty_fv) fv nota.ont_args
+
+let generalize_extra_ty to_gen fv =
+  List.filter (fun (id,_) -> Mid.mem id fv) to_gen.tg_params
+
+let rec generalize_extra_args binds fv =
+  match binds with
+  | [] -> []
+  | Binding (id, gt) :: binds ->
+    let args = generalize_extra_args binds fv in
+    if Mid.mem id fv then
+      match gt with
+      | GTty ty -> (id, ty) :: args
+      | GTmodty  _ -> assert false
+      | GTmem _    -> assert false
+    else args
+  | Imply _ :: binds -> generalize_extra_args binds fv
+
+let rec generalize_extra_forall ~imply binds f =
+  match binds with
+  | [] -> f
+  | Binding (id,gt) :: binds ->
+    let f = generalize_extra_forall ~imply binds f in
+    if Mid.mem id f.f_fv then
+      f_forall [id,gt] f
+    else f
+  | Imply f1 :: binds ->
+    let f = generalize_extra_forall ~imply binds f in
+    if imply then f_imp f1 f else f
+
+let generalize_tydecl env to_gen locality prefix (name, tydecl) =
+  let path = pqname prefix name in
+  match locality with
+  | EcParsetree.Local -> to_gen, None
+  | EcParsetree.Global ->
+    let tydecl = EcSubst.subst_tydecl to_gen.tg_subst tydecl in
+    let fv = tydecl_fv tydecl in
+    let extra = generalize_extra_ty to_gen fv in
+    let tyd_params = extra @ tydecl.tyd_params in
+    let args = List.map (fun (id, _) -> tvar id) tyd_params in
+    let tosubst = (List.map fst tydecl.tyd_params, tconstr path args) in
+    (* For recursive type *)
+    let tyd_type =
+      (EcSubst.subst_tydecl (EcSubst.add_tydef EcSubst.empty path tosubst)
+        tydecl).tyd_type in
+    (* Build the substitution for the remaining *)
+    let to_gen =
+      {to_gen with
+       tg_subst = EcSubst.add_tydef to_gen.tg_subst path tosubst} in
+
+    to_gen, Some (CTh_type (name, { tyd_params; tyd_type }))
+  | EcParsetree.Declare ->
+    let to_gen = add_declared_ty env to_gen path in
+    to_gen, None
+
+let generalize_opdecl env to_gen locality prefix (name, operator) =
+  let path = pqname prefix name in
+  match locality with
+  | EcParsetree.Local -> to_gen, None
+  | EcParsetree.Global ->
+    let operator = EcSubst.subst_op to_gen.tg_subst operator in
+    let tg_subst, operator =
+      match operator.op_kind with
+      | OB_oper None ->
+        let fv = operator.op_ty.ty_fv in
+        let extra = generalize_extra_ty to_gen fv in
+        let op_tparams = extra @ operator.op_tparams in
+        let op_ty = operator.op_ty in
+        let args = List.map (fun (id, _) -> tvar id) op_tparams in
+        let tosubst = (List.map fst operator.op_tparams,
+                       e_op path args op_ty) in
+        let tg_subst =
+          EcSubst.add_opdef to_gen.tg_subst path tosubst in
+        tg_subst, {op_tparams; op_ty; op_kind = OB_oper None}
+
+      | OB_pred None ->
+        let fv = operator.op_ty.ty_fv in
+        let extra = generalize_extra_ty to_gen fv in
+        let op_tparams = extra @ operator.op_tparams in
+        let op_ty = operator.op_ty in
+        let args = List.map (fun (id, _) -> tvar id) op_tparams in
+        let tosubst = (List.map fst operator.op_tparams,
+                       f_op path args op_ty) in
+        let tg_subst =
+          EcSubst.add_pddef to_gen.tg_subst path tosubst in
+        tg_subst, {op_tparams; op_ty; op_kind = OB_pred None}
+
+      | OB_oper (Some body) ->
+        let fv = op_body_fv body operator.op_ty in
+        let extra_t = generalize_extra_ty to_gen fv in
+        let op_tparams = extra_t @ operator.op_tparams in
+        let extra_a = generalize_extra_args to_gen.tg_binds fv in
+        let op_ty = toarrow (List.map snd extra_a) operator.op_ty in
+        let t_args = List.map (fun (id, _) -> tvar id) op_tparams in
+        let eop = e_op path t_args op_ty in
+        let e   =
+          e_app eop (List.map (fun (id,ty) -> e_local id ty) extra_a)
+            operator.op_ty in
+        let tosubst =
+          (List.map fst operator.op_tparams, e) in
+        let tg_subst =
+          EcSubst.add_opdef to_gen.tg_subst path tosubst in
+        let body =
+          match body with
+          | OP_Fix opfix ->
+            let subst = EcSubst.add_opdef EcSubst.empty path tosubst in
+            let nb_extra = List.length extra_a in
+            let opf_struct =
+              let (l,i) = opfix.opf_struct in
+              (List.map (fun i -> i + nb_extra) l, i + nb_extra) in
+            OP_Fix {
+                opf_args     = extra_a @ opfix.opf_args;
+                opf_resty    = opfix.opf_resty;
+                opf_struct;
+                opf_branches = EcSubst.subst_branches subst opfix.opf_branches;
+                opf_nosmt    = opfix.opf_nosmt;
+              }
+
+          | _ -> body in
+        tg_subst, {op_tparams; op_ty; op_kind = OB_oper (Some body) }
+
+      | OB_pred (Some body) ->
+        let fv = pr_body_fv body operator.op_ty in
+        let extra_t = generalize_extra_ty to_gen fv in
+        let op_tparams = extra_t @ operator.op_tparams in
+        let extra_a = generalize_extra_args to_gen.tg_binds fv in
+        let op_ty   = toarrow (List.map snd extra_a) operator.op_ty in
+        let t_args  = List.map (fun (id, _) -> tvar id) op_tparams in
+        let fop = f_op path t_args op_ty in
+        let f   =
+          f_app fop (List.map (fun (id,ty) -> f_local id ty) extra_a)
+            operator.op_ty in
+        let tosubst =
+          (List.map fst operator.op_tparams, f) in
+        let tg_subst =
+          EcSubst.add_pddef to_gen.tg_subst path tosubst in
+        let body =
+          match body with
+          | PR_Plain _ -> body
+          | PR_Ind pri ->
+            let subst = EcSubst.add_pddef EcSubst.empty path tosubst in
+            let pri_args = extra_a @ pri.pri_args in
+            let mk_ctor ctor =
+              {ctor with
+                (* FIXME should we generalize here *)
+                prc_bds =
+                  List.map (fun (id,ty) -> id, gtty ty) extra_a @ ctor.prc_bds;
+                prc_spec = List.map (EcSubst.subst_form subst) ctor.prc_spec;
+              } in
+            let pri_ctors = List.map mk_ctor pri.pri_ctors in
+            PR_Ind { pri_args; pri_ctors } in
+        tg_subst, {op_tparams; op_ty; op_kind = OB_pred (Some body) }
+
+
+      | OB_nott nott ->
+        let fv = notation_fv nott in
+        let extra_t = generalize_extra_ty to_gen fv in
+        let op_tparams = extra_t @ operator.op_tparams in
+        let extra_a = generalize_extra_args to_gen.tg_binds fv in
+        let op_ty   = toarrow (List.map snd extra_a) operator.op_ty in
+        let nott = { nott with ont_args = extra_a @ nott.ont_args; } in
+        to_gen.tg_subst,
+          { op_tparams; op_ty; op_kind = OB_nott nott }
+    in
+    let to_gen = {to_gen with tg_subst} in
+    to_gen, Some (CTh_operator (name, operator))
+
+
+  | EcParsetree.Declare ->
+    let to_gen = add_declared_op env to_gen path in
+    to_gen, None
+
+let generalize_axiom _env to_gen locality prefix (name, ax) =
+  let ax = EcSubst.subst_ax to_gen.tg_subst ax in
+  let path = pqname prefix name in
+  match locality with
+  | EcParsetree.Local ->
+    (* FIXME *)
+    assert (not (is_axiom ax.ax_kind));
+    add_clear to_gen path , None
+  | EcParsetree.Global ->
+    let ax_spec =
+      match ax.ax_kind with
+      | `Axiom _ ->
+        generalize_extra_forall ~imply:false to_gen.tg_binds ax.ax_spec
+      | `Lemma   ->
+        generalize_extra_forall ~imply:true to_gen.tg_binds ax.ax_spec
+    in
+    let extra_t = generalize_extra_ty to_gen ax_spec.f_fv in
+    let ax_tparams = extra_t @ ax.ax_tparams in
+    to_gen, Some (CTh_axiom (name, {ax with ax_tparams; ax_spec}))
+  | EcParsetree.Declare ->
+    assert (is_axiom ax.ax_kind);
+    let to_gen = add_clear to_gen path in
+    let to_gen =
+      { to_gen with tg_binds = add_imp to_gen.tg_binds ax.ax_spec } in
+    to_gen, None
+
+let generalize_modtype _env to_gen locality _prefix (name, ms) =
+  match locality with
+  | EcParsetree.Local ->
+    to_gen, None
+  | EcParsetree.Global ->
+    let ms = EcSubst.subst_modsig to_gen.tg_subst ms in
+    to_gen, Some (CTh_modtype (name, ms))
+  | EcParsetree.Declare -> assert false
+
+let generalize_modtype _env to_gen locality _prefix (name, ms) =
+  match locality with
+  | EcParsetree.Local ->
+    to_gen, None
+  | EcParsetree.Global ->
+    let ms = EcSubst.subst_modsig to_gen.tg_subst ms in
+    to_gen, Some (CTh_modtype (name, ms))
+  | EcParsetree.Declare -> assert false
+
+let generalize_module _env to_gen locality _prefix me =
+  match locality with
+  | EcParsetree.Local ->
+    to_gen, None
+  | EcParsetree.Global ->
+    (* FIXME: we can generalize declare module *)
+    let me = EcSubst.subst_module to_gen.tg_subst me in
+    to_gen, Some (CTh_module me)
+  | EcParsetree.Declare -> assert false (* should be a LC_decl_mod *)
+
+let generalize_export _env to_gen locality _prefix p =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local then to_gen, None
+  else to_gen, Some (CTh_export p)
+
+let generalize_baserw _env to_gen locality prefix s =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local then
+    add_clear to_gen (pqname prefix s), None
+  else to_gen, Some (CTh_baserw s)
+
+let generalize_addrw _env to_gen locality _prefix p ps =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local || not (to_keep to_gen p) then
+    to_gen, None
+  else
+    let ps = List.filter (to_keep to_gen) ps in
+    if ps = [] then to_gen, None
+    else to_gen, Some (CTh_addrw (p, ps))
+
+let generalize_reduction _env to_gen locality _prefix rl =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local then
+    to_gen, None
+  else
+    (* FIXME ensure no dependency to local and declare *)
+    to_gen, Some(CTh_reduction rl)
+
+let generalize_auto _env to_gen locality _prefix (b,n,s,ps) =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local then
+    to_gen, None
+  else
+    let ps = List.filter (to_keep to_gen) ps in
+    if ps = [] then to_gen, None
+    else to_gen, Some (CTh_auto (b,n,s,ps))
+
+(* FIXME : add locality for baserw addrw reduction auto *)
+let rec generalize_th_item env to_gen locality prefix th_item =
+  match th_item with
+  | CTh_type tydecl     -> generalize_tydecl env to_gen locality prefix tydecl
+  | CTh_operator opdecl -> generalize_opdecl env to_gen locality prefix opdecl
+  | CTh_axiom  ax       -> generalize_axiom env to_gen locality prefix ax
+  | CTh_modtype ms      -> generalize_modtype env to_gen locality prefix ms
+  | CTh_module me       -> generalize_module env to_gen locality prefix me
+  | CTh_theory cth      -> generalize_ctheory env to_gen locality prefix cth
+  | CTh_export p        -> generalize_export env to_gen locality prefix p
+  | CTh_instance  _     -> assert false
+  | CTh_typeclass _     -> assert false
+  | CTh_baserw  s       -> generalize_baserw env to_gen locality prefix s
+  | CTh_addrw  (p,ps)   -> generalize_addrw env to_gen locality prefix p ps
+  | CTh_reduction rl    -> generalize_reduction env to_gen locality prefix rl
+  | CTh_auto hints      -> generalize_auto env to_gen locality prefix hints
+
+and generalize_ctheory env to_gen locality prefix (name, (cth, thmode)) =
+  assert (locality <> EcParsetree.Declare);
+  if locality = EcParsetree.Local && thmode = `Abstract then
+    to_gen, None
+  else
+  (* FIXME: c'est quoi ce ctheory_clone ? *)
+  let prefix = pqname prefix name in
+  let to_gen, cth_struct =
+    generalize_ctheory_struct env to_gen locality prefix cth.cth_struct in
+  if cth_struct = [] then to_gen, None
+  else
+    let cth = {cth_desc = CTh_struct cth_struct; cth_struct = cth_struct} in
+    to_gen, Some (CTh_theory (name, (cth, thmode)))
+
+and generalize_ctheory_struct env to_gen locality prefix cth_struct =
+  match cth_struct with
+  | [] -> to_gen, []
+  | item::items ->
+    let to_gen, item = generalize_th_item env to_gen locality prefix item in
+    let to_gen, items =
+      generalize_ctheory_struct env to_gen locality prefix items in
+    match item with
+    | None -> to_gen, items
+    | Some item -> to_gen, item :: items
+
+let generalize_lc_item env to_gen prefix item =
+  match item with
+  | LC_decl_mod (id, modty, restr) ->
+    let to_gen = add_declared_mod to_gen id modty restr in
+    to_gen, None
+  | LC_th_item (locality, th_item) ->
+    generalize_th_item env to_gen locality prefix th_item
+
+let rec generalize_lc_items env to_gen prefix items =
+  match items with
+  | [] -> []
+  | item::items ->
+    let to_gen, item = generalize_lc_item env to_gen prefix item in
+    let items = generalize_lc_items env to_gen prefix items in
+    match item with
+    | None -> items
+    | Some item -> item :: items
+
+
+
+
+
+
+
+
+(* ---------------------------------------------------------------- *)
+
 let abstracts lc = lc.lc_abstracts
 
 let generalize env lc (f : EcFol.form) =

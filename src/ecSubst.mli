@@ -46,6 +46,7 @@ val subst_op      : subst -> operator -> operator
 val subst_tydecl  : subst -> tydecl -> tydecl
 val subst_tc      : subst -> typeclass -> typeclass
 val subst_ctheory : subst -> ctheory -> ctheory
+val subst_branches : subst -> opbranches -> opbranches
 
 (* -------------------------------------------------------------------- *)
 val subst_path         : subst -> path  -> path
