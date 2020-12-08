@@ -58,5 +58,7 @@ type lvl = [`Local | `Global] * [`Axiom | `Lemma]
 
 val add_local_mod : path -> t -> t
 val add_lemma     : path -> lvl -> t -> t
+(* We need more info for EcTheory.ctheory_item *)
+(* Such that we will be able to add it again *)
 val add_item      : EcTheory.ctheory_item -> t -> t
 val add_abstract  : EcIdent.t -> (module_type * mod_restr) -> t -> t
