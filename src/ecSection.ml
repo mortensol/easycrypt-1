@@ -21,6 +21,314 @@ module Mid  = EcIdent.Mid
 module MSym = EcSymbols.Msym
 
 (* -------------------------------------------------------------------- *)
+type cbarg = [
+  | `Module     of mpath
+  | `ModuleType of path
+  | `Op         of path
+]
+
+type cb = cbarg -> unit
+
+(* -------------------------------------------------------------------- *)
+let rec on_ty (cb : cb) (ty : ty) =
+  match ty.ty_node with
+  | Tunivar _        -> ()
+  | Tvar    _        -> ()
+  | Tglob mp         -> cb (`Module mp)
+  | Ttuple tys       -> List.iter (on_ty cb) tys
+  | Tconstr (_, tys) -> List.iter (on_ty cb) tys
+  | Tfun (ty1, ty2)  -> List.iter (on_ty cb) [ty1; ty2]
+
+let on_pv (cb : cb) (pv : prog_var) =
+  cb (`Module pv.pv_name.x_top)
+
+let on_lp (cb : cb) (lp : lpattern) =
+  match lp with
+  | LSymbol (_, ty) -> on_ty cb ty
+  | LTuple  xs      -> List.iter (fun (_, ty) -> on_ty cb ty) xs
+  | LRecord (_, xs) -> List.iter (on_ty cb |- snd) xs
+
+let on_binding (cb : cb) ((_, ty) : (EcIdent.t * ty)) =
+  on_ty cb ty
+
+let on_bindings (cb : cb) (bds : (EcIdent.t * ty) list) =
+  List.iter (on_binding cb) bds
+
+let rec on_expr (cb : cb) (e : expr) =
+  let cbrec = on_expr cb in
+
+  let rec fornode () =
+    match e.e_node with
+    | Eint   _            -> ()
+    | Elocal _            -> ()
+    | Equant (_, bds, e)  -> on_bindings cb bds; cbrec e
+    | Evar   pv           -> on_pv cb pv
+    | Elet   (lp, e1, e2) -> on_lp cb lp; List.iter cbrec [e1; e2]
+    | Etuple es           -> List.iter cbrec es
+    | Eop    (p, tys)     -> cb (`Op p); List.iter (on_ty cb) tys
+    | Eapp   (e, es)      -> List.iter cbrec (e :: es)
+    | Eif    (c, e1, e2)  -> List.iter cbrec [c; e1; e2]
+    | Ematch (e, es, ty)  -> on_ty cb ty; List.iter cbrec (e :: es)
+    | Eproj  (e, _)       -> cbrec e
+
+  in on_ty cb e.e_ty; fornode ()
+
+let on_lv (cb : cb) (lv : lvalue) =
+  let for1 (pv, ty) = on_pv cb pv; on_ty cb ty in
+
+    match lv with
+    | LvVar   pv  -> for1 pv
+    | LvTuple pvs -> List.iter for1 pvs
+
+let rec on_instr (cb : cb) (i : instr)=
+  match i.i_node with
+  | Srnd (lv, e) | Sasgn (lv, e) ->
+      on_lv cb lv;
+      on_expr cb e
+
+  | Sassert e ->
+      on_expr cb e
+
+  | Scall (lv, f, args) ->
+      lv |> oiter (on_lv cb);
+      cb (`Module f.x_top);
+      List.iter (on_expr cb) args
+
+  | Sif (e, s1, s2) ->
+      on_expr cb e;
+      List.iter (on_stmt cb) [s1; s2]
+
+  | Swhile (e, s) ->
+      on_expr cb e;
+      on_stmt cb s
+
+  | Sabstract _ -> ()
+
+and on_stmt (cb : cb) (s : stmt) =
+  List.iter (on_instr cb) s.s_node
+
+let on_lcmem (cb : cb) m =
+    cb (`Module (EcMemory.lmt_xpath m).x_top);
+    Msym.iter (fun _ (_, ty) -> on_ty cb ty) (EcMemory.lmt_bindings m)
+
+let on_memenv (cb : cb) (m : EcMemory.memenv) =
+  match snd m with
+  | None    -> ()
+  | Some lm -> on_lcmem cb lm
+
+let rec on_modty (cb : cb) mty =
+  cb (`ModuleType mty.mt_name);
+  List.iter (fun (_, mty) -> on_modty cb mty) mty.mt_params;
+  List.iter (fun m -> cb (`Module m)) mty.mt_args
+
+let on_gbinding (cb : cb) (b : gty) =
+  match b with
+  | EcFol.GTty ty ->
+      on_ty cb ty
+  | EcFol.GTmodty (mty, (rx, r)) ->
+      on_modty cb mty;
+      Sx.iter (fun x -> cb (`Module x.x_top)) rx;
+      Sm.iter (fun x -> cb (`Module x)) r
+  | EcFol.GTmem None->
+      ()
+  | EcFol.GTmem (Some m) ->
+      on_lcmem cb m
+
+let on_gbindings (cb : cb) (b : (EcIdent.t * gty) list) =
+  List.iter (fun (_, b) -> on_gbinding cb b) b
+
+let rec on_form (cb : cb) (f : EcFol.form) =
+  let cbrec = on_form cb in
+
+  let rec fornode () =
+    match f.EcFol.f_node with
+    | EcFol.Fint      _            -> ()
+    | EcFol.Flocal    _            -> ()
+    | EcFol.Fquant    (_, b, f)    -> on_gbindings cb b; cbrec f
+    | EcFol.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
+    | EcFol.Fmatch    (b, fs, ty)  -> on_ty cb ty; List.iter cbrec (b :: fs)
+    | EcFol.Flet      (lp, f1, f2) -> on_lp cb lp; List.iter cbrec [f1; f2]
+    | EcFol.Fop       (p, tys)     -> cb (`Op p); List.iter (on_ty cb) tys
+    | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
+    | EcFol.Ftuple    fs           -> List.iter cbrec fs
+    | EcFol.Fproj     (f, _)       -> cbrec f
+    | EcFol.Fpvar     (pv, _)      -> on_pv  cb pv
+    | EcFol.Fglob     (mp, _)      -> cb (`Module mp)
+    | EcFol.FhoareF   hf           -> on_hf  cb hf
+    | EcFol.FhoareS   hs           -> on_hs  cb hs
+    | EcFol.FequivF   ef           -> on_ef  cb ef
+    | EcFol.FequivS   es           -> on_es  cb es
+    | EcFol.FeagerF   eg           -> on_eg  cb eg
+    | EcFol.FbdHoareS bhs          -> on_bhs cb bhs
+    | EcFol.FbdHoareF bhf          -> on_bhf cb bhf
+    | EcFol.Fpr       pr           -> on_pr  cb pr
+
+  and on_hf cb hf =
+    on_form cb hf.EcFol.hf_pr;
+    on_form cb hf.EcFol.hf_po;
+    cb (`Module hf.EcFol.hf_f.x_top)
+
+  and on_hs cb hs =
+    on_form cb hs.EcFol.hs_pr;
+    on_form cb hs.EcFol.hs_po;
+    on_stmt cb hs.EcFol.hs_s;
+    on_memenv cb hs.EcFol.hs_m
+
+  and on_ef cb ef =
+    on_form cb ef.EcFol.ef_pr;
+    on_form cb ef.EcFol.ef_po;
+    cb (`Module ef.EcFol.ef_fl.x_top);
+    cb (`Module ef.EcFol.ef_fr.x_top)
+
+  and on_es cb es =
+    on_form cb es.EcFol.es_pr;
+    on_form cb es.EcFol.es_po;
+    on_stmt cb es.EcFol.es_sl;
+    on_stmt cb es.EcFol.es_sr;
+    on_memenv cb es.EcFol.es_ml;
+    on_memenv cb es.EcFol.es_mr
+
+  and on_eg cb eg =
+    on_form cb eg.EcFol.eg_pr;
+    on_form cb eg.EcFol.eg_po;
+    cb (`Module eg.EcFol.eg_fl.x_top);
+    cb (`Module eg.EcFol.eg_fr.x_top);
+    on_stmt cb eg.EcFol.eg_sl;
+    on_stmt cb eg.EcFol.eg_sr;
+
+  and on_bhf cb bhf =
+    on_form cb bhf.EcFol.bhf_pr;
+    on_form cb bhf.EcFol.bhf_po;
+    on_form cb bhf.EcFol.bhf_bd;
+    cb (`Module bhf.EcFol.bhf_f.x_top)
+
+  and on_bhs cb bhs =
+    on_form cb bhs.EcFol.bhs_pr;
+    on_form cb bhs.EcFol.bhs_po;
+    on_form cb bhs.EcFol.bhs_bd;
+    on_stmt cb bhs.EcFol.bhs_s;
+    on_memenv cb bhs.EcFol.bhs_m
+
+  and on_pr cb pr =
+    cb (`Module pr.EcFol.pr_fun.x_top);
+    List.iter (on_form cb) [pr.EcFol.pr_event; pr.EcFol.pr_args]
+
+  in
+    on_ty cb f.EcFol.f_ty; fornode ()
+
+let rec on_module (cb : cb) (me : module_expr) =
+  match me.me_body with
+  | ME_Alias (_, mp)  -> cb (`Module mp)
+  | ME_Structure st   -> on_mstruct cb st
+  | ME_Decl (mty, sm) -> on_mdecl cb (mty, sm)
+
+and on_mdecl (cb : cb) ((mty, (rx, r)) : module_type * mod_restr) =
+  on_modty cb mty;
+  Sx.iter (fun x -> cb (`Module x.x_top)) rx;
+  Sm.iter (fun x -> cb (`Module x)) r
+
+and on_mstruct (cb : cb) (st : module_structure) =
+  List.iter (on_mpath_mstruct1 cb) st.ms_body
+
+and on_mpath_mstruct1 (cb : cb) (item : module_item) =
+  match item with
+  | MI_Module   me -> on_module cb me
+  | MI_Variable x  -> on_ty cb x.v_type
+  | MI_Function f  -> on_fun cb f
+
+and on_fun (cb : cb) (fun_ : function_) =
+  on_fun_sig  cb fun_.f_sig;
+  on_fun_body cb fun_.f_def
+
+and on_fun_sig (cb : cb) (fsig : funsig) =
+  on_ty cb fsig.fs_arg;
+  on_ty cb fsig.fs_ret
+
+and on_fun_body (cb : cb) (fbody : function_body) =
+  match fbody with
+  | FBalias xp -> cb (`Module xp.x_top)
+  | FBdef fdef -> on_fun_def cb fdef
+  | FBabs oi   -> on_fun_oi  cb oi
+
+and on_fun_def (cb : cb) (fdef : function_def) =
+  List.iter (fun v -> on_ty cb v.v_type) fdef.f_locals;
+  on_stmt cb fdef.f_body;
+  fdef.f_ret |> oiter (on_expr cb);
+  on_uses cb fdef.f_uses
+
+and on_uses (cb : cb) (uses : uses) =
+  List.iter (fun x -> cb (`Module x.x_top)) uses.us_calls;
+  Sx.iter   (fun x -> cb (`Module x.x_top)) uses.us_reads;
+  Sx.iter   (fun x -> cb (`Module x.x_top)) uses.us_writes
+
+and on_fun_oi (cb : cb) (oi : oracle_info) =
+  List.iter (fun x -> cb (`Module x.x_top)) oi.oi_calls
+
+(* -------------------------------------------------------------------- *)
+let on_tydecl (cb : cb) (tydecl : tydecl) =
+  match tydecl.tyd_type with
+  | `Concrete ty -> on_ty cb ty
+  | `Abstract _  -> ()
+
+  | `Record (f, fds) ->
+      on_form cb f;
+      List.iter (on_ty cb |- snd) fds
+
+  | `Datatype dt ->
+      List.iter (List.iter (on_ty cb) |- snd) dt.tydt_ctors;
+      List.iter (on_form cb) [dt.tydt_schelim; dt.tydt_schcase]
+
+(* -------------------------------------------------------------------- *)
+let on_opdecl (cb : cb) (opdecl : operator) =
+  let for_kind () =
+    match opdecl.op_kind with
+   | OB_pred None -> ()
+
+   | OB_pred (Some (PR_Plain f)) ->
+      on_form cb f
+
+   | OB_pred (Some (PR_Ind pri)) ->
+      on_bindings cb pri.pri_args;
+      List.iter (fun ctor ->
+        on_gbindings cb ctor.prc_bds;
+        List.iter (on_form cb) ctor.prc_spec)
+      pri.pri_ctors
+
+   | OB_nott nott -> begin
+      List.iter (on_ty cb |- snd) nott.ont_args;
+      on_ty cb nott.ont_resty;
+      on_expr cb nott.ont_body
+     end
+
+   | OB_oper None   -> ()
+   | OB_oper Some b ->
+       match b with
+       | OP_Constr _ -> ()
+       | OP_Record _ -> ()
+       | OP_Proj   _ -> ()
+       | OP_TC       -> ()
+       | OP_Plain  (e, _) -> on_expr cb e
+       | OP_Fix    f ->
+         let rec on_mpath_branches br =
+           match br with
+           | OPB_Leaf (bds, e) ->
+               List.iter (on_bindings cb) bds;
+               on_expr cb e
+           | OPB_Branch br ->
+               Parray.iter on_mpath_branch br
+
+         and on_mpath_branch br =
+           on_mpath_branches br.opb_sub
+
+         in on_mpath_branches f.opf_branches
+
+  in on_ty cb opdecl.op_ty; for_kind ()
+
+(* -------------------------------------------------------------------- *)
+let on_axiom (cb : cb) (ax : axiom) =
+  on_form cb ax.ax_spec
+
+(* -------------------------------------------------------------------- *)
 exception NoSectionOpened
 
 type locality = EcParsetree.locality
@@ -80,241 +388,8 @@ let rec is_mp_abstract mp (lc : locals) =
   in
     toplocal || (List.exists (is_mp_abstract^~ lc) mp.m_args)
 
-let rec on_mpath_ty cb (ty : ty) =
-  match ty.ty_node with
-  | Tunivar _        -> ()
-  | Tvar    _        -> ()
-  | Tglob mp         -> cb mp
-  | Ttuple tys       -> List.iter (on_mpath_ty cb) tys
-  | Tconstr (_, tys) -> List.iter (on_mpath_ty cb) tys
-  | Tfun (ty1, ty2)  -> List.iter (on_mpath_ty cb) [ty1; ty2]
-
-let on_mpath_pv cb (pv : prog_var)=
-  cb pv.pv_name.x_top
-
-let on_mpath_lp cb (lp : lpattern) =
-  match lp with
-  | LSymbol (_, ty) -> on_mpath_ty cb ty
-  | LTuple  xs      -> List.iter (fun (_, ty) -> on_mpath_ty cb ty) xs
-  | LRecord (_, xs) -> List.iter (on_mpath_ty cb |- snd) xs
-
-let on_mpath_binding cb ((_, ty) : (EcIdent.t * ty)) =
-  on_mpath_ty cb ty
-
-let on_mpath_bindings cb bds =
-  List.iter (on_mpath_binding cb) bds
-
-let rec on_mpath_expr cb (e : expr) =
-  let cbrec = on_mpath_expr cb in
-
-  let rec fornode () =
-    match e.e_node with
-    | Eint   _            -> ()
-    | Elocal _            -> ()
-    | Equant (_, bds, e)  -> on_mpath_bindings cb bds; cbrec e
-    | Evar   pv           -> on_mpath_pv cb pv
-    | Elet   (lp, e1, e2) -> on_mpath_lp cb lp; List.iter cbrec [e1; e2]
-    | Etuple es           -> List.iter cbrec es
-    | Eop    (_, tys)     -> List.iter (on_mpath_ty cb) tys
-    | Eapp   (e, es)      -> List.iter cbrec (e :: es)
-    | Eif    (c, e1, e2)  -> List.iter cbrec [c; e1; e2]
-    | Ematch (e, es, ty)  -> on_mpath_ty cb ty; List.iter cbrec (e :: es)
-    | Eproj  (e, _)       -> cbrec e
-
-  in on_mpath_ty cb e.e_ty; fornode ()
-
-let on_mpath_lv cb (lv : lvalue) =
-  let for1 (pv, ty) = on_mpath_pv cb pv; on_mpath_ty cb ty in
-
-    match lv with
-    | LvVar   pv  -> for1 pv
-    | LvTuple pvs -> List.iter for1 pvs
-
-let rec on_mpath_instr cb (i : instr)=
-  match i.i_node with
-  | Srnd (lv, e) | Sasgn (lv, e) ->
-      on_mpath_lv cb lv;
-      on_mpath_expr cb e
-
-  | Sassert e ->
-      on_mpath_expr cb e
-
-  | Scall (lv, f, args) ->
-      lv |> oiter (on_mpath_lv cb);
-      cb f.x_top;
-      List.iter (on_mpath_expr cb) args
-
-  | Sif (e, s1, s2) ->
-      on_mpath_expr cb e;
-      List.iter (on_mpath_stmt cb) [s1; s2]
-
-  | Swhile (e, s) ->
-      on_mpath_expr cb e;
-      on_mpath_stmt cb s
-
-  | Sabstract _ -> ()
-
-and on_mpath_stmt cb (s : stmt) =
-  List.iter (on_mpath_instr cb) s.s_node
-
-let on_mpath_lcmem cb m =
-    cb (EcMemory.lmt_xpath m).x_top;
-    Msym.iter (fun _ (_,ty) -> on_mpath_ty cb ty) (EcMemory.lmt_bindings m)
-
-let on_mpath_memenv cb (m : EcMemory.memenv) =
-  match snd m with
-  | None    -> ()
-  | Some lm -> on_mpath_lcmem cb lm
-
-let rec on_mpath_modty cb mty =
-  List.iter (fun (_, mty) -> on_mpath_modty cb mty) mty.mt_params;
-  List.iter cb mty.mt_args
-
-let on_mpath_gbinding cb b =
-  match b with
-  | EcFol.GTty ty ->
-      on_mpath_ty cb ty
-  | EcFol.GTmodty (mty, (rx,r)) ->
-      on_mpath_modty cb mty;
-      Sx.iter (fun x -> cb x.x_top) rx;
-      Sm.iter cb r
-  | EcFol.GTmem None->
-      ()
-  | EcFol.GTmem (Some m) ->
-      on_mpath_lcmem cb m
-
-let on_mpath_gbindings cb b =
-  List.iter (fun (_, b) -> on_mpath_gbinding cb b) b
-
-let rec on_mpath_form cb (f : EcFol.form) =
-  let cbrec = on_mpath_form cb in
-
-  let rec fornode () =
-    match f.EcFol.f_node with
-    | EcFol.Fint      _            -> ()
-    | EcFol.Flocal    _            -> ()
-    | EcFol.Fquant    (_, b, f)    -> on_mpath_gbindings cb b; cbrec f
-    | EcFol.Fif       (f1, f2, f3) -> List.iter cbrec [f1; f2; f3]
-    | EcFol.Fmatch    (b, fs, ty)  -> on_mpath_ty cb ty; List.iter cbrec (b :: fs)
-    | EcFol.Flet      (lp, f1, f2) -> on_mpath_lp cb lp; List.iter cbrec [f1; f2]
-    | EcFol.Fop       (_, tys)     -> List.iter (on_mpath_ty cb) tys
-    | EcFol.Fapp      (f, fs)      -> List.iter cbrec (f :: fs)
-    | EcFol.Ftuple    fs           -> List.iter cbrec fs
-    | EcFol.Fproj     (f, _)       -> cbrec f
-    | EcFol.Fpvar     (pv, _)      -> on_mpath_pv  cb pv
-    | EcFol.Fglob     (mp, _)      -> cb mp
-    | EcFol.FhoareF   hf           -> on_mpath_hf  cb hf
-    | EcFol.FhoareS   hs           -> on_mpath_hs  cb hs
-    | EcFol.FequivF   ef           -> on_mpath_ef  cb ef
-    | EcFol.FequivS   es           -> on_mpath_es  cb es
-    | EcFol.FeagerF   eg           -> on_mpath_eg  cb eg
-    | EcFol.FbdHoareS bhs          -> on_mpath_bhs cb bhs
-    | EcFol.FbdHoareF bhf          -> on_mpath_bhf cb bhf
-    | EcFol.Fpr       pr           -> on_mpath_pr  cb pr
-
-  and on_mpath_hf cb hf =
-    on_mpath_form cb hf.EcFol.hf_pr;
-    on_mpath_form cb hf.EcFol.hf_po;
-    cb hf.EcFol.hf_f.x_top
-
-  and on_mpath_hs cb hs =
-    on_mpath_form cb hs.EcFol.hs_pr;
-    on_mpath_form cb hs.EcFol.hs_po;
-    on_mpath_stmt cb hs.EcFol.hs_s;
-    on_mpath_memenv cb hs.EcFol.hs_m
-
-  and on_mpath_ef cb ef =
-    on_mpath_form cb ef.EcFol.ef_pr;
-    on_mpath_form cb ef.EcFol.ef_po;
-    cb ef.EcFol.ef_fl.x_top;
-    cb ef.EcFol.ef_fr.x_top
-
-  and on_mpath_es cb es =
-    on_mpath_form cb es.EcFol.es_pr;
-    on_mpath_form cb es.EcFol.es_po;
-    on_mpath_stmt cb es.EcFol.es_sl;
-    on_mpath_stmt cb es.EcFol.es_sr;
-    on_mpath_memenv cb es.EcFol.es_ml;
-    on_mpath_memenv cb es.EcFol.es_mr
-
-  and on_mpath_eg cb eg =
-    on_mpath_form cb eg.EcFol.eg_pr;
-    on_mpath_form cb eg.EcFol.eg_po;
-    cb eg.EcFol.eg_fl.x_top;
-    cb eg.EcFol.eg_fr.x_top;
-    on_mpath_stmt cb eg.EcFol.eg_sl;
-    on_mpath_stmt cb eg.EcFol.eg_sr;
-
-  and on_mpath_bhf cb bhf =
-    on_mpath_form cb bhf.EcFol.bhf_pr;
-    on_mpath_form cb bhf.EcFol.bhf_po;
-    on_mpath_form cb bhf.EcFol.bhf_bd;
-    cb bhf.EcFol.bhf_f.x_top
-
-  and on_mpath_bhs cb bhs =
-    on_mpath_form cb bhs.EcFol.bhs_pr;
-    on_mpath_form cb bhs.EcFol.bhs_po;
-    on_mpath_form cb bhs.EcFol.bhs_bd;
-    on_mpath_stmt cb bhs.EcFol.bhs_s;
-    on_mpath_memenv cb bhs.EcFol.bhs_m
-
-  and on_mpath_pr cb pr =
-    cb pr.EcFol.pr_fun.x_top;
-    List.iter (on_mpath_form cb) [pr.EcFol.pr_event; pr.EcFol.pr_args]
-
-  in
-    on_mpath_ty cb f.EcFol.f_ty; fornode ()
-
-let rec on_mpath_module cb (me : module_expr) =
-  match me.me_body with
-  | ME_Alias (_, mp)  -> cb mp
-  | ME_Structure st   -> on_mpath_mstruct cb st
-  | ME_Decl (mty, sm) -> on_mpath_mdecl cb (mty, sm)
-
-and on_mpath_mdecl cb (mty,(rx,r)) =
-  on_mpath_modty cb mty;
-  Sx.iter (fun x -> cb x.x_top) rx;
-  Sm.iter cb r
-
-and on_mpath_mstruct cb st =
-  List.iter (on_mpath_mstruct1 cb) st.ms_body
-
-and on_mpath_mstruct1 cb item =
-  match item with
-  | MI_Module   me -> on_mpath_module cb me
-  | MI_Variable x  -> on_mpath_ty cb x.v_type
-  | MI_Function f  -> on_mpath_fun cb f
-
-and on_mpath_fun cb fun_ =
-  on_mpath_fun_sig  cb fun_.f_sig;
-  on_mpath_fun_body cb fun_.f_def
-
-and on_mpath_fun_sig cb fsig =
-  on_mpath_ty cb fsig.fs_arg;
-  on_mpath_ty cb fsig.fs_ret
-
-and on_mpath_fun_body cb fbody =
-  match fbody with
-  | FBalias xp -> cb xp.x_top
-  | FBdef fdef -> on_mpath_fun_def cb fdef
-  | FBabs oi   -> on_mpath_fun_oi  cb oi
-
-and on_mpath_fun_def cb fdef =
-  List.iter (fun v -> on_mpath_ty cb v.v_type) fdef.f_locals;
-  on_mpath_stmt cb fdef.f_body;
-  fdef.f_ret |> oiter (on_mpath_expr cb);
-  on_mpath_uses cb fdef.f_uses
-
-and on_mpath_uses cb uses =
-  List.iter (fun x -> cb x.x_top) uses.us_calls;
-  Sx.iter   (fun x -> cb x.x_top) uses.us_reads;
-  Sx.iter   (fun x -> cb x.x_top) uses.us_writes
-
-and on_mpath_fun_oi cb oi =
-  List.iter (fun x -> cb x.x_top) oi.oi_calls
 
 (* -------------------------------------------------------------------- *)
-
 let check_use_local_or_abs lc mp =
   if is_mp_local mp lc || is_mp_abstract mp lc then
     raise (UseLocal mp)
@@ -333,76 +408,6 @@ let module_use_local_or_abs m lc =
   try  on_mpath_module (check_use_local_or_abs lc) m; false
   with UseLocal _ -> true
 
-(* -------------------------------------------------------------------- *)
-let opdecl_use_local_or_abs opdecl lc =
-  let cb = check_use_local_or_abs lc in
-
-  try
-    on_mpath_ty cb opdecl.op_ty;
-    (match opdecl.op_kind with
-     | OB_pred None -> ()
-
-     | OB_pred (Some (PR_Plain f)) ->
-        on_mpath_form cb f
-
-     | OB_pred (Some (PR_Ind pri)) ->
-        on_mpath_bindings cb pri.pri_args;
-        List.iter (fun ctor ->
-          on_mpath_gbindings cb ctor.prc_bds;
-          List.iter (on_mpath_form cb) ctor.prc_spec)
-        pri.pri_ctors
-
-     | OB_nott nott -> begin
-        List.iter (on_mpath_ty cb |- snd) nott.ont_args;
-        on_mpath_ty cb nott.ont_resty;
-        on_mpath_expr cb nott.ont_body
-       end
-
-
-     | OB_oper None   -> ()
-     | OB_oper Some b ->
-         match b with
-         | OP_Constr _ -> ()
-         | OP_Record _ -> ()
-         | OP_Proj   _ -> ()
-         | OP_TC       -> ()
-         | OP_Plain  (e, _) -> on_mpath_expr cb e
-         | OP_Fix    f ->
-           let rec on_mpath_branches br =
-             match br with
-             | OPB_Leaf (bds, e) ->
-                 List.iter (on_mpath_bindings cb) bds;
-                 on_mpath_expr cb e
-             | OPB_Branch br ->
-                 Parray.iter on_mpath_branch br
-
-           and on_mpath_branch br =
-             on_mpath_branches br.opb_sub
-
-           in on_mpath_branches f.opf_branches);
-    false
-
-  with UseLocal _ -> true
-
-(* -------------------------------------------------------------------- *)
-let tydecl_use_local_or_abs tydecl lc =
-  let cb = check_use_local_or_abs lc in
-
-  try
-    (match tydecl.tyd_type with
-    | `Concrete ty -> on_mpath_ty cb ty
-    | `Abstract _  -> ()
-
-    | `Record (f, fds) ->
-        on_mpath_form cb f;
-        List.iter (on_mpath_ty cb |- snd) fds
-
-    | `Datatype dt ->
-        List.iter (List.iter (on_mpath_ty cb) |- snd) dt.tydt_ctors;
-        List.iter (on_mpath_form cb) [dt.tydt_schelim; dt.tydt_schcase]);
-    false
-
-  with UseLocal _ -> true
 
 (* -------------------------------------------------------------------- *)
 
@@ -844,12 +849,6 @@ let rec generalize_lc_items env to_gen prefix items =
     match item with
     | None -> items
     | Some item -> item :: items
-
-
-
-
-
-
 
 
 (* ---------------------------------------------------------------- *)
