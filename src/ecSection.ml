@@ -26,6 +26,7 @@ type cbarg = [
   | `Module     of mpath
   | `ModuleType of path
   | `Op         of path
+  | `Ax         of path
 ]
 
 type cb = cbarg -> unit
@@ -364,13 +365,15 @@ and declare =
   | DC_Module of EcIdent.t
   | DC_Type   of EcPath.path
   | DC_Op     of EcPath.path
+  | DC_Axiom  of EcPath.path
 
 let is_declared (scenv : scenv) (who : cbarg) =
   let for1 (declare : declare) =
     match declare, who with
-    | DC_Module x, `Module mp when m_equal mp (mident x) -> true
-    | DC_Type   p, `Type   p' when p_equal p p' -> true
-    | DC_Op     p, `Op     p' when p_equal p p' -> true
+    | DC_Module x, `Module mp -> m_equal mp (mident x)
+    | DC_Type   p, `Type   p' -> p_equal p p'
+    | DC_Op     p, `Op     p' -> p_equal p p'
+    | DC_Axiom  p, `Ax     p' -> p_equal p p'
     | _, _ -> false
 
   in List.exists for1 scenv.lc_declare
@@ -380,11 +383,35 @@ let is_local (scenv : scenv) (who : cbarg) =
   | `Type       p -> Sp.mem p scenv.lc_locals.lc_types
   | `ModuleType p -> Sp.mem p scenv.lc_locals.lc_modtypes
   | `Op         p -> Sp.mem p scenv.lc_locals.lc_operators
-
+  | `Ax         p -> Sp.mem p scenv.lc_locals.lc_axioms
   | `Module mp ->
       match mp.m_top with
       | `Local    _      -> false
       | `Concrete (p, _) -> Sp.mem p scenv.lc_locals.lc_modtypes
+
+(* -------------------------------------------------------------------- *)
+
+let get_locality scenv who =
+  if is_declared scenv who then EcParsetree.Declare
+  else if is_local scenv who then EcParsetree.Local
+  else EcParsetree.Global
+
+
+let get_ty_locality scenv p = get_locality scenv (`Type p)
+
+let get_op_locality scenv p = get_locality scenv (`Op p)
+
+let get_ax_locality scenv p = get_locality scenv (`Ax p)
+
+let get_mod_locality scenv mp = get_locality scenv (`Module mp)
+
+let get_th_locality scenv p =
+  if Sp.mem p scenv.lc_locals.lc_theories then EcParsetree.Local
+  else EcParsetree.Global
+
+let get_modty_locality scenv p =
+  if is_local scenv (`ModuleType p) then EcParsetree.Local
+  else EcParsetree.Global
 
 (* -------------------------------------------------------------------- *)
 type to_gen = {
@@ -415,8 +442,7 @@ let add_declared_mod to_gen id modty restr =
     tg_subst  = EcSubst.add_module to_gen.tg_subst id (mpath_abs id [])
   }
 
-let add_declared_ty env to_gen path =
-  let tydecl = EcEnv.Ty.by_path path env in
+let add_declared_ty to_gen path tydecl =
   assert (
       tydecl.tyd_params = [] &&
       match tydecl.tyd_type with
@@ -430,8 +456,7 @@ let add_declared_ty env to_gen path =
     tg_subst  = EcSubst.add_tydef to_gen.tg_subst path ([], tvar id);
   }
 
-let add_declared_op env to_gen path =
-  let opdecl = EcEnv.Op.by_path path env in
+let add_declared_op to_gen path opdecl =
   assert (
       opdecl.op_tparams = [] &&
       match opdecl.op_kind with
@@ -533,9 +558,9 @@ let rec generalize_extra_forall ~imply binds f =
     let f = generalize_extra_forall ~imply binds f in
     if imply then f_imp f1 f else f
 
-let generalize_tydecl env to_gen locality prefix (name, tydecl) =
+let generalize_tydecl scenv to_gen prefix (name, tydecl) =
   let path = pqname prefix name in
-  match get_type_locality env path with
+  match get_ty_locality scenv path with
   | EcParsetree.Local -> to_gen, None
   | EcParsetree.Global ->
     let tydecl = EcSubst.subst_tydecl to_gen.tg_subst tydecl in
@@ -555,12 +580,12 @@ let generalize_tydecl env to_gen locality prefix (name, tydecl) =
 
     to_gen, Some (CTh_type (name, { tyd_params; tyd_type }))
   | EcParsetree.Declare ->
-    let to_gen = add_declared_ty env to_gen path in
+    let to_gen = add_declared_ty to_gen path tydecl in
     to_gen, None
 
-let generalize_opdecl env to_gen locality prefix (name, operator) =
+let generalize_opdecl scenv to_gen prefix (name, operator) =
   let path = pqname prefix name in
-  match get_op_locality env path with
+  match get_op_locality scenv path with
   | EcParsetree.Local -> to_gen, None
   | EcParsetree.Global ->
     let operator = EcSubst.subst_op to_gen.tg_subst operator in
@@ -672,13 +697,13 @@ let generalize_opdecl env to_gen locality prefix (name, operator) =
 
 
   | EcParsetree.Declare ->
-    let to_gen = add_declared_op env to_gen path in
+    let to_gen = add_declared_op to_gen path operator in
     to_gen, None
 
-let generalize_axiom env to_gen prefix (name, ax) =
+let generalize_axiom scenv to_gen prefix (name, ax) =
   let ax = EcSubst.subst_ax to_gen.tg_subst ax in
   let path = pqname prefix name in
-  match get_axiom_locality env path with
+  match get_ax_locality scenv path with
   | EcParsetree.Local ->
     (* FIXME *)
     assert (not (is_axiom ax.ax_kind));
@@ -701,8 +726,8 @@ let generalize_axiom env to_gen prefix (name, ax) =
       { to_gen with tg_binds = add_imp to_gen.tg_binds ax.ax_spec } in
     to_gen, None
 
-let generalize_modtype env to_gen prefix (name, ms) =
-  match get_modtype_locality env (EcPath.pqname prefix name) with
+let generalize_modtype scenv to_gen prefix (name, ms) =
+  match get_modty_locality scenv (EcPath.pqname prefix name) with
   | EcParsetree.Local ->
     to_gen, None
   | EcParsetree.Global ->
@@ -710,9 +735,9 @@ let generalize_modtype env to_gen prefix (name, ms) =
     to_gen, Some (CTh_modtype (name, ms))
   | EcParsetree.Declare -> assert false
 
-let generalize_module _env to_gen locality prefix me =
+let generalize_module scenv to_gen prefix me =
   let path = EcPath.pqname prefix me.me_name in
-  match get_module_locality env path with
+  match get_mod_locality scenv (mpath_crt path [] None) with
   | EcParsetree.Local ->
     to_gen, None
   | EcParsetree.Global ->
@@ -721,26 +746,26 @@ let generalize_module _env to_gen locality prefix me =
     to_gen, Some (CTh_module me)
   | EcParsetree.Declare -> assert false (* should be a LC_decl_mod *)
 
-let generalize_export _env to_gen locality _prefix p =
-  assert (locality <> EcParsetree.Declare);
+let generalize_export scenv to_gen prefix p =
+  let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then to_gen, None
   else to_gen, Some (CTh_export p)
 
-let generalize_instance env to_gen locality prefix (ty,tci) =
-  assert (locality <> EcParsetree.Declare);
+let generalize_instance scenv to_gen prefix (ty,tci) =
+  let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then to_gen, None
   (* FIXME: be sure that we have no dep to declare or local,
      or fix this code *)
   else to_gen, Some (CTh_instance (ty,tci))
 
-let generalize_baserw _env to_gen locality prefix s =
-  assert (locality <> EcParsetree.Declare);
+let generalize_baserw scenv to_gen prefix s =
+  let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then
     add_clear to_gen (pqname prefix s), None
   else to_gen, Some (CTh_baserw s)
 
-let generalize_addrw _env to_gen locality _prefix p ps =
-  assert (locality <> EcParsetree.Declare);
+let generalize_addrw scenv to_gen prefix p ps =
+  let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local || not (to_keep to_gen p) then
     to_gen, None
   else
@@ -748,16 +773,16 @@ let generalize_addrw _env to_gen locality _prefix p ps =
     if ps = [] then to_gen, None
     else to_gen, Some (CTh_addrw (p, ps))
 
-let generalize_reduction _env to_gen locality _prefix rl =
-  assert (locality <> EcParsetree.Declare);
+let generalize_reduction scenv to_gen prefix rl =
+  let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then
     to_gen, None
   else
     (* FIXME ensure no dependency to local and declare *)
     to_gen, Some(CTh_reduction rl)
 
-let generalize_auto _env to_gen locality _prefix (b,n,s,ps) =
-  assert (locality <> EcParsetree.Declare);
+let generalize_auto scenv to_gen prefix (b,n,s,ps) =
+  let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then
     to_gen, None
   else
@@ -795,13 +820,13 @@ and generalize_ctheory env to_gen prefix (name, (cth, thmode)) =
     let cth = {cth_desc = CTh_struct cth_struct; cth_struct = cth_struct} in
     to_gen, Some (CTh_theory (name, (cth, thmode)))
 
-and generalize_ctheory_struct env to_gen locality prefix cth_struct =
+and generalize_ctheory_struct env to_gen prefix cth_struct =
   match cth_struct with
   | [] -> to_gen, []
   | item::items ->
-    let to_gen, item = generalize_th_item env to_gen locality prefix item in
+    let to_gen, item = generalize_th_item env to_gen prefix item in
     let to_gen, items =
-      generalize_ctheory_struct env to_gen locality prefix items in
+      generalize_ctheory_struct env to_gen prefix items in
     match item with
     | None -> to_gen, items
     | Some item -> to_gen, item :: items
