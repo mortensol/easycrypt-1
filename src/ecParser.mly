@@ -1911,9 +1911,9 @@ nosmt:
 | empty { false }
 
 axiom_tc:
-| /* empty */       { PILemma }
-| BY bracket(empty) { PLemma None }
-| BY t=tactics      { PLemma (Some t) }
+| /* empty */       { PLemma None }
+| BY bracket(empty) { PLemma (Some None) }
+| BY t=tactics      { PLemma (Some (Some t)) }
 
 axiom:
 | l=locality AXIOM ids=bracket(ident+)? o=nosmt d=lemma_decl

@@ -340,11 +340,9 @@ type locality = EcParsetree.locality
 type scenv = {
   lc_env     : EcEnv.env;
   lc_name    : symbol option;
-  lc_declare : declare list;
-  lc_islocal : bool;
+  lc_declare : declare list * declare list;
   lc_locals  : locals;
   lc_items   : lc_items;
-  lc_topth   : (symbol * lc_items) list;
 }
 
 and locals = {
@@ -370,7 +368,7 @@ and declare =
   | DC_Op     of EcPath.path
   | DC_Axiom  of EcPath.path
 
-let is_declared (scenv : scenv) (who : cbarg) =
+let is_declared ~current (scenv : scenv) (who : cbarg) =
   let for1 (declare : declare) =
     match declare, who with
     | DC_Module x, `Module mp -> m_equal mp (mident x)
@@ -379,7 +377,7 @@ let is_declared (scenv : scenv) (who : cbarg) =
     | DC_Axiom  p, `Ax     p' -> p_equal p p'
     | _, _ -> false
 
-  in List.exists for1 scenv.lc_declare
+  in List.exists for1 ((if current then fst else snd) scenv.lc_declare)
 
 let is_local (locals : locals) (who : cbarg) =
   match who with
@@ -409,12 +407,10 @@ let add_local (locals:locals) (who : cbarg) =
         {locals with lc_modules = Sp.add p locals.lc_modules }
 
 (* -------------------------------------------------------------------- *)
-
 let get_locality scenv who =
-  if is_declared scenv who then EcParsetree.Declare
+  if is_declared ~current:true scenv who then EcParsetree.Declare
   else if is_local scenv.lc_locals who then EcParsetree.Local
   else EcParsetree.Global
-
 
 let get_ty_locality scenv p = get_locality scenv (`Type p)
 
@@ -876,55 +872,22 @@ let rec generalize_lc_items env to_gen prefix items =
 
 
 (* ---------------------------------------------------------------- *)
+let scenv0 (env : EcEnv.env) (name : symbol option) : scenv =
+  { lc_env     = env;
+    lc_name    = name;
+    lc_declare = ([], []);
+    lc_locals  = {
+      lc_theories  = Sp.empty;
+      lc_axioms    = Sp.empty;
+      lc_types     = Sp.empty;
+      lc_modules   = Sp.empty;
+      lc_modtypes  = Sp.empty;
+      lc_operators = Sp.empty;
+      lc_baserw    = Sp.empty;
+    };
+    lc_items   = []; }
 
-let abstracts lc = lc.lc_abstracts
-
-let generalize env lc (f : EcFol.form) =
-  let axioms =
-    List.pmap
-      (fun (p, lvl) ->
-         match lvl with `Global, `Axiom -> Some p | _ -> None)
-      (fst lc.lc_lemmas)
-  in
-
-  match axioms with
-  | [] ->
-    let mods = Sid.of_list (List.map fst (fst lc.lc_abstracts)) in
-      if   Mid.set_disjoint mods f.EcFol.f_fv
-      then f
-      else begin
-        List.fold_right
-          (fun (x, (mty, rt)) f ->
-             match Mid.mem x f.EcFol.f_fv with
-             | false -> f
-             | true  -> EcFol.f_forall [(x, EcFol.GTmodty (mty, rt))] f)
-          (fst lc.lc_abstracts) f
-      end
-
-  | _ ->
-    let f =
-      let do1 p f =
-        let ax = EcEnv.Ax.by_path p env in
-        EcFol.f_imp ax.ax_spec f
-      in
-          List.fold_right do1 axioms f in
-    let f =
-      let do1 (x, (mty, rt)) f =
-        EcFol.f_forall [(x, EcFol.GTmodty (mty, rt))] f
-      in
-        List.fold_right do1 (fst lc.lc_abstracts) f
-    in
-      f
-
-let elocals (env : EcEnv.env) (name : symbol option) : locals =
-  { lc_env       = env;
-    lc_name      = name;
-    lc_lemmas    = ([], Mp.empty);
-    lc_modules   = Sp.empty;
-    lc_abstracts = ([], Sid.empty);
-    lc_items     = []; }
-
-type t = locals list
+type t = scenv list
 
 let initial : t = []
 
@@ -933,17 +896,18 @@ let in_section (cs : t) =
 
 let enter (env : EcEnv.env) (name : symbol option) (cs : t) : t =
   match List.ohead cs with
-  | None    -> [elocals env name]
+  | None    -> [scenv0 env name]
   | Some ec ->
     let ec =
       { ec with
-          lc_items = [];
-          lc_abstracts = ([], snd ec.lc_abstracts);
-          lc_env = env;
-          lc_name = name; }
+          lc_env     = env;
+          lc_name    = name;
+          lc_declare = ([], snd ec.lc_declare);
+          lc_locals  = ec.lc_locals;
+          lc_items   = []; }
     in
       ec :: cs
-
+(*
 let exit (cs : t) =
   match cs with
   | [] -> raise NoSectionOpened
@@ -1002,3 +966,6 @@ let add_abstract id mt (cs : t) : t =
           { ec with lc_abstracts = (ids, set) }
   in
     onactive doit cs
+*)
+
+let add = assert false

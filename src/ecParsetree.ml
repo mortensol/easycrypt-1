@@ -118,7 +118,6 @@ and pinstr = pinstr_r located
 and pstmt  = pinstr list
 
 (* -------------------------------------------------------------------- *)
-
 type locality = Local | Declare | Global
 
 (* -------------------------------------------------------------------- *)
@@ -902,16 +901,15 @@ and pcut =
 (* -------------------------------------------------------------------- *)
 type paxiom_kind =
 | PAxiom of psymbol list
-| PLemma of ptactics option
-| PILemma
+| PLemma of ptactics option option
 
 type paxiom = {
-  pa_name    : psymbol;
-  pa_tyvars  : (psymbol * pqsymbol list) list option;
-  pa_vars    : pgtybindings option;
-  pa_formula : pformula;
-  pa_kind    : paxiom_kind;
-  pa_nosmt   : bool;
+  pa_name     : psymbol;
+  pa_tyvars   : (psymbol * pqsymbol list) list option;
+  pa_vars     : pgtybindings option;
+  pa_formula  : pformula;
+  pa_kind     : paxiom_kind;
+  pa_nosmt    : bool;
   pa_locality : locality;
 }
 
