@@ -8,7 +8,7 @@
 
 (* -------------------------------------------------------------------- *)
 open EcModules
-
+open EcEnv
 (* -------------------------------------------------------------------- *)
 type t
 
@@ -21,3 +21,6 @@ type lc_item =
 
 val initial : t
 val add     : locality -> lc_item -> t -> t
+
+val enter : env -> EcSymbols.symbol option -> t -> t
+val exit  : t -> EcParsetree.psymbol option -> env * t * ctheory_item list

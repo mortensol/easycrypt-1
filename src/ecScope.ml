@@ -1997,6 +1997,9 @@ module Theory = struct
           { scope with sc_env = EcEnv.Theory.import path scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
+  let export_p scope p =
+    { scope with sc_env = EcEnv.Theory.export p scope.sc_env }
+
   let export (scope : scope) (name : qsymbol) =
     assert (scope.sc_pr_uc = None);
 
@@ -2010,8 +2013,7 @@ module Theory = struct
         hierror "cannot export an abstract theory"
 
     | Some (path, (_, `Concrete)) ->
-        bump_prelude
-          { scope with sc_env = EcEnv.Theory.export path scope.sc_env }
+        bump_prelude (export_p scope path)
 
   (* ------------------------------------------------------------------ *)
   let check_end_required scope thname =
@@ -2073,77 +2075,44 @@ module Section = struct
             (omap unloc name) scope.sc_section; }
 
   let exit (scope : scope) (name : psymbol option) =
-    match EcSection.opath scope.sc_section with
-    | None -> hierror "no section to close"
-    | Some (sname, sp) ->
-        if not (p_equal sp (EcEnv.root (scope.sc_env))) then
-          hierror "cannot close a section containing pending theories";
-        if sname <> (omap unloc name) then
-          hierror "expecting [%s], not [%s]"
-            (match sname with None -> "<empty>" | Some x -> x)
-            (match  name with None -> "<empty>" | Some x -> unloc x);
-        let (locals, osc) = EcSection.exit scope.sc_section in
-        let oenv   = EcSection.env_of_locals locals in
-        let oitems = EcSection.items_of_locals locals in
-        let scenv  = scope.sc_env in
-        let scope  = { scope with sc_env = oenv; sc_section = osc; } in
-
-        let rec bind1 scope item =
-          match item with
-          | T.CTh_type     (x, ty) -> Ty.bind scope (x, ty)
-          | T.CTh_operator (x, op) -> Op.bind scope (x, op)
-          | T.CTh_modtype  (x, mt) -> ModType.bind scope (x, mt)
-
-          | T.CTh_module me ->
-            let mep = EcPath.pqname (path scope) me.me_name in
-              if not (EcSection.is_local `Module mep locals) then
-                Mod.bind scope false me
-              else
-                scope
-
-          | T.CTh_axiom (x, ax) -> begin
-            match ax.ax_kind with
-            | `Axiom _ -> scope
-            | `Lemma   ->
-                let axp = EcPath.pqname (path scope) x in
-                  if not (EcSection.is_local `Lemma axp locals) then
-                    Ax.bind scope false
-                      (x, { ax with ax_spec =
-                              EcSection.generalize scenv locals ax.ax_spec })
-                  else
-                    scope
-          end
-
-          | T.CTh_export p ->
-              { scope with sc_env = EcEnv.Theory.export p scope.sc_env }
-
-          | T.CTh_theory (x, (th, thmode)) ->
-              let scope = Theory.enter scope thmode x in
-              let scope = List.fold_left bind1 scope th.EcTheory.cth_struct in
-              let _, scope = Theory.exit scope in
-                scope
-
-          | T.CTh_typeclass (x, tc) -> Ty.bindclass scope (x, tc)
-
-          | T.CTh_instance (p, cr) ->
+    let sc_env, sc_section, items = EcSection.exit scope.sc_section name in
+    let scope = { scope with sc_env; sc_section} in
+    let rec bind_item scope item =
+      match item with
+      | T.CTh_type     (x, ty) -> Ty.bind scope Global(x, ty)
+      | T.CTh_operator (x, op) -> Op.bind scope Global (x, op)
+      | T.CTh_modtype  (x, mt) -> ModType.bind scope Global (x, mt)
+      | T.CTh_module   me      -> Mod.bind scope Global me
+      | T.CTh_axiom    (x, ax) -> Ax.bind scope Global (x,ax)
+      | T.CTh_export   p       -> Theory.export_p scope p
+      | T.CTh_theory (x, (th, thmode)) ->
+        let scope = Theory.enter scope thmode x in
+        let scope = bind_items scope th.EcTheory.cth_struct in
+        let _, scope = Theory.exit scope in
+        scope
+      | T.CTh_typeclass (x, tc) -> Ty.bindclass scope Global (x, tc)
+      | T.CTh_instance (p, cr) ->
               { scope with
                 sc_env = EcEnv.TypeClass.add_instance p cr scope.sc_env }
 
-          | T.CTh_baserw x ->
+      | T.CTh_baserw x ->
               { scope with sc_env = EcEnv.BaseRw.add x scope.sc_env }
 
-          | T.CTh_addrw (p, l) ->
+      | T.CTh_addrw (p, l) ->
               { scope with sc_env = EcEnv.BaseRw.addto p l scope.sc_env }
 
-          | T.CTh_reduction rule ->
-              { scope with sc_env = EcEnv.Reduction.add rule scope.sc_env }
+      | T.CTh_reduction rule ->
+        { scope with sc_env = EcEnv.Reduction.add rule scope.sc_env }
 
-          | T.CTh_auto (local, level, base, ps) ->
-              { scope with sc_env =
-                  EcEnv.Auto.add ~local ~level ?base ps scope.sc_env }
-        in
+      | T.CTh_auto (local, level, base, ps) ->
+        { scope with
+          sc_env = EcEnv.Auto.add ~local ~level ?base ps scope.sc_env }
 
-        List.fold_left bind1 scope oitems
+    and bind_items scope items =
+      List.fold_left bind_item scope items  in
+
+    bind_items scope items
+
 end
 
 (* -------------------------------------------------------------------- *)

@@ -113,3 +113,15 @@ RED:
 
 
 *)
+
+(*
+ Section:
+  match EcSection.opath scope.sc_section with
+    | None -> hierror "no section to close"
+    | Some (sname, sp) ->
+        if not (p_equal sp (EcEnv.root (scope.sc_env))) then
+          hierror "cannot close a section containing pending theories";
+        if sname <> (omap unloc name) then
+          hierror "expecting [%s], not [%s]"
+            (match sname with None -> "<empty>" | Some x -> x)
+            (match  name with None -> "<empty>" | Some x -> unloc x);
