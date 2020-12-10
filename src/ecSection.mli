@@ -16,11 +16,11 @@ type locality = EcParsetree.locality
 open EcTheory
 
 type lc_item =
-  | LC_th_item  of ctheory_item
+  | LC_th_item  of theory_item
   | LC_decl_mod of EcIdent.t * module_type * mod_restr
 
 val initial : t
 val add     : locality -> lc_item -> t -> t
 
 val enter : env -> EcSymbols.symbol option -> t -> t
-val exit  : t -> EcSymbols.symbol option -> env * t * ctheory_item list
+val exit  : t -> EcSymbols.symbol option -> env * t * theory_item list

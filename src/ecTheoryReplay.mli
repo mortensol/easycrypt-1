@@ -58,5 +58,5 @@ val replay : 'a ovrhooks
   -> abstract:bool -> local:bool -> incl:bool
   -> clears:Sp.t -> renames:(renaming list)
   -> opath:path -> npath:path -> evclone
-  -> 'a -> symbol * ctheory_item list
+  -> 'a -> symbol * theory_item list
   ->  axclone list * 'a

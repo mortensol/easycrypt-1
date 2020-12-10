@@ -101,7 +101,7 @@ let rec evc_get (nm : symbol list) (evc : evclone) =
 let find_mc =
   let for1 cth nm =
     let test = function
-      | CTh_theory (x, (sub, _)) when x = nm -> Some sub.cth_struct
+      | Th_theory (x, (sub, _)) when x = nm -> Some sub.cth_items
       | _ -> None
     in List.opick test cth
   in
@@ -116,45 +116,45 @@ let find_mc =
 (* -------------------------------------------------------------------- *)
 let find_type cth (nm, x) =
   let test = function
-    | CTh_type (xty, ty) when xty = x -> Some ty
+    | Th_type (xty, ty) when xty = x -> Some ty
     | _ -> None
-  in find_mc cth.cth_struct nm |> obind (List.opick test)
+  in find_mc cth.cth_items nm |> obind (List.opick test)
 
 (* -------------------------------------------------------------------- *)
 let find_theory cth (nm, x) =
   let test = function
-    | CTh_theory (xth, th) when xth = x -> Some th
+    | Th_theory (xth, th) when xth = x -> Some th
     | _ -> None
-  in find_mc cth.cth_struct nm |> obind (List.opick test)
+  in find_mc cth.cth_items nm |> obind (List.opick test)
 
 (* -------------------------------------------------------------------- *)
 let find_op cth (nm, x) =
   let test = function
-    | CTh_operator (xop, op) when xop = x && EcDecl.is_oper op -> Some op
+    | Th_operator (xop, op) when xop = x && EcDecl.is_oper op -> Some op
     | _ -> None
-  in find_mc cth.cth_struct nm |> obind (List.opick test)
+  in find_mc cth.cth_items nm |> obind (List.opick test)
 
 (* -------------------------------------------------------------------- *)
 let find_pr cth (nm, x) =
   let test = function
-    | CTh_operator (xpr, pr) when xpr = x && EcDecl.is_pred pr -> Some pr
+    | Th_operator (xpr, pr) when xpr = x && EcDecl.is_pred pr -> Some pr
     | _ -> None
-  in find_mc cth.cth_struct nm |> obind (List.opick test)
+  in find_mc cth.cth_items nm |> obind (List.opick test)
 
 (* -------------------------------------------------------------------- *)
 let find_ax cth (nm, x) =
   let test = function
-    | CTh_axiom (xax, ax) when xax = x -> Some ax
+    | Th_axiom (xax, ax) when xax = x -> Some ax
     | _ -> None
-  in find_mc cth.cth_struct nm |> obind (List.opick test)
+  in find_mc cth.cth_items nm |> obind (List.opick test)
 
 (* -------------------------------------------------------------------- *)
 let find_nt cth (nm, x) =
   let test = function
-    | CTh_operator (xop, op) when xop = x && EcDecl.is_abbrev op ->
+    | Th_operator (xop, op) when xop = x && EcDecl.is_abbrev op ->
        Some op
     | _ -> None
-  in find_mc cth.cth_struct nm |> obind (List.opick test)
+  in find_mc cth.cth_items nm |> obind (List.opick test)
 
 (* -------------------------------------------------------------------- *)
 type clone = {
@@ -327,7 +327,7 @@ end = struct
 
     let rec doit prefix (proofs, evc) dth =
       match dth with
-      | CTh_type (x, otyd) ->
+      | Th_type (x, otyd) ->
          let params = List.map (EcIdent.name |- fst) otyd.tyd_params in
          let params = List.map (mk_loc lc) params in
          let tyd    =
@@ -338,7 +338,7 @@ end = struct
          let ovrd = (params, loced tyd, `Inline) in
          ty_ovrd ~cancrt:true oc (proofs, evc) (loced (xdth @ prefix, x)) ovrd
 
-      | CTh_operator (x, ({ op_kind = OB_oper _ } as oopd)) ->
+      | Th_operator (x, ({ op_kind = OB_oper _ } as oopd)) ->
          let params = List.map (EcIdent.name |- fst) oopd.op_tparams in
          let params = List.map (mk_loc lc) params in
          let ovrd   = {
@@ -354,7 +354,7 @@ end = struct
          let ovrd = (ovrd, `Inline) in
          op_ovrd ~cancrt:true oc (proofs, evc) (loced (xdth @ prefix, x)) ovrd
 
-      | CTh_operator (x, ({ op_kind = OB_pred _ } as oprd)) ->
+      | Th_operator (x, ({ op_kind = OB_pred _ } as oprd)) ->
          let params = List.map (EcIdent.name |- fst) oprd.op_tparams in
          let params = List.map (mk_loc lc) params in
          let ovrd   = {
@@ -368,7 +368,7 @@ end = struct
          let ovrd = (ovrd, `Inline) in
          pr_ovrd ~cancrt:true oc (proofs, evc) (loced (xdth @ prefix, x)) ovrd
 
-      | CTh_axiom (x, ax) ->
+      | Th_axiom (x, ax) ->
          if is_axiom ax.ax_kind then
            let params = List.map (EcIdent.name |- fst) ax.ax_tparams in
            let params = List.map (mk_loc lc) params in
@@ -384,15 +384,15 @@ end = struct
            in (pr :: proofs, evc)
          else (proofs, evc)
 
-      | CTh_theory (x, (dth, `Concrete)) ->
-         List.fold_left (doit (prefix @ [x])) (proofs, evc) dth.cth_struct
+      | Th_theory (x, (dth, `Concrete)) ->
+         List.fold_left (doit (prefix @ [x])) (proofs, evc) dth.cth_items
 
-      | CTh_export _ ->
+      | Th_export _ ->
          (proofs, evc)
 
       | _ -> clone_error oc.oc_env (CE_CrtOverride (OVK_Theory, name))
 
-    in List.fold_left (doit []) (proofs, evc) dth.cth_struct
+    in List.fold_left (doit []) (proofs, evc) dth.cth_items
 
   (* ------------------------------------------------------------------ *)
   let ovrd ?(cancrt = false) oc state name (ovrd : theory_override) =

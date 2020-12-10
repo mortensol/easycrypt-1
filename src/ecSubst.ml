@@ -486,7 +486,7 @@ let rec subst_theory_item (s : _subst) (item : theory_item) =
       Th_module (subst_module s m)
 
   | Th_theory (x, (th, thmode)) ->
-      Th_theory (x, (subst_theory s th, thmode))
+      Th_theory (x, (subst_ctheory s th, thmode))
 
   | Th_export p ->
       Th_export (s.s_p p)
@@ -516,79 +516,13 @@ and subst_theory (s : _subst) (items : theory) =
   List.map (subst_theory_item s) items
 
 (* -------------------------------------------------------------------- *)
-and subst_ctheory_item (s : _subst) (item : ctheory_item) =
-  match item with
-  | CTh_type (x, ty) ->
-      CTh_type (x, subst_tydecl s ty)
-
-  | CTh_operator (x, op) ->
-      CTh_operator (x, subst_op s op)
-
-  | CTh_axiom (x, ax) ->
-      CTh_axiom (x, subst_ax s ax)
-
-  | CTh_modtype (x, modty) ->
-      CTh_modtype (x, snd (subst_modsig s modty))
-
-  | CTh_module me ->
-      CTh_module (subst_module s me)
-
-  | CTh_theory (x, (cth, cthmode)) ->
-      CTh_theory (x, (subst_ctheory s cth, cthmode))
-
-  | CTh_export p ->
-      CTh_export (s.s_p p)
-
-  | CTh_instance (ty, cr) ->
-      CTh_instance (subst_genty s ty, subst_instance s cr)
-
-  | CTh_typeclass (x, tc) ->
-      CTh_typeclass (x, subst_tc s tc)
-
-  | CTh_baserw _ ->
-      item
-
-  | CTh_addrw (b, ls) ->
-      CTh_addrw (s.s_p b, List.map s.s_p ls)
-
-  | CTh_reduction rules ->
-      let rules =
-        List.map (fun (p, opts, _) -> (s.s_p p, opts, None)) rules
-      in CTh_reduction rules
-
-  | CTh_auto (lc, lvl, base, ps) ->
-      CTh_auto (lc, lvl, base, List.map s.s_p ps)
-
-(* -------------------------------------------------------------------- *)
-and subst_ctheory_struct (s : _subst) (th : ctheory_struct) =
-  List.map (subst_ctheory_item s) th
-
-(* -------------------------------------------------------------------- *)
-and subst_ctheory_desc (s : _subst) (th : ctheory_desc) =
-  match th with
-  | CTh_struct th -> CTh_struct (subst_ctheory_struct s th)
-  | CTh_clone  cl -> CTh_clone  (subst_ctheory_clone  s cl)
-
-(* -------------------------------------------------------------------- *)
-and subst_ctheory_clone (s : _subst) (cl : ctheory_clone) =
-  { cthc_base = s.s_p cl.cthc_base;
-    cthc_ext  = subst_ctheory_clone_override s cl.cthc_ext; }
-
-(* -------------------------------------------------------------------- *)
-and subst_ctheory_clone_override (s : _subst) overrides =
-  let do1 (x, override) =
-    let override =
-      match override with
-      | CTHO_Type ty -> CTHO_Type (s.s_ty ty)
-    in
-      (x, override)
-  in
-    List.map do1 overrides
-
-(* -------------------------------------------------------------------- *)
 and subst_ctheory (s : _subst) (cth : ctheory) =
-  { cth_desc   = subst_ctheory_desc   s cth.cth_desc;
-    cth_struct = subst_ctheory_struct s cth.cth_struct; }
+  { cth_items  = subst_theory s cth.cth_items;
+    cth_source = omap (subst_theory_source s) cth.cth_source; }
+
+(* -------------------------------------------------------------------- *)
+and subst_theory_source (s : _subst) (ths : thsource) =
+  { ths_base = s.s_p ths.ths_base; }
 
 (* -------------------------------------------------------------------- *)
 let subst_branches     s = subst_branches (e_subst_of_subst (_subst_of_subst s))
@@ -597,7 +531,6 @@ let subst_op           s = subst_op (_subst_of_subst s)
 let subst_tydecl       s = subst_tydecl (_subst_of_subst s)
 let subst_tc           s = subst_tc (_subst_of_subst s)
 let subst_theory       s = subst_theory (_subst_of_subst s)
-let subst_ctheory      s = subst_ctheory (_subst_of_subst s)
 
 let subst_function     s = subst_function (_subst_of_subst s)
 let subst_module       s = subst_module (_subst_of_subst s)

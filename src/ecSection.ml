@@ -356,7 +356,7 @@ and locals = {
 }
 
 and lc_item =
-  | LC_th_item  of EcTheory.ctheory_item
+  | LC_th_item  of EcTheory.theory_item
   | LC_decl_mod of EcIdent.t * module_type * mod_restr
 
 and lc_items =
@@ -605,7 +605,7 @@ let generalize_tydecl scenv to_gen prefix (name, tydecl) =
       {to_gen with
        tg_subst = EcSubst.add_tydef to_gen.tg_subst path tosubst} in
 
-    to_gen, Some (CTh_type (name, { tyd_params; tyd_type }))
+    to_gen, Some (Th_type (name, { tyd_params; tyd_type }))
   | EcParsetree.Declare ->
     let to_gen = add_declared_ty to_gen path tydecl in
     to_gen, None
@@ -720,7 +720,7 @@ let generalize_opdecl scenv to_gen prefix (name, operator) =
           { op_tparams; op_ty; op_kind = OB_nott nott }
     in
     let to_gen = {to_gen with tg_subst} in
-    to_gen, Some (CTh_operator (name, operator))
+    to_gen, Some (Th_operator (name, operator))
 
 
   | EcParsetree.Declare ->
@@ -744,7 +744,7 @@ let generalize_axiom scenv to_gen prefix (name, ax) =
     in
     let extra_t = generalize_extra_ty to_gen ax_spec.f_fv in
     let ax_tparams = extra_t @ ax.ax_tparams in
-    to_gen, Some (CTh_axiom (name, {ax with ax_tparams; ax_spec}))
+    to_gen, Some (Th_axiom (name, {ax with ax_tparams; ax_spec}))
   | EcParsetree.Declare ->
     assert (is_axiom ax.ax_kind);
     let to_gen = add_clear to_gen (`Ax path) in
@@ -759,7 +759,7 @@ let generalize_modtype scenv to_gen prefix (name, ms) =
     add_clear to_gen (`ModuleType path), None
   | EcParsetree.Global ->
     let ms = EcSubst.subst_modsig to_gen.tg_subst ms in
-    to_gen, Some (CTh_modtype (name, ms))
+    to_gen, Some (Th_modtype (name, ms))
   | EcParsetree.Declare -> assert false
 
 let generalize_module scenv to_gen prefix me =
@@ -771,26 +771,26 @@ let generalize_module scenv to_gen prefix me =
   | EcParsetree.Global ->
     (* FIXME: we can generalize declare module *)
     let me = EcSubst.subst_module to_gen.tg_subst me in
-    to_gen, Some (CTh_module me)
+    to_gen, Some (Th_module me)
   | EcParsetree.Declare -> assert false (* should be a LC_decl_mod *)
 
 let generalize_export scenv to_gen prefix p =
   let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local || to_clear to_gen (`Th p) then to_gen, None
-  else to_gen, Some (CTh_export p)
+  else to_gen, Some (Th_export p)
 
 let generalize_instance scenv to_gen prefix (ty,tci) =
   let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then to_gen, None
   (* FIXME: be sure that we have no dep to declare or local,
      or fix this code *)
-  else to_gen, Some (CTh_instance (ty,tci))
+  else to_gen, Some (Th_instance (ty,tci))
 
 let generalize_baserw scenv to_gen prefix s =
   let locality = get_th_locality scenv prefix in
   if locality = EcParsetree.Local then
     add_clear to_gen (`Baserw (pqname prefix s)), None
-  else to_gen, Some (CTh_baserw s)
+  else to_gen, Some (Th_baserw s)
 
 let generalize_addrw scenv to_gen prefix p ps =
   let locality = get_th_locality scenv prefix in
@@ -799,7 +799,7 @@ let generalize_addrw scenv to_gen prefix p ps =
   else
     let ps = List.filter (fun p -> to_keep1 to_gen (`Ax p)) ps in
     if ps = [] then to_gen, None
-    else to_gen, Some (CTh_addrw (p, ps))
+    else to_gen, Some (Th_addrw (p, ps))
 
 let generalize_reduction scenv to_gen prefix rl =
   let locality = get_th_locality scenv prefix in
@@ -807,7 +807,7 @@ let generalize_reduction scenv to_gen prefix rl =
     to_gen, None
   else
     (* FIXME ensure no dependency to local and declare *)
-    to_gen, Some(CTh_reduction rl)
+    to_gen, Some(Th_reduction rl)
 
 let generalize_auto scenv to_gen prefix (b,n,s,ps) =
   let locality = get_th_locality scenv prefix in
@@ -816,24 +816,24 @@ let generalize_auto scenv to_gen prefix (b,n,s,ps) =
   else
     let ps = List.filter (fun p -> to_keep1 to_gen (`Ax p)) ps in
     if ps = [] then to_gen, None
-    else to_gen, Some (CTh_auto (b,n,s,ps))
+    else to_gen, Some (Th_auto (b,n,s,ps))
 
 (* FIXME : add locality for baserw addrw reduction auto *)
 let rec generalize_th_item env to_gen prefix th_item =
   match th_item with
-  | CTh_type tydecl     -> generalize_tydecl env to_gen prefix tydecl
-  | CTh_operator opdecl -> generalize_opdecl env to_gen prefix opdecl
-  | CTh_axiom  ax       -> generalize_axiom env to_gen prefix ax
-  | CTh_modtype ms      -> generalize_modtype env to_gen prefix ms
-  | CTh_module me       -> generalize_module env to_gen prefix me
-  | CTh_theory cth      -> generalize_ctheory env to_gen prefix cth
-  | CTh_export p        -> generalize_export env to_gen prefix p
-  | CTh_instance (ty,i) -> generalize_instance env to_gen prefix (ty,i)
-  | CTh_typeclass _     -> assert false
-  | CTh_baserw  s       -> generalize_baserw env to_gen prefix s
-  | CTh_addrw (p,ps)    -> generalize_addrw env to_gen prefix p ps
-  | CTh_reduction rl    -> generalize_reduction env to_gen prefix rl
-  | CTh_auto hints      -> generalize_auto env to_gen prefix hints
+  | Th_type tydecl     -> generalize_tydecl env to_gen prefix tydecl
+  | Th_operator opdecl -> generalize_opdecl env to_gen prefix opdecl
+  | Th_axiom  ax       -> generalize_axiom env to_gen prefix ax
+  | Th_modtype ms      -> generalize_modtype env to_gen prefix ms
+  | Th_module me       -> generalize_module env to_gen prefix me
+  | Th_theory cth      -> generalize_ctheory env to_gen prefix cth
+  | Th_export p        -> generalize_export env to_gen prefix p
+  | Th_instance (ty,i) -> generalize_instance env to_gen prefix (ty,i)
+  | Th_typeclass _     -> assert false
+  | Th_baserw  s       -> generalize_baserw env to_gen prefix s
+  | Th_addrw (p,ps)    -> generalize_addrw env to_gen prefix p ps
+  | Th_reduction rl    -> generalize_reduction env to_gen prefix rl
+  | Th_auto hints      -> generalize_auto env to_gen prefix hints
 
 and generalize_ctheory env to_gen prefix (name, (cth, thmode)) =
   let path = pqname prefix name in
@@ -843,13 +843,13 @@ and generalize_ctheory env to_gen prefix (name, (cth, thmode)) =
     add_clear to_gen (`Th path), None
   | _, _ ->
     (* FIXME: c'est quoi ce ctheory_clone ? *)
-    let to_gen, cth_struct =
-      generalize_ctheory_struct env to_gen path cth.cth_struct in
-    if cth_struct = [] then
+    let to_gen, cth_items =
+      generalize_ctheory_struct env to_gen path cth.cth_items in
+    if cth_items = [] then
       add_clear to_gen (`Th path), None
     else
-      let cth = {cth_desc = CTh_struct cth_struct; cth_struct = cth_struct} in
-      to_gen, Some (CTh_theory (name, (cth, thmode)))
+      let cth = { cth with cth_items } in
+      to_gen, Some (Th_theory (name, (cth, thmode)))
 
 and generalize_ctheory_struct env to_gen prefix cth_struct =
   match cth_struct with

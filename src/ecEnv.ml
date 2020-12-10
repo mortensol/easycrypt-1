@@ -96,7 +96,7 @@ type obj = [
   | `TypeDecl of EcDecl.tydecl
   | `Operator of EcDecl.operator
   | `Axiom    of EcDecl.axiom
-  | `Theory   of (ctheory * thmode)
+  | `Theory   of (theory * thmode)
 ]
 
 type mc = {
@@ -159,7 +159,7 @@ type preenv = {
   env_redbase  : mredinfo;
   env_ntbase   : (path * env_notation) list;
   env_modlcs   : Sid.t;                 (* declared modules *)
-  env_item     : ctheory_item list;     (* in reverse order *)
+  env_item     : theory_item list;      (* in reverse order *)
   env_norm     : env_norm ref;
 }
 
@@ -1018,58 +1018,58 @@ module MC = struct
         me.me_comps
 
   (* ------------------------------------------------------------------ *)
-  let rec mc_of_ctheory_r (scope : EcPath.path) (x, th) =
+  let rec mc_of_theory_r (scope : EcPath.path) (x, cth) =
     let subscope = EcPath.pqname scope x in
     let expath = fun x -> EcPath.pqname subscope x in
     let add2mc up name obj mc =
       up false mc name (IPPath (expath name), obj)
     in
 
-    let mc1_of_ctheory (mc : mc) = function
-      | CTh_type (xtydecl, tydecl) ->
+    let mc1_of_theory (mc : mc) = function
+      | Th_type (xtydecl, tydecl) ->
           (add2mc _up_tydecl xtydecl tydecl mc, None)
 
-      | CTh_operator (xop, op) ->
+      | Th_operator (xop, op) ->
           (add2mc _up_operator xop op mc, None)
 
-      | CTh_axiom (xax, ax) ->
+      | Th_axiom (xax, ax) ->
           (add2mc _up_axiom xax ax mc, None)
 
-      | CTh_modtype (xmodty, modty) ->
+      | Th_modtype (xmodty, modty) ->
           (add2mc _up_modty xmodty modty mc, None)
 
-      | CTh_module subme ->
+      | Th_module subme ->
           let args = subme.me_sig.mis_params in
           let submcs = mc_of_module_r (expath subme.me_name, args, None) subme in
             (add2mc _up_mod subme.me_name subme mc, Some submcs)
 
-      | CTh_theory (xsubth, ((items, `Concrete) as subth)) ->
-          let submcs = mc_of_ctheory_r subscope (xsubth, items) in
+      | Th_theory (xsubth, ((cth, `Concrete) as subth)) ->
+          let submcs = mc_of_theory_r subscope (xsubth, cth) in
           let mc = _up_mc false mc (IPPath (expath xsubth)) in
             (add2mc _up_theory xsubth subth mc, Some submcs)
 
-      | CTh_theory (xsubth, ((_, `Abstract) as subth)) ->
+      | Th_theory (xsubth, ((_, `Abstract) as subth)) ->
           (add2mc _up_theory xsubth subth mc, None)
 
-      | CTh_typeclass (x, tc) ->
+      | Th_typeclass (x, tc) ->
           (add2mc _up_typeclass x tc mc, None)
 
-      | CTh_baserw x ->
+      | Th_baserw x ->
           (add2mc _up_rwbase x (expath x) mc, None)
 
-      | CTh_export _ | CTh_addrw _ | CTh_instance _
-      | CTh_auto   _ | CTh_reduction _ ->
+      | Th_export _ | Th_addrw _ | Th_instance _
+      | Th_auto   _ | Th_reduction _ ->
           (mc, None)
     in
 
     let (mc, submcs) =
-      List.map_fold mc1_of_ctheory (empty_mc None) th.cth_struct
+      List.map_fold mc1_of_theory (empty_mc None) cth.cth_items
     in
       ((x, mc), List.rev_pmap identity submcs)
 
-  let mc_of_ctheory (env : env) (x : symbol) ((th, thmode) : ctheory * thmode) =
+  let mc_of_theory (env : env) (x : symbol) ((cth, thmode) : ctheory * thmode) =
     match thmode with
-    | `Concrete -> Some (mc_of_ctheory_r (root env) (x, th))
+    | `Concrete -> Some (mc_of_theory_r (root env) (x, cth))
     | `Abstract -> None
 
   (* ------------------------------------------------------------------ *)
@@ -1098,7 +1098,7 @@ module MC = struct
             (Mip.add (IPPath path) mc env.env_comps); }
 
   and bind_theory x th env =
-    match mc_of_ctheory env x th with
+    match mc_of_theory env x th with
     | None -> bind _up_theory x th env
     | Some ((_, mc), submcs) ->
         let env = bind _up_theory x th env in
@@ -1297,7 +1297,7 @@ module TypeClass = struct
 
   let bind name tc env =
     { (rebind name tc env) with
-        env_item = CTh_typeclass (name, tc) :: env.env_item }
+        env_item = Th_typeclass (name, tc) :: env.env_item }
 
   let lookup qname (env : env) =
     MC.lookup_typeclass qname env
@@ -1317,7 +1317,7 @@ module TypeClass = struct
   let add_instance ty cr env =
     { env with
         env_tci  = bind_instance ty cr env.env_tci;
-        env_item = CTh_instance (ty, cr) :: env.env_item; }
+        env_item = Th_instance (ty, cr) :: env.env_item; }
 
   let get_instances env = env.env_tci
 end
@@ -1354,7 +1354,7 @@ module BaseRw = struct
     let ip  = IPPath p in
     { env with
         env_rwbase = Mip.add ip Sp.empty env.env_rwbase;
-        env_item   = CTh_baserw name :: env.env_item; }
+        env_item   = Th_baserw name :: env.env_item; }
 
   let addto p l env =
     { env with
@@ -1362,7 +1362,7 @@ module BaseRw = struct
           Mip.change
             (omap (fun s -> List.fold_left (fun s r -> Sp.add r s) s l))
             (IPPath p) env.env_rwbase;
-        env_item = CTh_addrw (p, l) :: env.env_item; }
+        env_item = Th_addrw (p, l) :: env.env_item; }
 
 end
 
@@ -1402,7 +1402,7 @@ module Reduction = struct
     let rstrip = List.map (fun (x, _, y) -> (x, y)) rules in
     { env with
         env_redbase = add_rules rstrip env.env_redbase;
-        env_item    = CTh_reduction rules :: env.env_item; }
+        env_item    = Th_reduction rules :: env.env_item; }
 
   let add1 (prule : path * rule_option * rule option) (env : env) =
     add [prule] env
@@ -1428,7 +1428,7 @@ module Auto = struct
   let add ~local ~level ?base (ps : path list) (env : env) =
     { env with
         env_atbase = updatedb ?base ~level ps env.env_atbase;
-        env_item   = CTh_auto (local, level, base, ps) :: env.env_item; }
+        env_item   = Th_auto (local, level, base, ps) :: env.env_item; }
 
   let add1 ~local ~level ?base (p : path) (env : env) =
     add ~local ?base ~level [p] env
@@ -1552,7 +1552,7 @@ module Ty = struct
 
   let bind name ty env =
     { (rebind name ty env) with
-         env_item = CTh_type (name, ty) :: env.env_item; }
+         env_item = Th_type (name, ty) :: env.env_item; }
 end
 
 (* -------------------------------------------------------------------- *)
@@ -1975,7 +1975,7 @@ module Mod = struct
 
   let bind name me env =
     { (MC.bind_mod name me env) with
-          env_item = CTh_module me :: env.env_item;
+          env_item = Th_module me :: env.env_item;
           env_norm = ref !(env.env_norm); }
 
   let me_of_mt env name modty restr =
@@ -2499,7 +2499,7 @@ module ModTy = struct
   let bind name modty env =
     let env = MC.bind_modty name modty env in
       { env with
-          env_item = CTh_modtype (name, modty) :: env.env_item }
+          env_item = Th_modtype (name, modty) :: env.env_item }
 
   exception ModTypeNotEquiv
 
@@ -2599,7 +2599,7 @@ module Op = struct
 
     { env with
         env_ntbase = ofold List.cons env.env_ntbase nt;
-        env_item   = CTh_operator(name, op) :: env.env_item; }
+        env_item   = Th_operator(name, op) :: env.env_item; }
 
   let rebind name op env =
     MC.bind_operator name op env
@@ -2706,7 +2706,7 @@ module Ax = struct
   let bind name ax env =
     let ax = NormMp.norm_ax env ax in
     let env = MC.bind_axiom name ax env in
-    { env with env_item = CTh_axiom (name, ax) :: env.env_item }
+    { env with env_item = Th_axiom (name, ax) :: env.env_item }
 
   let rebind name ax env =
     MC.bind_axiom name ax env
@@ -2771,29 +2771,6 @@ module Theory = struct
   type t    = ctheory
   type mode = [`All | thmode]
 
-  (* -------------------------------------------------------------------- *)
-  let rec ctheory_of_theory =
-      fun th ->
-        let items = List.map ctheory_item_of_theory_item th in
-          { cth_desc = CTh_struct items; cth_struct = items; }
-
-  and ctheory_item_of_theory_item = function
-    | Th_type      (x, ty)  -> CTh_type      (x, ty)
-    | Th_operator  (x, op)  -> CTh_operator  (x, op)
-    | Th_axiom     (x, ax)  -> CTh_axiom     (x, ax)
-    | Th_modtype   (x, mt)  -> CTh_modtype   (x, mt)
-    | Th_module    m        -> CTh_module    m
-    | Th_export    name     -> CTh_export    name
-    | Th_typeclass name     -> CTh_typeclass name
-    | Th_instance  (ty, cr) -> CTh_instance  (ty, cr)
-    | Th_baserw    x        -> CTh_baserw x
-    | Th_addrw     (b, l)   -> CTh_addrw     (b, l)
-    | Th_reduction rule     -> CTh_reduction rule
-    | Th_auto      ps       -> CTh_auto      ps
-
-    | Th_theory (x, (th, md)) ->
-        CTh_theory (x, (ctheory_of_theory th, md))
-
   (* ------------------------------------------------------------------ *)
   let enter name env =
     enter `Theory name env
@@ -2830,20 +2807,20 @@ module Theory = struct
     fst (lookup ?mode name env)
 
   (* ------------------------------------------------------------------ *)
-  let rec bind_instance_cth path inst cth =
-    List.fold_left (bind_instance_cth_item path) inst cth.cth_struct
+  let rec bind_instance_th path inst cth =
+    List.fold_left (bind_instance_th_item path) inst cth
 
-  and bind_instance_cth_item path inst item =
+  and bind_instance_th_item path inst item =
     let xpath x = EcPath.pqname path x in
 
     match item with
-    | CTh_instance (ty, k) ->
+    | Th_instance (ty, k) ->
         TypeClass.bind_instance ty k inst
 
-    | CTh_theory (x, (cth, `Concrete)) ->
-        bind_instance_cth (xpath x) inst cth
+    | Th_theory (x, (cth, `Concrete)) ->
+        bind_instance_th (xpath x) inst cth.cth_items
 
-    | CTh_type (x, tyd) -> begin
+    | Th_type (x, tyd) -> begin
         match tyd.tyd_type with
         | `Abstract tc ->
             let myty =
@@ -2860,39 +2837,39 @@ module Theory = struct
     | _ -> inst
 
   (* ------------------------------------------------------------------ *)
-  let rec bind_base_cth tx path base cth =
-    List.fold_left (bind_base_cth_item tx path) base cth.cth_struct
+  let rec bind_base_th tx path base cth =
+    List.fold_left (bind_base_th_item tx path) base cth
 
-  and bind_base_cth_item tx path base item =
+  and bind_base_th_item tx path base item =
     let xpath x = EcPath.pqname path x in
 
     match item with
-    | CTh_theory (x, (cth, `Concrete)) ->
-        bind_base_cth tx (xpath x) base cth
-    | CTh_theory _ ->
+    | Th_theory (x, (cth, `Concrete)) ->
+        bind_base_th tx (xpath x) base cth.cth_items
+    | Th_theory _ ->
         base
     | _ -> odfl base (tx path base item)
 
   (* ------------------------------------------------------------------ *)
-  let bind_tc_cth =
+  let bind_tc_th =
     let for1 path base = function
-      | CTh_typeclass (x, tc) ->
+      | Th_typeclass (x, tc) ->
           tc.tc_prt |> omap (fun prt ->
             let src = EcPath.pqname path x in
             TC.Graph.add ~src ~dst:prt base)
       | _ -> None
 
-    in bind_base_cth for1
+    in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
-  let bind_br_cth =
+  let bind_br_th =
     let for1 path base = function
-      | CTh_baserw x ->
+      | Th_baserw x ->
          let ip = IPPath (EcPath.pqname path x) in
          assert (not (Mip.mem ip base));
          Some (Mip.add ip Sp.empty base)
 
-      | CTh_addrw (b, r) ->
+      | Th_addrw (b, r) ->
          let change = function
            | None   -> assert false
            | Some s -> Some (List.fold_left (fun s r -> Sp.add r s) s r)
@@ -2901,113 +2878,113 @@ module Theory = struct
 
       | _ -> None
 
-    in bind_base_cth for1
+    in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
-  let bind_at_cth =
+  let bind_at_th =
     let for1 _path db = function
-      | CTh_auto (false, level, base, ps) ->
+      | Th_auto (false, level, base, ps) ->
          Some (Auto.updatedb ?base ~level ps db)
       | _ -> None
 
-    in bind_base_cth for1
+    in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
-  let bind_nt_cth =
+  let bind_nt_th =
     let for1 path base = function
-      | CTh_operator (x, ({ op_kind = OB_nott nt } as op)) ->
+      | Th_operator (x, ({ op_kind = OB_nott nt } as op)) ->
          Some ((EcPath.pqname path x, (op.op_tparams, nt)) :: base)
       | _ -> None
 
-    in bind_base_cth for1
+    in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
-  let bind_rd_cth =
+  let bind_rd_th =
     let for1 _path db = function
-      | CTh_reduction rules ->
+      | Th_reduction rules ->
          let rules = List.map (fun (x, _, y) -> (x, y)) rules in
          Some (Reduction.add_rules rules db)
       | _ -> None
 
-    in bind_base_cth for1
+    in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
-  let bind ?(mode = `Concrete) name cth env =
-    let th = (cth, mode) in
+  let bind ?(mode = `Concrete) ?src name items env =
+    let cth = ({ cth_items = items; cth_source = src; }, mode) in
 
-    let env = MC.bind_theory name th env in
-    let env = { env with env_item = (CTh_theory (name, th)) :: env.env_item } in
+    let env = MC.bind_theory name cth env in
+    let env = { env with env_item = (Th_theory (name, cth)) :: env.env_item } in
 
     match mode with
     | `Concrete ->
         let thname      = EcPath.pqname (root env) name in
-        let env_tci     = bind_instance_cth thname env.env_tci cth in
-        let env_tc      = bind_tc_cth thname env.env_tc cth in
-        let env_rwbase  = bind_br_cth thname env.env_rwbase cth in
-        let env_atbase  = bind_at_cth thname env.env_atbase cth in
-        let env_ntbase  = bind_nt_cth thname env.env_ntbase cth in
-        let env_redbase = bind_rd_cth thname env.env_redbase cth in
+        let env_tci     = bind_instance_th thname env.env_tci items in
+        let env_tc      = bind_tc_th thname env.env_tc items in
+        let env_rwbase  = bind_br_th thname env.env_rwbase items in
+        let env_atbase  = bind_at_th thname env.env_atbase items in
+        let env_ntbase  = bind_nt_th thname env.env_ntbase items in
+        let env_redbase = bind_rd_th thname env.env_redbase items in
         { env with env_tci; env_tc; env_rwbase; env_atbase; env_ntbase; env_redbase; }
 
     | `Abstract ->
         env
 
   (* ------------------------------------------------------------------ *)
-  let rebind name cth env =
-    MC.bind_theory name cth env
+  let rebind name th env =
+    MC.bind_theory name th env
 
   (* ------------------------------------------------------------------ *)
   let import (path : EcPath.path) (env : env) =
-    let rec import (env : env) path (cth : ctheory) =
+    let rec import (env : env) path (th : theory) =
       let xpath x = EcPath.pqname path x in
-      let rec import_cth_item (env : env) = function
-        | CTh_type (x, ty) ->
+      let rec import_th_item (env : env) = function
+        | Th_type (x, ty) ->
             MC.import_tydecl (xpath x) ty env
 
-        | CTh_operator (x, op) ->
+        | Th_operator (x, op) ->
             MC.import_operator (xpath x) op env
 
-        | CTh_axiom (x, ax) ->
+        | Th_axiom (x, ax) ->
             MC.import_axiom (xpath x) ax env
 
-        | CTh_modtype (x, ty) ->
+        | Th_modtype (x, ty) ->
             MC.import_modty (xpath x) ty env
 
-        | CTh_module m ->
+        | Th_module m ->
             let env = MC.import_mod (IPPath (xpath m.me_name)) m env in
             let env = MC.import_mc (IPPath (xpath m.me_name)) env in
               env
 
-        | CTh_export p ->
-            import env p (fst (by_path ~mode:`Concrete p env))
+        | Th_export p ->
+            import env p (fst (by_path ~mode:`Concrete p env)).cth_items
 
-        | CTh_theory (x, ((_, `Concrete) as th)) ->
+        | Th_theory (x, ((_, `Concrete) as th)) ->
             let env = MC.import_theory (xpath x) th env in
             let env = MC.import_mc (IPPath (xpath x)) env in
               env
 
-        | CTh_theory (x, ((_, `Abstract) as th)) ->
+        | Th_theory (x, ((_, `Abstract) as th)) ->
             MC.import_theory (xpath x) th env
 
-        | CTh_typeclass (x, tc) ->
+        | Th_typeclass (x, tc) ->
             MC.import_typeclass (xpath x) tc env
 
-        | CTh_baserw x ->
+        | Th_baserw x ->
             MC.import_rwbase (xpath x) env
 
-        | CTh_addrw _ | CTh_instance _ | CTh_auto _ | CTh_reduction _ ->
+        | Th_addrw _ | Th_instance _ | Th_auto _ | Th_reduction _ ->
             env
 
       in
-        List.fold_left import_cth_item env cth.cth_struct
+        List.fold_left import_th_item env th
 
     in
-      import env path (fst (by_path ~mode:`Concrete path env))
+      import env path (fst (by_path ~mode:`Concrete path env)).cth_items
 
   (* ------------------------------------------------------------------ *)
   let export (path : EcPath.path) (env : env) =
     let env = import path env in
-    { env with env_item = CTh_export path :: env.env_item }
+    { env with env_item = Th_export path :: env.env_item }
 
   (* ------------------------------------------------------------------ *)
   let rec filter clears root cleared items =
@@ -3028,32 +3005,32 @@ module Theory = struct
 
     fun cleared item ->
       match item with
-      | CTh_theory (x, (cth, mode)) ->
+      | Th_theory (x, (cth, mode)) ->
          let cleared, items =
            let xpath = EcPath.pqname root x in
-           filter_th clears xpath cleared cth.cth_struct in
+           filter_th clears xpath cleared cth.cth_items in
          let item = items |> omap (fun items ->
-           let cth = { cth with cth_struct = items } in
-           CTh_theory (x, (cth, mode))) in
+           let cth = { cth with cth_items = items } in
+           Th_theory (x, (cth, mode))) in
          (cleared, item)
 
       | _ -> let item = match item with
 
-      | CTh_axiom (_, { ax_kind = `Lemma }) when thclear ->
+      | Th_axiom (_, { ax_kind = `Lemma }) when thclear ->
           None
 
-      | CTh_axiom (x, ({ ax_kind = `Axiom (tags, false) } as ax)) when thclear ->
-          Some (CTh_axiom (x, { ax with ax_kind = `Axiom (tags, true) }))
+      | Th_axiom (x, ({ ax_kind = `Axiom (tags, false) } as ax)) when thclear ->
+          Some (Th_axiom (x, { ax with ax_kind = `Axiom (tags, true) }))
 
-      | CTh_addrw (p, ps) ->
+      | Th_addrw (p, ps) ->
           let ps = List.filter ((not) |- inclear |- oget |- EcPath.prefix) ps in
-          if List.is_empty ps then None else Some (CTh_addrw (p, ps))
+          if List.is_empty ps then None else Some (Th_addrw (p, ps))
 
-      | CTh_auto (lc, lvl, base, ps) ->
+      | Th_auto (lc, lvl, base, ps) ->
           let ps = List.filter ((not) |- inclear |- oget |- EcPath.prefix) ps in
-          if List.is_empty ps then None else Some (CTh_auto (lc, lvl, base, ps))
+          if List.is_empty ps then None else Some (Th_auto (lc, lvl, base, ps))
 
-      | (CTh_export p) as item ->
+      | (Th_export p) as item ->
           if Sp.mem p cleared then None else Some item
 
       | _ as item -> Some item
@@ -3074,8 +3051,7 @@ module Theory = struct
       | _, _ -> items
     in
 
-    items |> omap (fun items ->
-      { cth_desc = CTh_struct items; cth_struct = items; })
+    items |> omap (fun items -> { cth_items = items; cth_source = None; })
 
   (* ------------------------------------------------------------------ *)
   let require ?(mode = `Concrete) x cth env =
@@ -3086,7 +3062,7 @@ module Theory = struct
       match mode with
       | `Concrete ->
           let (_, thmc), submcs =
-            MC.mc_of_ctheory_r rootnm (x, cth)
+            MC.mc_of_theory_r rootnm (x, cth)
           in MC.bind_submc env rootnm ((x, thmc), submcs)
 
       | `Abstract -> env
@@ -3112,12 +3088,12 @@ module Theory = struct
 
     | `Concrete ->
       { env with
-          env_tci     = bind_instance_cth thpath env.env_tci cth;
-          env_tc      = bind_tc_cth thpath env.env_tc cth;
-          env_rwbase  = bind_br_cth thpath env.env_rwbase cth;
-          env_atbase  = bind_at_cth thpath env.env_atbase cth;
-          env_ntbase  = bind_nt_cth thpath env.env_ntbase cth;
-          env_redbase = bind_rd_cth thpath env.env_redbase cth; }
+          env_tci     = bind_instance_th thpath env.env_tci cth.cth_items;
+          env_tc      = bind_tc_th thpath env.env_tc cth.cth_items;
+          env_rwbase  = bind_br_th thpath env.env_rwbase cth.cth_items;
+          env_atbase  = bind_at_th thpath env.env_atbase cth.cth_items;
+          env_ntbase  = bind_nt_th thpath env.env_ntbase cth.cth_items;
+          env_redbase = bind_rd_th thpath env.env_redbase cth.cth_items; }
 end
 
 (* -------------------------------------------------------------------- *)

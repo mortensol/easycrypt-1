@@ -259,8 +259,9 @@ module Theory : sig
   val lookup_path : ?mode:mode -> qsymbol -> env -> path
 
   val add  : path -> env -> env
-  val bind : ?mode:thmode -> symbol -> ctheory -> env -> env
+  val bind : ?mode:thmode -> ?src:thsource -> symbol -> theory -> env -> env
 
+ (* FIXME: section ? ctheory -> theory *)
   val require : ?mode:thmode -> symbol -> ctheory -> env -> env
   val import  : path -> env -> env
   val export  : path -> env -> env

@@ -540,49 +540,49 @@ and replay_instance
 (* -------------------------------------------------------------------- *)
 and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
   match item with
-  | CTh_type (x, otyd) ->
+  | Th_type (x, otyd) ->
      replay_tyd ove (subst, ops, proofs, scope) (x, otyd)
 
-  | CTh_operator (x, ({ op_kind = OB_oper _ } as oopd)) ->
+  | Th_operator (x, ({ op_kind = OB_oper _ } as oopd)) ->
      replay_opd ove (subst, ops, proofs, scope) (x, oopd)
 
-  | CTh_operator (x, ({ op_kind = OB_pred _} as oopr)) ->
+  | Th_operator (x, ({ op_kind = OB_pred _} as oopr)) ->
      replay_prd ove (subst, ops, proofs, scope) (x, oopr)
 
-  | CTh_operator (x, ({ op_kind = OB_nott _} as oont)) ->
+  | Th_operator (x, ({ op_kind = OB_nott _} as oont)) ->
      replay_ntd ove (subst, ops, proofs, scope) (x, oont)
 
-  | CTh_axiom (x, ax) ->
+  | Th_axiom (x, ax) ->
      replay_axd ove (subst, ops, proofs, scope) (x, ax)
 
-  | CTh_modtype (x, modty) ->
+  | Th_modtype (x, modty) ->
      replay_modtype ove (subst, ops, proofs, scope) (x, modty)
 
-  | CTh_module me ->
+  | Th_module me ->
      replay_mod ove (subst, ops, proofs, scope) me
 
-  | CTh_export p ->
+  | Th_export p ->
      replay_export ove (subst, ops, proofs, scope) p
 
-  | CTh_baserw x ->
+  | Th_baserw x ->
      replay_baserw ove (subst, ops, proofs, scope) x
 
-  | CTh_addrw (p, l) ->
+  | Th_addrw (p, l) ->
      replay_addrw ove (subst, ops, proofs, scope) (p, l)
 
-  | CTh_reduction rules ->
+  | Th_reduction rules ->
      replay_reduction ove (subst, ops, proofs, scope) rules
 
-  | CTh_auto (lc, lvl, base, ps) ->
+  | Th_auto (lc, lvl, base, ps) ->
      replay_auto ove (subst, ops, proofs, scope) (lc, lvl, base, ps)
 
-  | CTh_typeclass (x, tc) ->
+  | Th_typeclass (x, tc) ->
      replay_typeclass ove (subst, ops, proofs, scope) (x, tc)
 
-  | CTh_instance ((typ, ty), tc) ->
+  | Th_instance ((typ, ty), tc) ->
      replay_instance ove (subst, ops, proofs, scope) ((typ, ty), tc)
 
-  | CTh_theory (ox, (cth, thmode)) -> begin
+  | Th_theory (ox, (cth, thmode)) -> begin
       let (subst, x) = rename ove subst (`Theory, ox) in
       let subovrds = Msym.find_opt x ove.ovre_ovrd.evc_ths in
       let subovrds = EcUtils.odfl evc_empty subovrds in
@@ -600,7 +600,7 @@ and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
         let subscope = ove.ovre_hooks.hthenter scope thmode x in
         let (subst, ops, proofs, subscope) =
           List.fold_left (replay1 subove)
-            (subst, ops, proofs, subscope) cth.cth_struct in
+            (subst, ops, proofs, subscope) cth.cth_items in
         let scope = ove.ovre_hooks.hthexit subscope `Full in
         (subst, ops, proofs, scope)
 

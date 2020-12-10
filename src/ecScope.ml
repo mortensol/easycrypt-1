@@ -816,7 +816,7 @@ module Ax = struct
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) locality ((x, ax) : _ * axiom) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.CTh_axiom (x, ax)) in
+    let item = EcSection.LC_th_item (EcTheory.Th_axiom (x, ax)) in
     { scope with
         sc_env     = EcEnv.Ax.bind x ax scope.sc_env;
         sc_section = EcSection.add locality item scope.sc_section; }
@@ -1084,7 +1084,7 @@ module Op = struct
 
   let bind (scope : scope) locality ((x, op) : _ * operator) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.CTh_operator (x, op)) in
+    let item = EcSection.LC_th_item (EcTheory.Th_operator (x, op)) in
     { scope with
         sc_env     = EcEnv.Op.bind x op scope.sc_env;
         sc_section = EcSection.add locality item scope.sc_section; }
@@ -1358,7 +1358,7 @@ module Mod = struct
 
   let bind (scope : scope) locality (m : module_expr) =
     assert (scope.sc_pr_uc = None);
-    let item  = EcSection.LC_th_item (CTh_module m) in
+    let item  = EcSection.LC_th_item (Th_module m) in
     { scope with
         sc_env     = EcEnv.Mod.bind m.me_name m scope.sc_env;
         sc_section = EcSection.add locality item scope.sc_section; }
@@ -1417,7 +1417,7 @@ end
 module ModType = struct
   let bind (scope : scope) (lc : locality) ((x, tysig) : _ * module_sig) =
     assert (scope.sc_pr_uc = None);
-    let item  = EcSection.LC_th_item (EcTheory.CTh_modtype (x, tysig)) in
+    let item  = EcSection.LC_th_item (EcTheory.Th_modtype (x, tysig)) in
     { scope with
         sc_env = EcEnv.ModTy.bind x tysig scope.sc_env;
         sc_section = EcSection.add lc item scope.sc_section; }
@@ -1448,7 +1448,7 @@ module Ty = struct
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) (lc : locality) ((x, tydecl) : (_ * tydecl)) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.CTh_type (x, tydecl)) in
+    let item = EcSection.LC_th_item (EcTheory.Th_type (x, tydecl)) in
     { scope with
         sc_env = EcEnv.Ty.bind x tydecl scope.sc_env;
         sc_section = EcSection.add lc item scope.sc_section; }
@@ -1485,7 +1485,7 @@ module Ty = struct
   (* ------------------------------------------------------------------ *)
   let bindclass (scope : scope) (lc : locality) (x, tc) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.CTh_typeclass (x, tc)) in
+    let item = EcSection.LC_th_item (EcTheory.Th_typeclass (x, tc)) in
     { scope with
       sc_env     = EcEnv.TypeClass.bind x tc scope.sc_env;
       sc_section = EcSection.add lc item scope.sc_section; }
@@ -1855,9 +1855,10 @@ module Theory = struct
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) (lc : locality) (x, (cth, mode)) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.CTh_theory (x, (cth, mode))) in
+    let item = EcSection.LC_th_item (EcTheory.Th_theory (x, (cth, mode))) in
     { scope with
-        sc_env = EcEnv.Theory.bind ~mode x cth scope.sc_env;
+        sc_env = EcEnv.Theory.bind ~mode x
+            ?src:cth.cth_source cth.cth_items scope.sc_env;
         sc_section = EcSection.add lc item scope.sc_section; }
 
   (* ------------------------------------------------------------------ *)
@@ -1929,10 +1930,10 @@ module Theory = struct
   let exit ?(pempty = `ClearOnly) ?(clears =[]) (scope : scope) =
     let rec add_restr1 section where env item : EcEnv.env =
       match item with
-      | EcTheory.CTh_theory (name, th) ->
+      | EcTheory.Th_theory (name, th) ->
           add_restr section (EcPath.pqname where name) th env
 
-      | EcTheory.CTh_module me ->
+      | EcTheory.Th_module me ->
           if EcSection.in_section section then begin
             let islocal =
               EcSection.is_local `Module
@@ -2080,30 +2081,30 @@ module Section = struct
 
     let rec bind_item scope item =
       match item with
-      | T.CTh_type     (x, ty) -> Ty.bind scope Global (x, ty)
-      | T.CTh_operator (x, op) -> Op.bind scope Global (x, op)
-      | T.CTh_modtype  (x, mt) -> ModType.bind scope Global (x, mt)
-      | T.CTh_module   me      -> Mod.bind scope Global me
-      | T.CTh_axiom    (x, ax) -> Ax.bind scope Global (x,ax)
-      | T.CTh_export   p       -> Theory.export_p scope p
-      | T.CTh_theory   th      -> Theory.bind scope Global th
-      | T.CTh_typeclass (x, tc) -> Ty.bindclass scope Global (x, tc)
+      | T.Th_type     (x, ty) -> Ty.bind scope Global (x, ty)
+      | T.Th_operator (x, op) -> Op.bind scope Global (x, op)
+      | T.Th_modtype  (x, mt) -> ModType.bind scope Global (x, mt)
+      | T.Th_module   me      -> Mod.bind scope Global me
+      | T.Th_axiom    (x, ax) -> Ax.bind scope Global (x,ax)
+      | T.Th_export   p       -> Theory.export_p scope p
+      | T.Th_theory   th      -> Theory.bind scope Global th
+      | T.Th_typeclass (x, tc) -> Ty.bindclass scope Global (x, tc)
       (* FIXME: section
          would be nice to have proper bind here *)
-      | T.CTh_instance (p, cr) ->
+      | T.Th_instance (p, cr) ->
               { scope with
                 sc_env = EcEnv.TypeClass.add_instance p cr scope.sc_env }
 
-      | T.CTh_baserw x ->
+      | T.Th_baserw x ->
               { scope with sc_env = EcEnv.BaseRw.add x scope.sc_env }
 
-      | T.CTh_addrw (p, l) ->
+      | T.Th_addrw (p, l) ->
               { scope with sc_env = EcEnv.BaseRw.addto p l scope.sc_env }
 
-      | T.CTh_reduction rule ->
+      | T.Th_reduction rule ->
         { scope with sc_env = EcEnv.Reduction.add rule scope.sc_env }
 
-      | T.CTh_auto (local, level, base, ps) ->
+      | T.Th_auto (local, level, base, ps) ->
         { scope with
           sc_env = EcEnv.Auto.add ~local ~level ?base ps scope.sc_env }
 
@@ -2137,7 +2138,7 @@ module Reduction = struct
 
     in
 
-    let item = EcSection.LC_th_item (EcTheory.CTh_reduction rules) in
+    let item = EcSection.LC_th_item (EcTheory.Th_reduction rules) in
 
     { scope with
         sc_env = EcEnv.Reduction.add rules (env scope);

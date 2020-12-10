@@ -2842,13 +2842,10 @@ let pp_modexp_top ppe fmt (p, me) =
 
 let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   let basename = EcPath.basename path in
-  let pp_clone fmt desc =
-    match desc with
-    | EcTheory.CTh_struct _ -> ()
-    | EcTheory.CTh_clone cthc ->
+  let pp_clone fmt thsrc =
+    thsrc |> oiter (fun EcTheory.{ ths_base } ->
       Format.fprintf fmt "(* clone %a as %s *)@,"
-        EcSymbols.pp_qsymbol (PPEnv.th_symb ppe cthc.EcTheory.cthc_base)
-        basename in
+        EcSymbols.pp_qsymbol (PPEnv.th_symb ppe ths_base) basename) in
 
   let thkw =
     match mode with
@@ -2857,39 +2854,39 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   in
 
   Format.fprintf fmt "@[<v>%a%s %s.@,  @[<v>%a@]@,end %s.@]"
-    pp_clone cth.EcTheory.cth_desc
+    pp_clone cth.EcTheory.cth_source
     thkw basename
-    (pp_list "@,@," (pp_th_item ppe path)) cth.EcTheory.cth_struct
+    (pp_list "@,@," (pp_th_item ppe path)) cth.cth_items
     basename
 
  and pp_th_item ppe p fmt = function
-  | EcTheory.CTh_type (id, ty) ->
+  | EcTheory.Th_type (id, ty) ->
       pp_typedecl ppe fmt (EcPath.pqname p id,ty)
 
-  | EcTheory.CTh_operator (id, op) ->
+  | EcTheory.Th_operator (id, op) ->
       pp_opdecl ppe fmt (EcPath.pqname p id, op)
 
-  | EcTheory.CTh_axiom (id, ax) ->
+  | EcTheory.Th_axiom (id, ax) ->
       pp_axiom ppe fmt (EcPath.pqname p id, ax)
 
-  | EcTheory.CTh_modtype (id, ms) ->
+  | EcTheory.Th_modtype (id, ms) ->
       pp_modsig ppe fmt (EcPath.pqname p id, ms)
 
-  | EcTheory.CTh_module me ->
+  | EcTheory.Th_module me ->
       pp_modexp_top ppe fmt (p, me)
 
-  | EcTheory.CTh_theory (id, cth) ->
+  | EcTheory.Th_theory (id, cth) ->
       pp_theory ppe fmt (EcPath.pqname p id, cth)
 
-  | EcTheory.CTh_export p ->
+  | EcTheory.Th_export p ->
       (* Fixme should not use a pp_list, it should be a fold *)
       Format.fprintf fmt "export %a."
         EcSymbols.pp_qsymbol (PPEnv.th_symb ppe p)
 
-  | EcTheory.CTh_typeclass _ ->
+  | EcTheory.Th_typeclass _ ->
       Format.fprintf fmt "typeclass <FIXME>."
 
-  | EcTheory.CTh_instance ((typ, ty), tc) -> begin
+  | EcTheory.Th_instance ((typ, ty), tc) -> begin
       let ppe = PPEnv.add_locals ppe (List.map fst typ) in (* FIXME *)
 
       match tc with
@@ -2942,17 +2939,17 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
             (pp_type ppe) ty pp_path p
   end
 
-  | EcTheory.CTh_baserw name ->
+  | EcTheory.Th_baserw name ->
       Format.fprintf fmt "declare rewrite %s." name
 
-  | EcTheory.CTh_addrw (p, l) ->
+  | EcTheory.Th_addrw (p, l) ->
       Format.fprintf fmt "hint rewrite %a : @[<hov 2>%a@]."
         (pp_rwname ppe) p (pp_list "@ " (pp_axname ppe)) l
 
-  | EcTheory.CTh_reduction _ ->
+  | EcTheory.Th_reduction _ ->
       Format.fprintf fmt "hint simplify."
 
-  | EcTheory.CTh_auto (lc, lvl, base, p) ->
+  | EcTheory.Th_auto (lc, lvl, base, p) ->
       Format.fprintf fmt "%a solve %d %s : %a."
         (pp_list " " pp_string) ((if lc then ["local"] else []) @ ["hint"])
         lvl (odfl "" base)

@@ -63,7 +63,7 @@ OP:
 MOD:
 (*
     in
-    let scope = maybe_add_to_section scope (EcTheory.CTh_module m) in
+    let scope = maybe_add_to_section scope (EcTheory.Th_module m) in
     let scope =
       match local with
       | false -> scope
