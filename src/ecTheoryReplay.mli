@@ -36,11 +36,11 @@ type 'a ovrenv = {
 
 and 'a ovrhooks = {
   henv     : 'a -> EcEnv.env;
-  hty      : 'a -> (symbol * tydecl) -> 'a;
-  hop      : 'a -> (symbol * operator) -> 'a;
-  hmodty   : 'a -> (symbol * module_sig) -> 'a;
-  hmod     : 'a -> bool -> module_expr -> 'a;
-  hax      : 'a -> bool -> (symbol * axiom) -> 'a;
+  hty      : 'a -> locality -> (symbol * tydecl) -> 'a;
+  hop      : 'a -> locality -> (symbol * operator) -> 'a;
+  hmodty   : 'a -> locality -> (symbol * module_sig) -> 'a;
+  hmod     : 'a -> locality -> module_expr -> 'a;
+  hax      : 'a -> locality -> (symbol * axiom) -> 'a;
   hexport  : 'a -> EcPath.path -> 'a;
   hbaserw  : 'a -> symbol -> 'a;
   haddrw   : 'a -> EcPath.path * EcPath.path list -> 'a;

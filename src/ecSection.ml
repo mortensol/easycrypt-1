@@ -969,3 +969,4 @@ let add_abstract id mt (cs : t) : t =
 *)
 
 let add = assert false
+let exit = assert false
