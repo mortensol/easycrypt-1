@@ -368,6 +368,16 @@ and declare =
   | DC_Op     of EcPath.path
   | DC_Axiom  of EcPath.path
 
+let empty_locals =
+  { lc_theories  = Sp.empty;
+    lc_axioms    = Sp.empty;
+    lc_types     = Sp.empty;
+    lc_modules   = Sp.empty;
+    lc_modtypes  = Sp.empty;
+    lc_operators = Sp.empty;
+    lc_baserw    = Sp.empty;
+  }
+
 let is_declared ~current (scenv : scenv) (who : cbarg) =
   let for1 (declare : declare) =
     match declare, who with
@@ -870,21 +880,21 @@ let rec generalize_lc_items env to_gen prefix items =
     | None -> items
     | Some item -> item :: items
 
+let generalize_lc_items scenv =
+  let to_gen = {
+      tg_params = [];
+      tg_binds  = [];
+      tg_subst  = EcSubst.empty;
+      tg_clear  = empty_locals;
+    } in
+  generalize_lc_items scenv to_gen (EcEnv.root scenv.lc_env) scenv.lc_items
 
 (* ---------------------------------------------------------------- *)
 let scenv0 (env : EcEnv.env) (name : symbol option) : scenv =
   { lc_env     = env;
     lc_name    = name;
     lc_declare = ([], []);
-    lc_locals  = {
-      lc_theories  = Sp.empty;
-      lc_axioms    = Sp.empty;
-      lc_types     = Sp.empty;
-      lc_modules   = Sp.empty;
-      lc_modtypes  = Sp.empty;
-      lc_operators = Sp.empty;
-      lc_baserw    = Sp.empty;
-    };
+    lc_locals  = empty_locals;
     lc_items   = []; }
 
 type t = scenv list
@@ -907,66 +917,34 @@ let enter (env : EcEnv.env) (name : symbol option) (cs : t) : t =
           lc_items   = []; }
     in
       ec :: cs
+
+let exit (cs:t) (name : EcSymbols.symbol option) =
+  assert false
 (*
-let exit (cs : t) =
   match cs with
-  | [] -> raise NoSectionOpened
-  | ec :: cs ->
-      ({ ec with lc_items     = List.rev ec.lc_items;
-                 lc_abstracts = fst_map List.rev ec.lc_abstracts;
-                 lc_lemmas    = fst_map List.rev ec.lc_lemmas},
-       cs)
+  | [] -> hierror "no section to close"
+  | scenv::cs ->
+    (* FIXME: section pending th *)
+    if scenv.lc_name <> name then
+      hierror "expecting [%s], not [%s]"
+        (odfl "<empty>" scenv.lc_name) (odfl "<empty>" name);
+    let items = generalize_lc_items scenv in
+    scenv.lc_env, cs, items
+ *)
 
-let path (cs : t) : symbol option * path =
+(*
+let add_decl_mod lc item scenv =
+ *)
+
+let add_item (lc:locality) (item:lc_item) (scenv:scenv) =
+  assert false
+(*
+  match item with
+  | LC_th_item item -> add_item lc item scenv
+  | LC_decl_mod decl -> add_decl_mod lc item scenv
+ *)
+
+let add (lc:locality) (item:lc_item) (cs:t) =
   match cs with
-  | [] -> raise NoSectionOpened
-  | ec :: _ -> (ec.lc_name, EcEnv.root ec.lc_env)
-
-let opath (cs : t) =
-  try Some (path cs) with NoSectionOpened -> None
-
-let topenv (cs : t) : EcEnv.env =
-  match List.rev cs with
-  | [] -> raise NoSectionOpened
-  | ec :: _ -> ec.lc_env
-
-let locals (cs : t) : locals =
-  match cs with
-  | [] -> raise NoSectionOpened
-  | ec :: _ -> ec
-
-let olocals (cs : t) =
-  try Some (locals cs) with NoSectionOpened -> None
-
-let onactive (f : locals -> locals) (cs : t) =
-  match cs with
-  | []      -> raise NoSectionOpened
-  | c :: cs -> (f c) :: cs
-
-let add_local_mod (p : path) (cs : t) : t =
-  onactive (fun ec -> { ec with lc_modules = Sp.add p ec.lc_modules }) cs
-
-let add_lemma (p : path) (lvl : lvl) (cs : t) : t =
-  onactive (fun ec ->
-    let (axs, map) = ec.lc_lemmas in
-      { ec with lc_lemmas = ((p, lvl) :: axs, Mp.add p lvl map) })
-    cs
-
-let add_item item (cs : t) : t =
-  let doit ec = { ec with lc_items = item :: ec.lc_items } in
-    onactive doit cs
-
-let add_abstract id mt (cs : t) : t =
-  let doit ec =
-    match Sid.mem id (snd ec.lc_abstracts) with
-    | true  -> assert false
-    | false ->
-        let (ids, set) = ec.lc_abstracts in
-        let (ids, set) = ((id, mt) :: ids, Sid.add id set) in
-          { ec with lc_abstracts = (ids, set) }
-  in
-    onactive doit cs
-*)
-
-let add = assert false
-let exit = assert false
+  | [] -> cs
+  | scenv::cs -> add_item lc item scenv::cs

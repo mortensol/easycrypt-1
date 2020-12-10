@@ -2077,20 +2077,19 @@ module Section = struct
   let exit (scope : scope) (name : psymbol option) =
     let sc_env, sc_section, items = EcSection.exit scope.sc_section name in
     let scope = { scope with sc_env; sc_section} in
+
     let rec bind_item scope item =
       match item with
-      | T.CTh_type     (x, ty) -> Ty.bind scope Global(x, ty)
+      | T.CTh_type     (x, ty) -> Ty.bind scope Global (x, ty)
       | T.CTh_operator (x, op) -> Op.bind scope Global (x, op)
       | T.CTh_modtype  (x, mt) -> ModType.bind scope Global (x, mt)
       | T.CTh_module   me      -> Mod.bind scope Global me
       | T.CTh_axiom    (x, ax) -> Ax.bind scope Global (x,ax)
       | T.CTh_export   p       -> Theory.export_p scope p
-      | T.CTh_theory (x, (th, thmode)) ->
-        let scope = Theory.enter scope thmode x in
-        let scope = bind_items scope th.EcTheory.cth_struct in
-        let _, scope = Theory.exit scope in
-        scope
+      | T.CTh_theory   th      -> Theory.bind scope Global th
       | T.CTh_typeclass (x, tc) -> Ty.bindclass scope Global (x, tc)
+      (* FIXME: section
+         would be nice to have proper bind here *)
       | T.CTh_instance (p, cr) ->
               { scope with
                 sc_env = EcEnv.TypeClass.add_instance p cr scope.sc_env }
