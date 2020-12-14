@@ -289,8 +289,8 @@ end
 (* -------------------------------------------------------------------- *)
 type proof_uc = {
   puc_active : (proof_auc * (proof_ctxt option)) option;
-  puc_cont   : proof_ctxt list * (EcEnv.env option);
-  puc_init   : EcEnv.env;
+  puc_cont   : proof_ctxt list * (EcSection.scenv option);
+  puc_init   : EcSection.scenv;
 }
 
 and proof_auc = {
@@ -302,7 +302,7 @@ and proof_auc = {
 }
 
 and proof_ctxt =
-  (symbol option * EcDecl.axiom) * EcPath.path * EcEnv.env
+  (symbol option * EcDecl.axiom) * EcPath.path * EcSection.scenv
 
 and proof_state =
   PSNoCheck | PSCheck of EcCoreGoal.proof
@@ -331,7 +331,7 @@ type thloaded = (EcTheory.ctheory * EcTheory.thmode)
 
 type scope = {
   sc_name     : (symbol * EcTheory.thmode);
-  sc_env      : EcEnv.env;
+  sc_env      : EcSection.scenv;
   sc_top      : scope option;
   sc_prelude  : ([`Frozen | `InPrelude] * prelude);
   sc_loaded   : (thloaded * required) Msym.t;
@@ -339,26 +339,28 @@ type scope = {
   sc_clears   : path list;
   sc_pr_uc    : proof_uc option;
   sc_options  : GenOptions.options;
-  sc_section  : EcSection.t;
 }
 
 (* -------------------------------------------------------------------- *)
 let empty (gstate : EcGState.gstate) =
   let env = EcEnv.initial gstate in
   { sc_name       = (EcPath.basename (EcEnv.root env), `Concrete);
-    sc_env        = env;
+    sc_env        = EcSection.initial env;
     sc_top        = None;
     sc_prelude    = (`InPrelude, { pr_env = env; pr_required = []; });
     sc_loaded     = Msym.empty;
     sc_required   = [];
     sc_clears     = [];
     sc_pr_uc      = None;
-    sc_options    = GenOptions.freeze ();
-    sc_section    = EcSection.initial; }
+    sc_options    = GenOptions.freeze (); }
+
+(* -------------------------------------------------------------------- *)
+let env (scope : scope) =
+  EcSection.env scope.sc_env
 
 (* -------------------------------------------------------------------- *)
 let gstate (scope : scope) =
-  EcEnv.gstate scope.sc_env
+  EcEnv.gstate (env scope)
 
 (* -------------------------------------------------------------------- *)
 let name (scope : scope) =
@@ -366,11 +368,7 @@ let name (scope : scope) =
 
 (* -------------------------------------------------------------------- *)
 let path (scope : scope) =
-  EcEnv.root scope.sc_env
-
-(* -------------------------------------------------------------------- *)
-let env (scope : scope) =
-  scope.sc_env
+  EcEnv.root (env scope)
 
 (* -------------------------------------------------------------------- *)
 let attop (scope : scope) =
@@ -392,7 +390,7 @@ let xgoal (scope : scope) =
 
 (* -------------------------------------------------------------------- *)
 let dump_why3 (scope : scope) (filename : string) =
-  try  EcSmt.dump_why3 scope.sc_env filename
+  try  EcSmt.dump_why3 (env scope) filename
   with
   | Sys_error msg ->
       hierror "cannot dump to `%s`: system error: %s"
@@ -419,7 +417,7 @@ let check_state (mode : topmode) action (scope : scope) =
 
 (* -------------------------------------------------------------------- *)
 let notify (scope : scope) (lvl : EcGState.loglevel) =
-  EcEnv.notify scope.sc_env lvl
+  EcEnv.notify (env scope) lvl
 
 (* -------------------------------------------------------------------- *)
 module Options = struct
@@ -460,7 +458,7 @@ let for_loading (scope : scope) =
     (EcEnv.gstate env);
 
   { sc_name       = (EcPath.basename (EcEnv.root pr.pr_env), `Concrete);
-    sc_env        = env;
+    sc_env        = EcSection.initial env;
     sc_top        = None;
     sc_prelude    = scope.sc_prelude;
     sc_loaded     = scope.sc_loaded;
@@ -468,11 +466,11 @@ let for_loading (scope : scope) =
     sc_clears     = [];
     sc_pr_uc      = None;
     sc_options    = GenOptions.for_loading scope.sc_options;
-    sc_section    = EcSection.initial; }
+  }
 
 (* -------------------------------------------------------------------- *)
-let subscope (scope : scope) (mode : EcTheory.thmode) (name : symbol) =
-  let env = EcEnv.Theory.enter name scope.sc_env in
+let subscope (scope : scope) (mode : EcTheory.thmode) (name : symbol) lc =
+  let env = EcSection.enter_theory name lc scope.sc_env in
 
   { sc_name       = (name, mode);
     sc_env        = env;
@@ -483,7 +481,7 @@ let subscope (scope : scope) (mode : EcTheory.thmode) (name : symbol) =
     sc_clears     = [];
     sc_pr_uc      = None;
     sc_options    = GenOptions.for_subscope scope.sc_options;
-    sc_section    = scope.sc_section; }
+  }
 
 (* -------------------------------------------------------------------- *)
 module Prover = struct
@@ -633,7 +631,7 @@ module Prover = struct
 
   (* -------------------------------------------------------------------- *)
   let do_prover_info scope ppr =
-    let options = process_prover_option scope.sc_env ppr in
+    let options = process_prover_option (env scope) ppr in
     mk_prover_info scope options
 
   (* -------------------------------------------------------------------- *)
@@ -771,6 +769,7 @@ module Auto = struct
   let add_rw scope ~local ~base l =
     let env = env scope in
 
+
     (* FIXME section *)
   (*  if local then
       hierror "rewrite hints cannot be local"; *)
@@ -816,11 +815,9 @@ module Ax = struct
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) ((x, ax) : _ * axiom) =
     assert (scope.sc_pr_uc = None);
-    let item =
-      EcSection.sc_th_item scope.sc_section (EcTheory.Th_axiom (x, ax)) in
+    let item = EcTheory.Th_axiom (x, ax) in
     { scope with
-        sc_env     = EcEnv.Ax.bind x ax scope.sc_env;
-        sc_section = EcSection.add item scope.sc_section; }
+        sc_env     = EcSection.add_item item scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
   let start_lemma scope (cont, axflags) check ?name (axd, ctxt) =
@@ -828,7 +825,7 @@ module Ax = struct
       match check with
       | false -> PSNoCheck
       | true  ->
-          let hyps  = EcEnv.LDecl.init scope.sc_env axd.ax_tparams in
+          let hyps  = EcEnv.LDecl.init (env scope) axd.ax_tparams in
           let proof = EcCoreGoal.start hyps axd.ax_spec in
           PSCheck proof
     in
@@ -848,8 +845,9 @@ module Ax = struct
   let rec add_r (scope : scope) (mode : mode) (ax : paxiom located) =
     assert (scope.sc_pr_uc = None);
 
+    let env = env scope in
     let loc = ax.pl_loc and ax = ax.pl_desc in
-    let ue  = TT.transtyvars scope.sc_env (loc, ax.pa_tyvars) in
+    let ue  = TT.transtyvars env (loc, ax.pa_tyvars) in
 
     let (pconcl, tintro) =
       match ax.pa_vars with
@@ -866,7 +864,7 @@ module Ax = struct
     let tintro = mk_loc loc (Plogic (Pmove prevertv0)) in
     let tintro = { pt_core = tintro; pt_intros = [`Ip ip]; } in
 
-    let concl = TT.trans_prop scope.sc_env ue pconcl in
+    let concl = TT.trans_prop env ue pconcl in
 
     if not (EcUnify.UniEnv.closed ue) then
       hierror "the formula contains free type variables";
@@ -1084,46 +1082,43 @@ module Op = struct
 
   let bind (scope : scope) ((x, op) : _ * operator) =
     assert (scope.sc_pr_uc = None);
-    let item =
-      EcSection.sc_th_item scope.sc_section (EcTheory.Th_operator (x, op)) in
+    let item = EcTheory.Th_operator (x, op) in
     { scope with
-        sc_env     = EcEnv.Op.bind x op scope.sc_env;
-        sc_section = EcSection.add item scope.sc_section; }
+        sc_env = EcSection.add_item item scope.sc_env; }
+
 
   let add (scope : scope) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
     let op = op.pl_desc and loc = op.pl_loc in
-    let ue = TT.transtyvars scope.sc_env (loc, op.po_tyvars) in
+    let eenv = env scope in
+    let ue = TT.transtyvars eenv (loc, op.po_tyvars) in
     let lc = op.po_locality in
     let (ty, body, refts) =
       match op.po_def with
       | PO_abstr pty ->
-          let env   = scope.sc_env in
-          let codom = TT.transty TT.tp_relax env ue pty in
-          let xs    = snd (TT.trans_binding env ue op.po_args) in
+          let codom = TT.transty TT.tp_relax eenv ue pty in
+          let xs    = snd (TT.trans_binding eenv ue op.po_args) in
           (EcTypes.toarrow (List.map snd xs) codom, `Abstract, [])
 
       | PO_concr (pty, pe) ->
-          let env     = scope.sc_env in
-          let codom   = TT.transty TT.tp_relax env ue pty in
-          let env, xs = TT.trans_binding env ue op.po_args in
+          let codom   = TT.transty TT.tp_relax eenv ue pty in
+          let env, xs = TT.trans_binding eenv ue op.po_args in
           let body    = TT.transexpcast env `InOp ue codom pe in
           let lam     = EcTypes.e_lam xs body in
           (lam.EcTypes.e_ty, `Plain lam, [])
 
       | PO_case (pty, pbs) -> begin
           let name = { pl_loc = loc; pl_desc = unloc op.po_name } in
-          match EHI.trans_matchfix (env scope) ue name (op.po_args, pty, pbs) with
+          match EHI.trans_matchfix eenv ue name (op.po_args, pty, pbs) with
           | (ty, opinfo) -> (ty, `Fix opinfo, [])
         end
 
       | PO_reft (pty, (rname, reft)) ->
-          let env      = scope.sc_env in
-          let codom    = TT.transty TT.tp_relax env ue pty in
-          let _env, xs = TT.trans_binding env ue op.po_args in
+          let codom    = TT.transty TT.tp_relax eenv ue pty in
+          let _env, xs = TT.trans_binding eenv ue op.po_args in
           let opty     = EcTypes.toarrow (List.map snd xs) codom in
           let opabs    = EcDecl.mk_op [] codom None lc in
-          let openv    = EcEnv.Op.bind (unloc op.po_name) opabs env in
+          let openv    = EcEnv.Op.bind (unloc op.po_name) opabs eenv in
           let openv    = EcEnv.Var.bind_locals xs openv in
           let reft     = TT.trans_prop openv ue reft in
           (opty, `Abstract, [(rname, xs, reft, codom)])
@@ -1163,7 +1158,7 @@ module Op = struct
     in
 
     let tyop   = EcDecl.mk_op tparams ty body lc in
-    let opname = EcPath.pqname (EcEnv.root (env scope)) (unloc op.po_name) in
+    let opname = EcPath.pqname (EcEnv.root eenv) (unloc op.po_name) in
 
     if op.po_kind = `Const then begin
       let tue   = EcUnify.UniEnv.copy ue in
@@ -1173,7 +1168,7 @@ module Op = struct
       let tfun  = EcTypes.tfun tdom tcom in
 
         try
-          EcUnify.unify (env scope) tue ty tfun;
+          EcUnify.unify eenv tue ty tfun;
           let msg = "this operator type is (unifiable) to a function type" in
             hierror ~loc "%s" msg
         with EcUnify.UnificationFailure _ -> ()
@@ -1251,7 +1246,7 @@ module Op = struct
     let add_distr_tag
         (pred : path) (bases : string list) (tag : string) (suffix : string) scope
     =
-      if not (EcAlgTactic.is_module_loaded scope.sc_env) then
+      if not (EcAlgTactic.is_module_loaded (env scope)) then
         hierror "for tag %s, load Distr first" tag;
 
       let oppath   = EcPath.pqname (path scope) (unloc op.po_name) in

@@ -384,12 +384,6 @@ and sc_item =
 and sc_items =
   sc_item list
 
-type declare =
-  | DC_Module of EcIdent.t
-  | DC_Type   of EcPath.path
-  | DC_Op     of EcPath.path
-  | DC_Axiom  of EcPath.path
-
 let initial env =
   { sc_env     = env;
     sc_top     = None;
@@ -399,6 +393,7 @@ let initial env =
     sc_items   = [];
   }
 
+let env scenv = scenv.sc_env
 
 (* -------------------------------------------------------------------- *)
 
@@ -923,7 +918,7 @@ let enter_section (name : symbol option) (scenv : scenv) =
     sc_insec = true;
     sc_items = []; }
 
-let exit_section (scenv:scenv) (name : symbol option) =
+let exit_section (name : symbol option) (scenv:scenv) =
   match scenv.sc_name with
   | Top  -> hierror "no section to close"
   | Th _ -> hierror "cannot close a section containing pending theories"
@@ -978,25 +973,35 @@ let rec check_glob_mp scenv mp =
     hierror "global definition can't depend on local module";
   List.iter (check_glob_mp scenv) mp.m_args
 
+let check_local scenv =
+  if not (scenv.sc_insec) then
+    hierror "local are only allowed in section"
+
+let check_declare scenv =
+  if not (scenv.sc_insec) then
+    hierror "declare are only allowed in section"
+
 let check_tyd scenv tyd =
   match tyd.tyd_loca with
-  | `Local -> ()
-  | `Declare ->
-      if tyd.tyd_params <> [] then
-        hierror "declared type can not be polymorphic";
-      if not (is_abstract_ty tyd.tyd_type) then
-        hierror "only abstract type can be declared"
-  | `Global ->
-    let cb (who:cbarg) =
-      match who with
-      | `Type p ->
-        if is_local scenv who then
-          hierror "global definition can't depend of local type %s"
-            (EcPath.tostring p)
-      | `Module mp -> check_glob_mp_ty "type" scenv mp
-      | `Op _ | `Ax _  | `ModuleType _ -> assert false in
+  | `Local -> check_local scenv
 
-    on_tydecl cb tyd
+  | `Declare ->
+    check_declare scenv;
+    if tyd.tyd_params <> [] then
+      hierror "declared type can not be polymorphic";
+    if not (is_abstract_ty tyd.tyd_type) then
+      hierror "only abstract type can be declared"
+  | `Global ->
+    if scenv.sc_insec then
+      let cb (who:cbarg) =
+        match who with
+        | `Type p ->
+          if is_local scenv who then
+            hierror "global definition can't depend of local type %s"
+              (EcPath.tostring p)
+        | `Module mp -> check_glob_mp_ty "type" scenv mp
+        | `Op _ | `Ax _  | `ModuleType _ -> assert false in
+      on_tydecl cb tyd
 
 let cb_glob scenv (who:cbarg) =
   match who with
@@ -1035,14 +1040,18 @@ let check_op scenv op =
 let check_ax scenv ax =
   match ax.ax_loca with
   | `Local ->
+    check_local scenv;
     if is_axiom ax.ax_kind then
       hierror "axiom can't be local"
   | `Declare ->
+    check_declare scenv;
     if ax.ax_tparams <> [] then
       hierror "declared axiom can not be polymorphic";
     if is_lemma ax.ax_kind then
       hierror "can't declare a lemma"
-  | `Global -> on_axiom (cb_glob scenv) ax
+  | `Global ->
+    if scenv.sc_insec then
+      on_axiom (cb_glob scenv) ax
 
 
 let cb_mod scenv s (who : cbarg) =
@@ -1072,14 +1081,15 @@ let cb_mod scenv s (who : cbarg) =
 
 let check_modtype scenv ms =
   match ms.tms_loca with
-  | `Local -> ()
-  | `Global -> on_modsig (cb_mod scenv "module type") ms.tms_sig
+  | `Local -> check_local scenv
+  | `Global ->
+    if scenv.sc_insec then on_modsig (cb_mod scenv "module type") ms.tms_sig
 
 let check_module scenv me =
   match me.tme_loca with
-  | `Local -> ()
+  | `Local -> check_local scenv
   | `Global ->
-    on_module (cb_mod scenv "module") me.tme_expr
+    if scenv.sc_insec then on_module (cb_mod scenv "module") me.tme_expr
   | `Declare -> (* Should be SC_decl_mod ... *)
     assert false
 
@@ -1151,26 +1161,6 @@ let rec add_item (item : theory_item) (scenv:scenv) =
 
 
 
-
-
-
-(*
-
-
-
-
-  | Th_export       (_,lc)
-  | Th_instance   (_,_,lc)
-  | Th_baserw       (_,lc)
-  | Th_addrw      (_,_,lc)
-  | Th_auto     (_,_,_,lc) -> lc = `Global
-  | Th_reduction       r   -> true
- *)
-
-   | _ -> assert false
-
-
-(*
 let add_decl_mod id mt mr scenv =
   match scenv.sc_name with
   | Th _ | Top ->
@@ -1180,38 +1170,7 @@ let add_decl_mod id mt mr scenv =
       sc_env = EcEnv.Mod.declare_local id mt mr scenv.sc_env;
       sc_items = SC_decl_mod (id,mt,mr) :: scenv.sc_items }
 
-let add_sc_item (item:sc_item) (scenv:scenv) =
+let add (item:sc_item) (scenv:scenv) =
   match item with
   | SC_th_item item -> add_item item scenv
   | SC_decl_mod(id,mt,mr) -> add_decl_mod id mt mr scenv
-
-
-let rec all_globals = function
-  | Th_type         (_,ty) -> ty.tyd_loca = `Global
-  | Th_operator     (_,op) -> op.op_loca  = `Global
-  | Th_axiom        (_,ax) -> ax.ax_loca  = `Global
-  | Th_modtype      (_,ms) -> ms.tms_loca = `Global
-  | Th_module          me  -> me.tme_loca = `Global
-  | Th_typeclass    (_,tc) -> tc.tc_loca  = `Global
-  | Th_theory   (_,(th,_)) -> all_globals_th th
-  | Th_export       (_,lc)
-  | Th_instance   (_,_,lc)
-  | Th_baserw       (_,lc)
-  | Th_addrw      (_,_,lc)
-  | Th_auto     (_,_,_,lc) -> lc = `Global
-  | Th_reduction       r   -> true
-
-and all_globals_th cth = List.for_all all_globals cth.cth_items
-
-let all_globals_scitem = function
-  | SC_th_item item -> all_globals item
-  | SC_decl_mod _   -> false
-
-let add (item:sc_item) (cs:t) =
-  match cs with
-  | [] ->
-    if not (all_globals_scitem item) then
-      hierror "only global declarations are allowed outside of a section";
-    cs
-  | scenv::cs -> add_sc_item item scenv::cs
- *)

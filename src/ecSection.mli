@@ -10,26 +10,31 @@
 open EcModules
 open EcEnv
 open EcTheory
+
 (* -------------------------------------------------------------------- *)
-(*type sc_item =
+type sc_item =
   | SC_th_item  of theory_item
   | SC_decl_mod of EcIdent.t * module_type * mod_restr
- *)
-type sc_item
 
-type t
+(* -------------------------------------------------------------------- *)
+type scenv
 
-val sc_th_item  : t -> theory_item -> sc_item
-val sc_decl_mod : t -> EcIdent.t * module_type * mod_restr -> sc_item
+val env : scenv -> env
 
-val initial : t
-val add     : sc_item -> t -> t
+val initial : env -> scenv
+val add_item : theory_item -> scenv -> scenv
+val add     : sc_item -> scenv -> scenv
 
-val enter : env -> EcSymbols.symbol option -> t -> t
-val exit  : t -> EcSymbols.symbol option -> env * t * theory_item list
 
-val enter_theory : t -> EcSymbols.symbol -> EcTypes.is_local -> t
-val exit_theory  : t -> t
+val enter_section : EcSymbols.symbol option -> scenv -> scenv
+val exit_section  : EcSymbols.symbol option -> scenv -> scenv * theory
+
+val enter_theory : EcSymbols.symbol -> EcTypes.is_local -> scenv -> scenv
+val exit_theory  :
+  ?clears:EcPath.path list ->
+  ?pempty:[ `ClearOnly | `Full | `No ] ->
+  scenv -> EcSymbols.symbol * EcTheory.ctheory option * scenv
+
 
 (*val fix_locality : t -> locality -> locality
   val fix_is_local : t -> is_local -> is_local *)
