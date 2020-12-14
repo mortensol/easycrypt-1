@@ -104,7 +104,7 @@ type mc = {
   mc_variables  : (ipath * varbind) MMsym.t;
   mc_functions  : (ipath * function_) MMsym.t;
   mc_modules    : (ipath * (module_expr * locality option)) MMsym.t;
-  mc_modsigs    : (ipath * module_sig) MMsym.t;
+  mc_modsigs    : (ipath * top_module_sig) MMsym.t;
   mc_tydecls    : (ipath * EcDecl.tydecl) MMsym.t;
   mc_operators  : (ipath * EcDecl.operator) MMsym.t;
   mc_axioms     : (ipath * EcDecl.axiom) MMsym.t;
@@ -1050,7 +1050,7 @@ module MC = struct
           (add2mc _up_axiom xax ax mc, None)
 
       | Th_modtype (xmodty, modty) ->
-          (add2mc _up_modty xmodty modty.tms_sig mc, None)
+          (add2mc _up_modty xmodty modty mc, None)
 
       | Th_module { tme_expr = subme; tme_loca = lc; } ->
           let args = subme.me_sig.mis_params in
@@ -2010,7 +2010,7 @@ module Mod = struct
         | Some x -> x
       in
       EcSubst.subst_modsig
-        ~params:(List.map fst modty.mt_params) EcSubst.empty modsig
+        ~params:(List.map fst modty.mt_params) EcSubst.empty modsig.tms_sig
     in
     module_expr_of_module_sig name modty modsig restr
 
@@ -2517,7 +2517,7 @@ module ModTy = struct
     fst (lookup name env)
 
   let bind name modty env =
-    let env = MC.bind_modty name modty.tms_sig env in
+    let env = MC.bind_modty name modty env in
       { env with
           env_item = Th_modtype (name, modty) :: env.env_item }
 
@@ -2559,7 +2559,7 @@ module ModTy = struct
     List.exists (mod_type_equiv env src) dst
 
   let sig_of_mt env (mt:module_type) =
-    let sig_ = by_path mt.mt_name env in
+    let { tms_sig = sig_ } = by_path mt.mt_name env in
     let subst =
       List.fold_left2 (fun s (x1,_) a ->
         EcSubst.add_module s x1 a) EcSubst.empty sig_.mis_params mt.mt_args in
@@ -2967,8 +2967,8 @@ module Theory = struct
         | Th_axiom (x, ax) ->
             MC.import_axiom (xpath x) ax env
 
-        | Th_modtype (x, ty) ->
-            MC.import_modty (xpath x) ty.tms_sig env
+        | Th_modtype (x, mty) ->
+            MC.import_modty (xpath x) mty env
 
         | Th_module ({ tme_expr = me; tme_loca = lc; }) ->
             let env = MC.import_mod (IPPath (xpath me.me_name)) (me, Some lc) env in

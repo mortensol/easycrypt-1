@@ -1294,7 +1294,7 @@ let lookup_fun env name =
 
 (* -------------------------------------------------------------------- *)
 let transmodtype (env : EcEnv.env) (modty : pmodule_type) =
-  let (p, sig_) = lookup_module_type env modty in
+  let (p, { tms_sig = sig_ }) = lookup_module_type env modty in
   let modty = {                         (* eta-normal form *)
     mt_params = sig_.mis_params;
     mt_name   = p;

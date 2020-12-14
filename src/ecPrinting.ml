@@ -3073,7 +3073,7 @@ module ObjectInfo = struct
   let pr_mty_r =
     { od_name    = "module types";
       od_lookup  = EcEnv.ModTy.lookup;
-      od_printer = pp_modsig; }
+      od_printer = pp_top_modsig; }
 
   let pr_mty = pr_gen pr_mty_r
 

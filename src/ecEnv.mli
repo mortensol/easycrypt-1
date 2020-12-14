@@ -210,10 +210,10 @@ end
 module ModTy : sig
   type t = top_module_sig
 
-  val by_path     : path -> env -> module_sig
-  val by_path_opt : path -> env -> module_sig option
-  val lookup      : qsymbol -> env -> path * module_sig
-  val lookup_opt  : qsymbol -> env -> (path * module_sig) option
+  val by_path     : path -> env -> top_module_sig
+  val by_path_opt : path -> env -> top_module_sig option
+  val lookup      : qsymbol -> env -> path * top_module_sig
+  val lookup_opt  : qsymbol -> env -> (path * top_module_sig) option
   val lookup_path : qsymbol -> env -> path
 
   val add  : path -> env -> env
