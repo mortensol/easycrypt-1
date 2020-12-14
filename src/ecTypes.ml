@@ -15,6 +15,18 @@ open EcUid
 module BI = EcBigInt
 
 (* -------------------------------------------------------------------- *)
+type locality  = [`Local | `Declare | `Global]
+type is_local  = [`Local | `Global]
+let locality_of_local = function
+  | `Local -> `Local
+  | `Global -> `Global
+
+let local_of_locality = function
+  | `Local   -> `Local
+  | `Global  -> `Global
+  | `Declare -> `Local
+
+(* -------------------------------------------------------------------- *)
 type ty = {
   ty_node : ty_node;
   ty_fv   : int EcIdent.Mid.t; (* only ident appearing in path *)

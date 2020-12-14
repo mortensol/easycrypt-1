@@ -198,6 +198,10 @@ and subst_modtype (s : _subst) (modty : module_type) =
     mt_name   = s.s_p modty.mt_name;
     mt_args   = List.map s.s_fmp modty.mt_args; }
 
+let subst_top_modsig (s : _subst) (ms: top_module_sig) =
+  { tms_sig = snd (subst_modsig s ms.tms_sig);
+    tms_loca = ms.tms_loca; }
+
 (* -------------------------------------------------------------------- *)
 let subst_function_def (s : _subst) (def : function_def) =
   let es = e_subst_of_subst s in
@@ -272,6 +276,10 @@ and subst_module (s : _subst) (m : module_expr) =
     { m with me_body; me_comps; me_sig; }
 
 (* -------------------------------------------------------------------- *)
+let subst_top_module (s : _subst) (m : top_module_expr) =
+  { tme_expr = subst_module s m.tme_expr;
+    tme_loca = m.tme_loca; }
+(* -------------------------------------------------------------------- *)
 let init_tparams (s : _subst) (params : ty_params) (params' : ty_params) =
   match params with
   | [] -> s
@@ -324,7 +332,7 @@ let subst_tydecl (s : _subst) (tyd : tydecl) =
         `Record (Fsubst.f_subst (f_subst_of_subst sty) scheme,
                  List.map (snd_map sty.s_ty) fields)
   in
-    { tyd_params = params'; tyd_type = body; }
+    { tyd_params = params'; tyd_type = body; tyd_loca = tyd.tyd_loca }
 
 (* -------------------------------------------------------------------- *)
 let rec subst_op_kind (s : _subst) (kind : operator_kind) =
@@ -412,9 +420,12 @@ let subst_op (s : _subst) (op : operator) =
   let sty     = init_tparams s op.op_tparams tparams in
   let ty      = sty.s_ty op.op_ty in
   let kind    = subst_op_kind sty op.op_kind in
+  let lc      = op.op_loca in
     { op_tparams = tparams;
       op_ty      = ty     ;
-      op_kind    = kind   ; }
+      op_kind    = kind   ;
+      op_loca    = lc     ;
+    }
 
 (* -------------------------------------------------------------------- *)
 let subst_ax (s : _subst) (ax : axiom) =
@@ -425,7 +436,9 @@ let subst_ax (s : _subst) (ax : axiom) =
   { ax_tparams = params;
     ax_spec    = spec;
     ax_kind    = ax.ax_kind;
-    ax_nosmt   = ax.ax_nosmt; }
+    ax_nosmt   = ax.ax_nosmt;
+    ax_loca    = ax.ax_loca;
+  }
 
 (* -------------------------------------------------------------------- *)
 let subst_ring (s : _subst) cr =
@@ -464,7 +477,7 @@ let subst_tc (s : _subst) tc =
   let tc_prt = tc.tc_prt |> omap s.s_p in
   let tc_ops = List.map (snd_map s.s_ty) tc.tc_ops in
   let tc_axs = List.map (snd_map (subst_form s)) tc.tc_axs in
-    { tc_prt; tc_ops; tc_axs; }
+    { tc_prt; tc_ops; tc_axs; tc_loca = tc.tc_loca }
 
 (* -------------------------------------------------------------------- *)
 (* SUBSTITUTION OVER THEORIES *)
@@ -480,19 +493,19 @@ let rec subst_theory_item (s : _subst) (item : theory_item) =
       Th_axiom (x, subst_ax s ax)
 
   | Th_modtype (x, tymod) ->
-      Th_modtype (x, snd (subst_modsig s tymod))
+      Th_modtype (x, subst_top_modsig s tymod)
 
   | Th_module m ->
-      Th_module (subst_module s m)
+      Th_module (subst_top_module s m)
 
   | Th_theory (x, (th, thmode)) ->
       Th_theory (x, (subst_ctheory s th, thmode))
 
-  | Th_export p ->
-      Th_export (s.s_p p)
+  | Th_export (p, lc) ->
+      Th_export (s.s_p p, lc)
 
-  | Th_instance (ty, tci) ->
-      Th_instance (subst_genty s ty, subst_instance s tci)
+  | Th_instance (ty, tci, lc) ->
+      Th_instance (subst_genty s ty, subst_instance s tci, lc)
 
   | Th_typeclass (x, tc) ->
       Th_typeclass (x, subst_tc s tc)
@@ -500,16 +513,16 @@ let rec subst_theory_item (s : _subst) (item : theory_item) =
   | Th_baserw _ ->
       item
 
-  | Th_addrw (b, ls) ->
-      Th_addrw (s.s_p b, List.map s.s_p ls)
+  | Th_addrw (b, ls, lc) ->
+      Th_addrw (s.s_p b, List.map s.s_p ls, lc)
 
   | Th_reduction rules ->
       let rules =
         List.map (fun (p, opts, _) -> (s.s_p p, opts, None)) rules
       in Th_reduction rules
 
-  | Th_auto (lc, lvl, base, ps) ->
-      Th_auto (lc, lvl, base, List.map s.s_p ps)
+  | Th_auto (lvl, base, ps, lc) ->
+      Th_auto (lvl, base, List.map s.s_p ps, lc)
 
 (* -------------------------------------------------------------------- *)
 and subst_theory (s : _subst) (items : theory) =
@@ -534,9 +547,11 @@ let subst_theory       s = subst_theory (_subst_of_subst s)
 
 let subst_function     s = subst_function (_subst_of_subst s)
 let subst_module       s = subst_module (_subst_of_subst s)
+let subst_top_module   s = subst_top_module (_subst_of_subst s)
 let subst_module_comps s = subst_module_comps (_subst_of_subst s)
 let subst_modtype      s = subst_modtype (_subst_of_subst s)
 let subst_modsig         = fun ?params s x -> snd (subst_modsig ?params (_subst_of_subst s) x)
+let subst_top_modsig   s = subst_top_modsig (_subst_of_subst s)
 let subst_modsig_body  s = subst_modsig_body (_subst_of_subst s)
 
 let subst_mpath        s = (_subst_of_subst s).s_fmp

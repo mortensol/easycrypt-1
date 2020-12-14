@@ -9,18 +9,27 @@
 (* -------------------------------------------------------------------- *)
 open EcModules
 open EcEnv
+open EcTheory
 (* -------------------------------------------------------------------- *)
+(*type sc_item =
+  | SC_th_item  of theory_item
+  | SC_decl_mod of EcIdent.t * module_type * mod_restr
+ *)
+type sc_item
+
 type t
 
-type locality = EcParsetree.locality
-open EcTheory
-
-type lc_item =
-  | LC_th_item  of theory_item
-  | LC_decl_mod of EcIdent.t * module_type * mod_restr
+val sc_th_item  : t -> theory_item -> sc_item
+val sc_decl_mod : t -> EcIdent.t * module_type * mod_restr -> sc_item
 
 val initial : t
-val add     : locality -> lc_item -> t -> t
+val add     : sc_item -> t -> t
 
 val enter : env -> EcSymbols.symbol option -> t -> t
 val exit  : t -> EcSymbols.symbol option -> env * t * theory_item list
+
+val enter_theory : t -> EcSymbols.symbol -> EcTypes.is_local -> t
+val exit_theory  : t -> t
+
+(*val fix_locality : t -> locality -> locality
+  val fix_is_local : t -> is_local -> is_local *)

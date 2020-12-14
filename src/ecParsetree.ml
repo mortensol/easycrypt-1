@@ -118,7 +118,9 @@ and pinstr = pinstr_r located
 and pstmt  = pinstr list
 
 (* -------------------------------------------------------------------- *)
-type locality = Local | Declare | Global
+type is_local = [ `Local | `Global]
+
+type locality = [`Declare | `Local | `Global]
 
 (* -------------------------------------------------------------------- *)
 type pmodule_type = pqsymbol
@@ -214,7 +216,7 @@ and pfunction_local = {
 type pinterface = {
   pi_name : psymbol;
   pi_sig : pmodule_sig;
-  pi_locality : locality;
+  pi_locality : is_local;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -377,7 +379,7 @@ type pnotation = {
   nt_args  : (psymbol * (psymbol list * pty option)) list;
   nt_codom : pty;
   nt_body  : pexpr;
-  nt_local : bool;
+  nt_local : is_local;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -390,7 +392,7 @@ type pabbrev = {
   ab_args  : ptybindings;
   ab_def   : pty * pexpr;
   ab_opts  : abrvopts;
-  ab_local : bool;
+  ab_local : is_local;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -933,6 +935,7 @@ type ptycinstance = {
   pti_ops  : (psymbol * (pty list * pqsymbol)) list;
   pti_axs  : (psymbol * ptactic_core) list;
   pti_args : [`Ring of (zint option * zint option)] option;
+  pti_loca : is_local;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -1001,7 +1004,7 @@ type theory_cloning = {
   pthc_rnm    : theory_renaming list;
   pthc_opts   : theory_cloning_options;
   pthc_clears : theory_cloning_clear list;
-  pthc_local  : bool;
+  pthc_local  : is_local;
   pthc_import : [`Export | `Import | `Include] option;
 }
 
@@ -1076,7 +1079,7 @@ type theory_clear = (pqsymbol option) list
 
 (* -------------------------------------------------------------------- *)
 type phint = {
-  ht_local : bool;
+  ht_local : is_local;
   ht_prio  : int;
   ht_base  : psymbol option;
   ht_names : pqsymbol list;
@@ -1104,7 +1107,7 @@ type global_action =
   | Gtype        of ptydecl list
   | Gtypeclass   of ptypeclass
   | Gtycinstance of ptycinstance
-  | Gaddrw       of (bool * pqsymbol * pqsymbol list)
+  | Gaddrw       of (is_local * pqsymbol * pqsymbol list)
   | Greduction   of puserred
   | Ghint        of phint
   | Gprint       of pprint

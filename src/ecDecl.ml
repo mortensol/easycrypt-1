@@ -24,6 +24,7 @@ type ty_pctor  = [ `Int of int | `Named of ty_params ]
 type tydecl = {
   tyd_params : ty_params;
   tyd_type   : ty_body;
+  tyd_loca   : locality;
 }
 
 and ty_body = [
@@ -52,7 +53,7 @@ let tydecl_as_record (td : tydecl) =
   match td.tyd_type with `Record x -> x | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
-let abs_tydecl ?(tc = Sp.empty) ?(params = `Int 0) () =
+let abs_tydecl ?(tc = Sp.empty) ?(params = `Int 0) lc =
   let params =
     match params with
     | `Named params ->
@@ -64,7 +65,7 @@ let abs_tydecl ?(tc = Sp.empty) ?(params = `Int 0) () =
           (EcUid.NameGen.bulk ~fmt n)
   in
 
-  { tyd_params = params; tyd_type = `Abstract tc; }
+  { tyd_params = params; tyd_type = `Abstract tc; tyd_loca = lc}
 
 (* -------------------------------------------------------------------- *)
 let ty_instanciate (params : ty_params) (args : ty list) (ty : ty) =
@@ -130,6 +131,7 @@ type operator = {
   op_tparams : ty_params;
   op_ty      : EcTypes.ty;
   op_kind    : operator_kind;
+  op_loca    : locality;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -139,7 +141,8 @@ type axiom = {
   ax_tparams : ty_params;
   ax_spec    : EcCoreFol.form;
   ax_kind    : axiom_kind;
-  ax_nosmt   : bool; }
+  ax_nosmt   : bool;
+  ax_loca    : locality; }
 
 let is_axiom (x : axiom_kind) = match x with `Axiom _ -> true | _ -> false
 let is_lemma (x : axiom_kind) = match x with `Lemma   -> true | _ -> false
@@ -187,21 +190,22 @@ let is_prind op =
   | OB_pred (Some (PR_Ind _)) -> true
   | _ -> false
 
-let gen_op tparams ty kind = {
+let gen_op tparams ty kind lc = {
   op_tparams = tparams;
   op_ty      = ty;
   op_kind    = kind;
+  op_loca    = lc;
 }
 
-let mk_pred tparams dom body =
+let mk_pred tparams dom body lc =
   let kind = OB_pred body in
-    gen_op tparams (EcTypes.toarrow dom EcTypes.tbool) kind
+    gen_op tparams (EcTypes.toarrow dom EcTypes.tbool) kind lc
 
-let mk_op tparams ty body =
+let mk_op tparams ty body lc =
   let kind = OB_oper body in
-    gen_op tparams ty kind
+    gen_op tparams ty kind lc
 
-let mk_abbrev ?(ponly = false) tparams xs (codom, body) =
+let mk_abbrev ?(ponly = false) tparams xs (codom, body) lc =
   let kind = {
     ont_args  = xs;
     ont_resty = codom;
@@ -209,7 +213,7 @@ let mk_abbrev ?(ponly = false) tparams xs (codom, body) =
     ont_ponly = ponly;
   } in
 
-  gen_op tparams (EcTypes.toarrow (List.map snd xs) codom) (OB_nott kind)
+  gen_op tparams (EcTypes.toarrow (List.map snd xs) codom) (OB_nott kind) lc
 
 let operator_as_ctor (op : operator) =
   match op.op_kind with
@@ -237,7 +241,7 @@ let operator_as_prind (op : operator) =
   | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
-let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) =
+let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) lc =
   let axbd = EcCoreFol.form_of_expr EcCoreFol.mhr bd in
   let axbd, axpm =
     let bdpm = List.map fst tparams in
@@ -265,13 +269,16 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) =
   { ax_tparams = axpm;
     ax_spec    = axspec;
     ax_kind    = `Axiom (Ssym.empty, false);
-    ax_nosmt   = nosmt; }
+    ax_nosmt   = nosmt;
+    ax_loca    = lc;
+  }
 
 (* -------------------------------------------------------------------- *)
 type typeclass = {
   tc_prt : EcPath.path option;
   tc_ops : (EcIdent.t * EcTypes.ty) list;
   tc_axs : (EcSymbols.symbol * EcCoreFol.form) list;
+  tc_loca: is_local;
 }
 
 (* -------------------------------------------------------------------- *)

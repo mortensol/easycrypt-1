@@ -176,22 +176,23 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Mod : sig
-  type t = module_expr
+  type t = top_module_expr
 
-  val by_mpath    : mpath -> env -> t
-  val by_mpath_opt: mpath -> env -> t option
-  val lookup      : qsymbol -> env -> mpath * t
-  val lookup_opt  : qsymbol -> env -> (mpath * t) option
+  val by_mpath    : mpath -> env -> module_expr
+  val by_mpath_opt: mpath -> env -> module_expr option
+  val lookup      : qsymbol -> env -> mpath * module_expr
+  val lookup_opt  : qsymbol -> env -> (mpath * module_expr) option
   val lookup_path : qsymbol -> env -> mpath
 
   val sp_lookup     : qsymbol -> env -> mpath * (module_expr suspension)
   val sp_lookup_opt : qsymbol -> env -> (mpath * (module_expr suspension)) option
 
-  val bind  : symbol -> module_expr -> env -> env
+  val bind  : symbol -> t -> env -> env
   val enter : symbol -> (EcIdent.t * module_type) list -> env -> env
 
   val bind_local    : EcIdent.t -> module_type -> mod_restr -> env -> env
   val declare_local : EcIdent.t -> module_type -> mod_restr -> env -> env
+  val is_declared   : EcIdent.t -> env -> bool
 
   val add_restr_to_locals : mod_restr -> env -> env
 
@@ -205,12 +206,12 @@ end
 
 (* -------------------------------------------------------------------- *)
 module ModTy : sig
-  type t = module_sig
+  type t = top_module_sig
 
-  val by_path     : path -> env -> t
-  val by_path_opt : path -> env -> t option
-  val lookup      : qsymbol -> env -> path * t
-  val lookup_opt  : qsymbol -> env -> (path * t) option
+  val by_path     : path -> env -> module_sig
+  val by_path_opt : path -> env -> module_sig option
+  val lookup      : qsymbol -> env -> path * module_sig
+  val lookup_opt  : qsymbol -> env -> (path * module_sig) option
   val lookup_path : qsymbol -> env -> path
 
   val add  : path -> env -> env
@@ -264,7 +265,7 @@ module Theory : sig
  (* FIXME: section ? ctheory -> theory *)
   val require : ?mode:thmode -> symbol -> ctheory -> env -> env
   val import  : path -> env -> env
-  val export  : path -> env -> env
+  val export  : path -> is_local -> env -> env
 
   val enter : symbol -> env -> env
 
@@ -336,8 +337,8 @@ val ty_hnorm : ty -> env -> ty
 
 (* -------------------------------------------------------------------- *)
 module Algebra : sig
-  val add_ring  : ty -> EcDecl.ring  -> env -> env
-  val add_field : ty -> EcDecl.field -> env -> env
+  val add_ring  : ty -> EcDecl.ring -> is_local -> env -> env
+  val add_field : ty -> EcDecl.field -> is_local -> env -> env
 end
 
 (* -------------------------------------------------------------------- *)
@@ -354,7 +355,7 @@ module TypeClass : sig
   val lookup_opt  : qsymbol -> env -> (path * t) option
   val lookup_path : qsymbol -> env -> path
 
-  val add_instance  : (ty_params * ty) -> tcinstance -> env -> env
+  val add_instance  : (ty_params * ty) -> tcinstance -> is_local -> env -> env
   val get_instances : env -> ((ty_params * ty) * tcinstance) list
 end
 (* -------------------------------------------------------------------- *)
@@ -365,8 +366,8 @@ module BaseRw : sig
   val lookup_path : qsymbol -> env -> path
   val is_base     : qsymbol -> env -> bool
 
-  val add   : symbol -> env -> env
-  val addto : path -> path list -> env -> env
+  val add   : symbol -> is_local -> env -> env
+  val addto : path -> path list -> is_local -> env -> env
 end
 
 (* -------------------------------------------------------------------- *)
@@ -382,8 +383,8 @@ end
 (* -------------------------------------------------------------------- *)
 module Auto : sig
   val dname  : symbol
-  val add1   : local:bool -> level:int -> ?base:symbol -> path -> env -> env
-  val add    : local:bool -> level:int -> ?base:symbol -> path list -> env -> env
+  val add1   : level:int -> ?base:symbol -> path -> is_local -> env -> env
+  val add    : level:int -> ?base:symbol -> path list -> is_local -> env -> env
   val get    : ?base:symbol -> env -> path list
   val getall : symbol list -> env -> path list
   val getx   : symbol -> env ->  (int * path list) list

@@ -772,8 +772,8 @@ module Auto = struct
     let env = env scope in
 
     (* FIXME section *)
-    if local then
-      hierror "rewrite hints cannot be local";
+  (*  if local then
+      hierror "rewrite hints cannot be local"; *)
 
     let env, base =
       match EcEnv.BaseRw.lookup_opt base.pl_desc env with
@@ -782,17 +782,17 @@ module Auto = struct
         if not (List.is_empty pre) then
           hierror ~loc:base.pl_loc
             "cannot create rewrite hints out of its enclosing theory";
-        let env = EcEnv.BaseRw.add ibase env in
+        let env = EcEnv.BaseRw.add ibase local env in
         (env, fst (EcEnv.BaseRw.lookup base.pl_desc env))
 
       | Some (base, _) -> (env, base) in
 
     let l = List.map (fun l -> EcEnv.Ax.lookup_path (unloc l) env) l in
-    { scope with sc_env = EcEnv.BaseRw.addto base l env }
+    { scope with sc_env = EcEnv.BaseRw.addto base l local env }
 
   let bind_hint scope ~local ~level ?base names =
     { scope with sc_env =
-        EcEnv.Auto.add ~local ~level ?base names scope.sc_env }
+        EcEnv.Auto.add ~level ?base names local scope.sc_env }
 
   let add_hint scope hint =
     let base = omap unloc hint.ht_base in
@@ -814,12 +814,13 @@ module Ax = struct
   type mode = [`WeakCheck | `Check | `Report]
 
   (* ------------------------------------------------------------------ *)
-  let bind (scope : scope) locality ((x, ax) : _ * axiom) =
+  let bind (scope : scope) ((x, ax) : _ * axiom) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.Th_axiom (x, ax)) in
+    let item =
+      EcSection.sc_th_item scope.sc_section (EcTheory.Th_axiom (x, ax)) in
     { scope with
         sc_env     = EcEnv.Ax.bind x ax scope.sc_env;
-        sc_section = EcSection.add locality item scope.sc_section; }
+        sc_section = EcSection.add item scope.sc_section; }
 
   (* ------------------------------------------------------------------ *)
   let start_lemma scope (cont, axflags) check ?name (axd, ctxt) =
@@ -882,16 +883,18 @@ module Ax = struct
       in { ax_tparams = tparams;
            ax_spec    = concl;
            ax_kind    = kind;
-           ax_nosmt   = ax.pa_nosmt; }
+           ax_nosmt   = ax.pa_nosmt;
+           ax_loca    = ax.pa_locality;
+         }
     in
 
     match ax.pa_kind with
     | PLemma tc -> begin
         let local =
           match ax.pa_locality with
-          | Declare -> hierror ~loc "cannot mark with `declare` a lemma"
-          | Local   -> true
-          | Global  -> false in
+          | `Declare -> hierror ~loc "cannot mark with `declare` a lemma"
+          | `Local   -> true
+          | `Global  -> false in
 
         let check    = Check_mode.check scope.sc_options in
         let pucflags = { puc_nosmt = ax.pa_nosmt; puc_local = local; } in
@@ -912,10 +915,10 @@ module Ax = struct
       end
 
     | PAxiom _ ->
-        if ax.pa_locality = Local then
+        if ax.pa_locality = `Local then
           hierror ~loc "An axiom cannot be local";
         Some (unloc ax.pa_name),
-        bind scope ax.pa_locality (unloc ax.pa_name, axd)
+        bind scope (unloc ax.pa_name, axd)
 
   (* ------------------------------------------------------------------ *)
   and add_defer (scope : scope) proofs =
@@ -974,11 +977,8 @@ module Ax = struct
             { scope with sc_env = e }
 
         | None ->
-            let bind name scope =
-              let locality =
-                if pac.puc_flags.puc_local then Local else Global in
-              bind scope locality (name, pac.puc_crt)
-            in pac.puc_name |> ofold bind scope
+            let bind name scope = bind scope (name, pac.puc_crt) in
+            pac.puc_name |> ofold bind scope
 
       in (pac.puc_name, scope)
 
@@ -1082,18 +1082,19 @@ module Op = struct
   module TTC = EcProofTyping
   module EHI = EcHiInductive
 
-  let bind (scope : scope) locality ((x, op) : _ * operator) =
+  let bind (scope : scope) ((x, op) : _ * operator) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.Th_operator (x, op)) in
+    let item =
+      EcSection.sc_th_item scope.sc_section (EcTheory.Th_operator (x, op)) in
     { scope with
         sc_env     = EcEnv.Op.bind x op scope.sc_env;
-        sc_section = EcSection.add locality item scope.sc_section; }
+        sc_section = EcSection.add item scope.sc_section; }
 
   let add (scope : scope) (op : poperator located) =
     assert (scope.sc_pr_uc = None);
     let op = op.pl_desc and loc = op.pl_loc in
     let ue = TT.transtyvars scope.sc_env (loc, op.po_tyvars) in
-
+    let lc = op.po_locality in
     let (ty, body, refts) =
       match op.po_def with
       | PO_abstr pty ->
@@ -1114,14 +1115,14 @@ module Op = struct
           let name = { pl_loc = loc; pl_desc = unloc op.po_name } in
           match EHI.trans_matchfix (env scope) ue name (op.po_args, pty, pbs) with
           | (ty, opinfo) -> (ty, `Fix opinfo, [])
-      end
+        end
 
       | PO_reft (pty, (rname, reft)) ->
           let env      = scope.sc_env in
           let codom    = TT.transty TT.tp_relax env ue pty in
           let _env, xs = TT.trans_binding env ue op.po_args in
           let opty     = EcTypes.toarrow (List.map snd xs) codom in
-          let opabs    = EcDecl.mk_op [] codom None in
+          let opabs    = EcDecl.mk_op [] codom None lc in
           let openv    = EcEnv.Op.bind (unloc op.po_name) opabs env in
           let openv    = EcEnv.Var.bind_locals xs openv in
           let reft     = TT.trans_prop openv ue reft in
@@ -1161,7 +1162,7 @@ module Op = struct
 
     in
 
-    let tyop   = EcDecl.mk_op tparams ty body in
+    let tyop   = EcDecl.mk_op tparams ty body lc in
     let opname = EcPath.pqname (EcEnv.root (env scope)) (unloc op.po_name) in
 
     if op.po_kind = `Const then begin
@@ -1180,7 +1181,7 @@ module Op = struct
 
     let scope =
       match op.po_ax with
-      | None    -> bind scope op.po_locality (unloc op.po_name, tyop)
+      | None    -> bind scope (unloc op.po_name, tyop)
       | Some ax -> begin
           match tyop.op_kind with
           | OB_oper (Some (OP_Plain (bd, _))) ->
@@ -1188,10 +1189,10 @@ module Op = struct
               let axop  =
                 let nosmt = op.po_nosmt in
                 let nargs = List.sum (List.map (List.length |- fst) op.po_args) in
-                  EcDecl.axiomatized_op ~nargs  ~nosmt path (tyop.op_tparams, bd) in
+                  EcDecl.axiomatized_op ~nargs  ~nosmt path (tyop.op_tparams, bd) lc in
               let tyop  = { tyop with op_kind = OB_oper None; } in
-              let scope = bind scope op.po_locality (unloc op.po_name, tyop) in
-              Ax.bind scope op.po_locality (unloc ax, axop)
+              let scope = bind scope (unloc op.po_name, tyop) in
+              Ax.bind scope (unloc ax, axop)
 
           | _ -> hierror ~loc "cannot axiomatize non-plain operators"
       end
@@ -1221,8 +1222,10 @@ module Op = struct
             { ax_tparams = axpm;
               ax_spec    = ax;
               ax_kind    = `Axiom (Ssym.empty, false);
-              ax_nosmt   = nosmt; }
-          in Ax.bind scope op.po_locality (unloc rname, ax))
+              ax_nosmt   = nosmt;
+              ax_loca    = lc;
+            }
+          in Ax.bind scope (unloc rname, ax))
         scope refts
     in
 
@@ -1236,8 +1239,8 @@ module Op = struct
           let subst = Tvar.init
             (List.map fst tparams)
             (List.map (tvar |- fst) nparams) in
-          let rop = EcDecl.mk_op nparams (Tvar.subst subst ty) None in
-          bind scope op.po_locality (unloc name, rop)
+          let rop = EcDecl.mk_op nparams (Tvar.subst subst ty) None lc in
+          bind scope (unloc name, rop)
         in List.fold_left addnew scope op.po_aliases
 
       end else scope
@@ -1273,17 +1276,19 @@ module Op = struct
         { ax_tparams = List.map (fun ty -> (ty, Sp.empty)) nparams;
           ax_spec    = ax;
           ax_kind    = `Axiom (Ssym.empty, false);
-          ax_nosmt   = false; } in
+          ax_nosmt   = false;
+          ax_loca    = lc;
+        } in
 
       let scope, axname =
         let axname = Printf.sprintf "%s_%s" (unloc op.po_name) suffix in
-        (Ax.bind scope op.po_locality (axname, ax), axname) in
+        (Ax.bind scope (axname, ax), axname) in
 
       let axpath = EcPath.pqname (path scope) axname in
 
       List.fold_left
         (fun scope base ->
-            Auto.bind_hint ~local:false ~level:0 ~base scope [axpath])
+            Auto.bind_hint ~local:(local_of_locality lc) ~level:0 ~base scope [axpath])
         scope bases
 
     in
@@ -1317,7 +1322,7 @@ module Pred = struct
     assert (scope.sc_pr_uc = None);
 
     let typr  = EcHiPredicates.trans_preddecl (env scope) pr in
-    let scope = Op.bind scope (unloc pr).pp_locality (unloc (unloc pr).pp_name, typr) in
+    let scope = Op.bind scope (unloc (unloc pr).pp_name, typr) in
     typr, scope
 end
 
@@ -1330,8 +1335,7 @@ module Notations = struct
 
   let add_abbrev (scope : scope) (ab : pabbrev located) =
     let op = EcHiNotations.trans_abbrev (env scope) ab in
-    let lc = if (unloc ab).ab_local then Local else Global in
-    Op.bind scope lc op
+    Op.bind scope op
 end
 
 (* -------------------------------------------------------------------- *)
@@ -1356,14 +1360,14 @@ module Mod = struct
         Mx.fold add use.EcEnv.us_pv EcPath.Sx.empty in
       EcEnv.Mod.add_restr_to_locals (rx,EcPath.Sm.empty) env
 
-  let bind (scope : scope) locality (m : module_expr) =
+  let bind (scope : scope) (m : top_module_expr) =
     assert (scope.sc_pr_uc = None);
-    let item  = EcSection.LC_th_item (Th_module m) in
+    let item  = EcSection.sc_th_item scope.sc_section (Th_module m) in
     { scope with
-        sc_env     = EcEnv.Mod.bind m.me_name m scope.sc_env;
-        sc_section = EcSection.add locality item scope.sc_section; }
+        sc_env     = EcEnv.Mod.bind m.tme_expr.me_name m scope.sc_env;
+        sc_section = EcSection.add item scope.sc_section; }
 
-  let add_concrete (scope : scope) (lc : locality) (ptm : pmodule_def) =
+  let add_concrete (scope : scope) lc (ptm : pmodule_def) =
     assert (scope.sc_pr_uc = None);
 
     let m = TT.transmod scope.sc_env ~attop:true ptm in
@@ -1383,20 +1387,21 @@ module Mod = struct
         (EcPrinting.pp_list "@," pp) ur
     end;
 
-    bind scope lc m
+    bind scope {tme_expr = m; tme_loca = lc}
 
   let declare (scope : scope) (lc : locality) (m : pmodule_decl) =
+    assert (lc = `Declare);
     let modty = m.ptm_modty in
     let tysig = fst (TT.transmodtype scope.sc_env (fst modty)) in
     let restr = List.map (TT.trans_topmsymbol scope.sc_env) (snd modty) in
     let name  = EcIdent.create (unloc m.ptm_name) in
     let scope =
       let restr = Sx.empty, Sm.of_list restr in
-      let item  = EcSection.LC_decl_mod (name, tysig, restr) in
+      let item  = EcSection.sc_decl_mod scope.sc_section (name, tysig, restr) in
       { scope with
           sc_env = EcEnv.Mod.declare_local
             name tysig restr scope.sc_env;
-          sc_section = EcSection.add lc item scope.sc_section; }
+          sc_section = EcSection.add item scope.sc_section; }
     in
       scope
 
@@ -1415,17 +1420,18 @@ end
 
 (* -------------------------------------------------------------------- *)
 module ModType = struct
-  let bind (scope : scope) (lc : locality) ((x, tysig) : _ * module_sig) =
+  let bind (scope : scope) ((x, tysig) : _ * top_module_sig) =
     assert (scope.sc_pr_uc = None);
-    let item  = EcSection.LC_th_item (EcTheory.Th_modtype (x, tysig)) in
+    let item  =
+      EcSection.sc_th_item scope.sc_section (EcTheory.Th_modtype (x, tysig)) in
     { scope with
         sc_env = EcEnv.ModTy.bind x tysig scope.sc_env;
-        sc_section = EcSection.add lc item scope.sc_section; }
+        sc_section = EcSection.add item scope.sc_section; }
 
   let add (scope : scope) (intf : pinterface) =
     assert (scope.sc_pr_uc = None);
     let tysig = EcTyping.transmodsig scope.sc_env intf in
-    bind scope intf.pi_locality (unloc intf.pi_name, tysig)
+    bind scope (unloc intf.pi_name, tysig)
 end
 
 (* -------------------------------------------------------------------- *)
@@ -1446,15 +1452,16 @@ module Ty = struct
       hierror ~loc:x.pl_loc "duplicated type/type-class name `%s'" x.pl_desc
 
   (* ------------------------------------------------------------------ *)
-  let bind (scope : scope) (lc : locality) ((x, tydecl) : (_ * tydecl)) =
+  let bind (scope : scope) ((x, tydecl) : (_ * tydecl)) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.Th_type (x, tydecl)) in
+    let item =
+      EcSection.sc_th_item scope.sc_section (EcTheory.Th_type (x, tydecl)) in
     { scope with
         sc_env = EcEnv.Ty.bind x tydecl scope.sc_env;
-        sc_section = EcSection.add lc item scope.sc_section; }
+        sc_section = EcSection.add item scope.sc_section; }
 
   (* ------------------------------------------------------------------ *)
-  let add (scope : scope) (lc : locality) info tcs =
+  let add (scope : scope) (lc:locality) info tcs =
     assert (scope.sc_pr_uc = None);
 
     let (args, name) = info.pl_desc and loc = info.pl_loc in
@@ -1467,8 +1474,9 @@ module Ty = struct
     let tydecl = {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Abstract (Sp.of_list tcs);
+      tyd_loca   = lc;
     } in
-      bind scope lc (unloc name, tydecl)
+      bind scope (unloc name, tydecl)
 
   (* ------------------------------------------------------------------ *)
   let define (scope : scope) (lc : locality) info body =
@@ -1479,19 +1487,21 @@ module Ty = struct
     let tydecl = {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Concrete body;
+      tyd_loca   = lc;
     } in
-      bind scope lc (unloc name, tydecl)
+      bind scope (unloc name, tydecl)
 
   (* ------------------------------------------------------------------ *)
-  let bindclass (scope : scope) (lc : locality) (x, tc) =
+  let bindclass (scope : scope) (x, tc) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.Th_typeclass (x, tc)) in
+    let item =
+      EcSection.sc_th_item scope.sc_section (EcTheory.Th_typeclass (x, tc)) in
     { scope with
       sc_env     = EcEnv.TypeClass.bind x tc scope.sc_env;
-      sc_section = EcSection.add lc item scope.sc_section; }
+      sc_section = EcSection.add item scope.sc_section; }
 
   (* ------------------------------------------------------------------ *)
-  let add_class (scope : scope) (lc : locality) { pl_desc = tcd } =
+  let add_class (scope : scope) (lc : is_local) { pl_desc = tcd } =
     assert (scope.sc_pr_uc = None);
 
     let name  = unloc tcd.ptc_name in
@@ -1511,7 +1521,7 @@ module Ty = struct
 
       let asty  =
         let body = ofold (fun p tc -> Sp.add p tc) Sp.empty uptc in
-          { tyd_params = []; tyd_type = `Abstract body; } in
+          { tyd_params = []; tyd_type = `Abstract body; tyd_loca = locality_of_local lc} in
       let scenv = EcEnv.Ty.bind name asty scenv in
 
       (* Check for duplicated field names *)
@@ -1544,9 +1554,9 @@ module Ty = struct
           tcd.ptc_axs |> List.map check1 in
 
       (* Construct actual type-class *)
-      { tc_prt = uptc; tc_ops = operators; tc_axs = axioms; }
+      { tc_prt = uptc; tc_ops = operators; tc_axs = axioms; tc_loca = lc}
     in
-      bindclass scope lc (name, tclass)
+      bindclass scope (name, tclass)
 
   (* ------------------------------------------------------------------ *)
   let check_tci_operators env tcty ops reqs =
@@ -1606,7 +1616,7 @@ module Ty = struct
         Mstr.empty reqs
 
   (* ------------------------------------------------------------------ *)
-  let check_tci_axioms scope mode axs reqs =
+  let check_tci_axioms scope mode axs reqs lc =
     let rmap = Mstr.of_list reqs in
     let symbs, axs =
       List.map_fold
@@ -1627,6 +1637,7 @@ module Ty = struct
                ax_spec    = req;
                ax_kind    = `Lemma;
                ax_nosmt   = true;
+               ax_loca    = lc;
              } in Some ((None, ax), EcPath.psymbol x, scope.sc_env)
            else None)
         reqs in
@@ -1639,7 +1650,9 @@ module Ty = struct
           let ax = { ax_tparams = [];
                      ax_spec    = f;
                      ax_kind    = `Axiom (Ssym.empty, false);
-                     ax_nosmt   = true; } in
+                     ax_nosmt   = true;
+                     ax_loca    = lc;
+                   } in
 
           let pucflags = { puc_nosmt = false; puc_local = false; } in
           let pucflags = (([], None), pucflags) in
@@ -1675,6 +1688,7 @@ module Ty = struct
          | None when EcReduction.EqTest.for_type env ty tint -> `Direct
          | None -> `Default | Some p -> `Embed p); }
 
+  (* FIXME: section instance are not binded *)
   let addring (scope : scope) mode (kind, { pl_desc = tci; pl_loc = loc }) =
     if not (EcAlgTactic.is_module_loaded scope.sc_env) then
       hierror "load AlgTactic/Ring first";
@@ -1689,12 +1703,14 @@ module Ty = struct
     let symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
     let cr      = ring_of_symmap scope.sc_env (snd ty) kind symbols in
     let axioms  = EcAlgTactic.ring_axioms scope.sc_env cr in
-    let inter   = check_tci_axioms scope mode tci.pti_axs axioms in
+    let lc      = locality_of_local tci.pti_loca in
+    let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc in
     let scope   =
       { scope with sc_env =
           List.fold_left
-            (fun env p -> EcEnv.TypeClass.add_instance ty (`General p) env)
-            (EcEnv.Algebra.add_ring (snd ty) cr scope.sc_env)
+            (fun env p ->
+              EcEnv.TypeClass.add_instance ty (`General p) tci.pti_loca env)
+            (EcEnv.Algebra.add_ring (snd ty) cr tci.pti_loca scope.sc_env)
             [p_zmod; p_ring; p_idomain] }
 
     in Ax.add_defer scope inter
@@ -1705,6 +1721,7 @@ module Ty = struct
       f_inv  = oget (Mstr.find_opt "inv" symbols);
       f_div  = Mstr.find_opt "div" symbols; }
 
+  (* FIXME: section instance are not binded *)
   let addfield (scope : scope) mode { pl_desc = tci; pl_loc = loc; } =
     if not (EcAlgTactic.is_module_loaded scope.sc_env) then
       hierror "load AlgTactic/Ring first";
@@ -1719,12 +1736,14 @@ module Ty = struct
     let symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
     let cr      = field_of_symmap scope.sc_env (snd ty) symbols in
     let axioms  = EcAlgTactic.field_axioms scope.sc_env cr in
-    let inter   = check_tci_axioms scope mode tci.pti_axs axioms; in
+    let lc      = locality_of_local tci.pti_loca in
+    let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc; in
     let scope   =
       { scope with sc_env =
           List.fold_left
-            (fun env p -> EcEnv.TypeClass.add_instance ty (`General p) env)
-            (EcEnv.Algebra.add_field (snd ty) cr scope.sc_env)
+            (fun env p ->
+              EcEnv.TypeClass.add_instance ty (`General p) tci.pti_loca env)
+            (EcEnv.Algebra.add_field (snd ty) cr tci.pti_loca scope.sc_env)
             [p_zmod; p_ring; p_idomain; p_field] }
 
     in Ax.add_defer scope inter
@@ -1770,6 +1789,7 @@ module Ty = struct
 *)
 
   (* ------------------------------------------------------------------ *)
+  (* FIXME: section field and ring instance are not binded *)
   let add_instance (scope : scope) mode ({ pl_desc = tci } as toptci) =
     match unloc tci.pti_name with
     | ([], "bring") -> begin
@@ -1825,9 +1845,10 @@ module Ty = struct
       tyd_params = datatype.ELI.dt_tparams;
       tyd_type   = `Datatype { tydt_ctors   = ctors ;
                                tydt_schcase = casesc;
-                               tydt_schelim = indsc ; }; }
+                               tydt_schelim = indsc ; };
+      tyd_loca   = lc }
 
-    in bind scope lc (unloc name, tydecl)
+    in bind scope (unloc name, tydecl)
 
   (* ------------------------------------------------------------------ *)
   let add_record (scope : scope) (lc : locality) (tydname : ptydname) rt =
@@ -1841,9 +1862,10 @@ module Ty = struct
     (* Add final record to environment *)
     let tydecl  = {
       tyd_params = record.ELI.rc_tparams;
-      tyd_type   = `Record (scheme, record.ELI.rc_fields); }
+      tyd_type   = `Record (scheme, record.ELI.rc_fields);
+      tyd_loca   = lc }
 
-    in bind scope lc (unloc name, tydecl)
+    in bind scope (unloc name, tydecl)
 end
 
 (* -------------------------------------------------------------------- *)
@@ -1853,13 +1875,14 @@ module Theory = struct
   exception TopScope
 
   (* ------------------------------------------------------------------ *)
-  let bind (scope : scope) (lc : locality) (x, (cth, mode)) =
+  let bind (scope : scope) (x, (cth, mode)) =
     assert (scope.sc_pr_uc = None);
-    let item = EcSection.LC_th_item (EcTheory.Th_theory (x, (cth, mode))) in
+    let item =
+      EcSection.sc_th_item scope.sc_section (EcTheory.Th_theory (x, (cth, mode))) in
     { scope with
         sc_env = EcEnv.Theory.bind ~mode x
             ?src:cth.cth_source cth.cth_items scope.sc_env;
-        sc_section = EcSection.add lc item scope.sc_section; }
+        sc_section = EcSection.add item scope.sc_section; }
 
   (* ------------------------------------------------------------------ *)
   let required (scope : scope) (name : required_info) =
@@ -1954,7 +1977,7 @@ module Theory = struct
       match thmode with
       | `Abstract -> env
       | `Concrete ->
-          List.fold_left (add_restr1 section where) env th.EcTheory.cth_struct
+          List.fold_left (add_restr1 section where) env th.EcTheory.cth_items
     in
 
     assert (scope.sc_pr_uc = None);
@@ -1998,8 +2021,11 @@ module Theory = struct
           { scope with sc_env = EcEnv.Theory.import path scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
-  let export_p scope p =
-    { scope with sc_env = EcEnv.Theory.export p scope.sc_env }
+  let export_p scope p lc =
+    let item =
+      EcSection.sc_th_item scope.sc_section (Th_export (p,lc)) in
+    { scope with sc_env = EcEnv.Theory.export p lc scope.sc_env;
+                 sc_section = EcSection.add item scope.sc_section;}
 
   let export (scope : scope) (name : qsymbol) =
     assert (scope.sc_pr_uc = None);
@@ -2014,7 +2040,8 @@ module Theory = struct
         hierror "cannot export an abstract theory"
 
     | Some (path, (_, `Concrete)) ->
-        bump_prelude (export_p scope path)
+        (* The section will fix the locality *)
+        bump_prelude (export_p scope path `Global)
 
   (* ------------------------------------------------------------------ *)
   let check_end_required scope thname =
@@ -2076,24 +2103,25 @@ module Section = struct
             (omap unloc name) scope.sc_section; }
 
   let exit (scope : scope) (name : psymbol option) =
-    let sc_env, sc_section, items = EcSection.exit scope.sc_section name in
+    let sc_env, sc_section, items =
+      EcSection.exit scope.sc_section (omap unloc name) in
     let scope = { scope with sc_env; sc_section} in
 
     let rec bind_item scope item =
       match item with
-      | T.Th_type     (x, ty) -> Ty.bind scope Global (x, ty)
-      | T.Th_operator (x, op) -> Op.bind scope Global (x, op)
-      | T.Th_modtype  (x, mt) -> ModType.bind scope Global (x, mt)
-      | T.Th_module   me      -> Mod.bind scope Global me
-      | T.Th_axiom    (x, ax) -> Ax.bind scope Global (x,ax)
-      | T.Th_export   p       -> Theory.export_p scope p
-      | T.Th_theory   th      -> Theory.bind scope Global th
-      | T.Th_typeclass (x, tc) -> Ty.bindclass scope Global (x, tc)
+      | T.Th_type     (x, ty) -> Ty.bind scope `Global (x, ty)
+      | T.Th_operator (x, op) -> Op.bind scope `Global (x, op)
+      | T.Th_modtype  (x, mt) -> ModType.bind scope `Global (x, mt)
+      | T.Th_module   me      -> Mod.bind scope `Global me
+      | T.Th_axiom    (x, ax) -> Ax.bind scope `Global (x,ax)
+      | T.Th_export   (p,lc)  -> Theory.export_p scope p
+      | T.Th_theory   th      -> Theory.bind scope `Global th
+      | T.Th_typeclass (x, tc) -> Ty.bindclass scope `Global (x, tc)
       (* FIXME: section
          would be nice to have proper bind here *)
-      | T.Th_instance (p, cr) ->
-              { scope with
-                sc_env = EcEnv.TypeClass.add_instance p cr scope.sc_env }
+      | T.Th_instance (p, cr, lc) ->
+        { scope with
+          sc_env = EcEnv.TypeClass.add_instance p cr scope.sc_env }
 
       | T.Th_baserw x ->
               { scope with sc_env = EcEnv.BaseRw.add x scope.sc_env }
@@ -2138,11 +2166,11 @@ module Reduction = struct
 
     in
 
-    let item = EcSection.LC_th_item (EcTheory.Th_reduction rules) in
+    let item = EcSection.SC_th_item (EcTheory.Th_reduction rules) in
 
     { scope with
         sc_env = EcEnv.Reduction.add rules (env scope);
-        sc_section = EcSection.add Global item scope.sc_section; }
+        sc_section = EcSection.add item scope.sc_section; }
 end
 
 (* -------------------------------------------------------------------- *)

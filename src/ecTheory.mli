@@ -7,8 +7,9 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-open EcPath
 open EcSymbols
+open EcPath
+open EcTypes
 open EcDecl
 open EcModules
 
@@ -19,16 +20,17 @@ and theory_item =
   | Th_type      of (symbol * tydecl)
   | Th_operator  of (symbol * operator)
   | Th_axiom     of (symbol * axiom)
-  | Th_modtype   of (symbol * module_sig)
-  | Th_module    of module_expr
+  | Th_modtype   of (symbol * top_module_sig)
+  | Th_module    of top_module_expr
   | Th_theory    of (symbol * (ctheory * thmode))
-  | Th_export    of EcPath.path
-  | Th_instance  of (ty_params * EcTypes.ty) * tcinstance
+  | Th_export    of EcPath.path * is_local
+  | Th_instance  of (ty_params * EcTypes.ty) * tcinstance * is_local
   | Th_typeclass of (symbol * typeclass)
-  | Th_baserw    of symbol
-  | Th_addrw     of EcPath.path * EcPath.path list
+  | Th_baserw    of symbol * is_local
+  | Th_addrw     of EcPath.path * EcPath.path list * is_local
+  (* reduction rule does not survive to section so no locality *)
   | Th_reduction of (EcPath.path * rule_option * rule option) list
-  | Th_auto      of (bool * int * symbol option * path list)
+  | Th_auto      of (int * symbol option * path list * is_local)
 
 and thsource = {
   ths_base : EcPath.path;

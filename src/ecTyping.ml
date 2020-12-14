@@ -1357,24 +1357,7 @@ let trans_gamepath (env : EcEnv.env) gp =
         EcPath.xpath_fun mpath funsymb
 
 (* -------------------------------------------------------------------- *)
-let rec transmodsig (env : EcEnv.env) (intf : pinterface) =
-  let Pmty_struct modty = intf.pi_sig in
-
-  let margs =
-    List.map (fun (x, i) ->
-      (EcIdent.create (unloc x), fst (transmodtype env i)))
-      modty.pmsig_params
-  in
-  let sa =
-    List.fold_left (fun sa (x,_) -> Sm.add (EcPath.mident x) sa) Sm.empty margs
-  in
-  let env  = EcEnv.Mod.enter (unloc intf.pi_name) margs env in
-  let body = transmodsig_body env sa modty.pmsig_body in
-  { mis_params = margs;
-    mis_body   = body; }
-
-(* -------------------------------------------------------------------- *)
-and transmodsig_body
+let transmodsig_body
   (env : EcEnv.env) (sa : Sm.t) (is : pmodule_sig_struct_body)
 =
 
@@ -1477,6 +1460,26 @@ and transmodsig_body
   Msym.odup unloc names |> oiter (fun (_, x) ->
     tyerror (loc x) env (InvalidModSig (MTS_DupProcName (unloc x))));
   items
+
+(* -------------------------------------------------------------------- *)
+let transmodsig (env : EcEnv.env) (intf : pinterface) =
+  let Pmty_struct modty = intf.pi_sig in
+
+  let margs =
+    List.map (fun (x, i) ->
+      (EcIdent.create (unloc x), fst (transmodtype env i)))
+      modty.pmsig_params
+  in
+  let sa =
+    List.fold_left (fun sa (x,_) -> Sm.add (EcPath.mident x) sa) Sm.empty margs
+  in
+  let env  = EcEnv.Mod.enter (unloc intf.pi_name) margs env in
+  let body = transmodsig_body env sa modty.pmsig_body in
+  let mis =
+    { mis_params = margs;
+      mis_body   = body; } in
+  { tms_sig = mis; tms_loca = intf.pi_locality }
+
 (* -------------------------------------------------------------------- *)
 
 (* LvMap (op, x, e, ty)

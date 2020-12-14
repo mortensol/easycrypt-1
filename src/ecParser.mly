@@ -145,11 +145,13 @@
   (* ------------------------------------------------------------------ *)
   let locality_as_local (lc : locality located) =
     match unloc lc with
-    | Global  -> false
-    | Local   -> true
-    | Declare -> parse_error (loc lc)
+    | `Global  -> `Global
+    | `Local   -> `Local
+    | `Declare -> parse_error (loc lc)
                    (Some "cannot mark with 'declare' this kind of objects ")
 
+  let bool_as_local b =
+    if b then `Local else `Global
   (* ------------------------------------------------------------------ *)
   type prover =
     [ `Exclude | `Include | `Only] * psymbol
@@ -1556,10 +1558,10 @@ mod_params:
     { (x, restr) }
 
 sig_def:
-| pi_locality=locality MODULE TYPE pi_name=uident args=sig_params* EQ i=sig_body
+| pi_locality=loc(locality) MODULE TYPE pi_name=uident args=sig_params* EQ i=sig_body
     { let pi_sig =
         Pmty_struct { pmsig_params = List.flatten args; pmsig_body = i; } in
-      { pi_name; pi_sig; pi_locality; } }
+      { pi_name; pi_sig; pi_locality = locality_as_local pi_locality; } }
 
 sig_body:
 | body=sig_struct_body { body }
@@ -1588,9 +1590,9 @@ signature_item:
 
 (* -------------------------------------------------------------------- *)
 %inline locality:
-| (* empty *) { Global }
-| LOCAL       { Local }
-| DECLARE     { Declare }
+| (* empty *) { `Global }
+| LOCAL       { `Local }
+| DECLARE     { `Declare }
 
 | LOCAL DECLARE
 | DECLARE LOCAL
@@ -1598,6 +1600,8 @@ signature_item:
         (EcLocation.make $startpos $endpos)
         (Some "cannot mix declare & local") }
 
+%inline is_local:
+| lc=loc(locality) { locality_as_local lc }
 (* -------------------------------------------------------------------- *)
 (* EcTypes declarations / definitions                                   *)
 
@@ -1668,24 +1672,28 @@ tc_ax:
 (* -------------------------------------------------------------------- *)
 (* Type classes (instances)                                             *)
 tycinstance:
-| INSTANCE x=qident
+| loca=is_local INSTANCE x=qident
     WITH typ=tyvars_decl? ty=loc(type_exp) ops=tyci_op* axs=tyci_ax*
   {
     { pti_name = x;
       pti_type = (odfl [] typ, ty);
       pti_ops  = ops;
       pti_axs  = axs;
-      pti_args = None; }
+      pti_args = None;
+      pti_loca = loca;
+    }
   }
 
-| INSTANCE x=qident c=uoption(UINT) p=uoption(UINT)
+| loca=is_local INSTANCE x=qident c=uoption(UINT) p=uoption(UINT)
     WITH typ=tyvars_decl? ty=loc(type_exp) ops=tyci_op* axs=tyci_ax*
   {
     { pti_name = x;
       pti_type = (odfl [] typ, ty);
       pti_ops  = ops;
       pti_axs  = axs;
-      pti_args = Some (`Ring (c, p)); }
+      pti_args = Some (`Ring (c, p));
+      pti_loca = loca;
+    }
   }
 
 tyci_op:
@@ -3344,7 +3352,7 @@ tactic_dump:
 (* Theory cloning                                                       *)
 
 theory_clone:
-| local=boption(LOCAL) CLONE options=clone_opts?
+| local=is_local CLONE options=clone_opts?
     ip=clone_import? x=uqident y=prefix(AS, uident)? cw=clone_with?
     c=or3(clone_proof, clone_rename, clone_clear)*
 
@@ -3573,15 +3581,15 @@ gprover_info:
     { { empty_pprover with pprov_cpufactor = Some t; } }
 
 addrw:
-| local=iboption(LOCAL) HINT REWRITE p=lqident COLON l=lqident*
+| local=is_local HINT REWRITE p=lqident COLON l=lqident*
     { (local, p, l) }
 
 hint:
-| local=iboption(LOCAL) HINT EXACT base=lident? COLON l=qident*
+| local=is_local HINT EXACT base=lident? COLON l=qident*
     { { ht_local = local; ht_prio  = 0;
         ht_base  = base ; ht_names = l; } }
 
-| local=iboption(LOCAL) HINT SOLVE i=word base=lident? COLON l=qident*
+| local=is_local HINT SOLVE i=word base=lident? COLON l=qident*
     { { ht_local = local; ht_prio  = i;
         ht_base  = base ; ht_names = l; } }
 

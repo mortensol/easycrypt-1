@@ -89,6 +89,7 @@ let trans_record (env : EcEnv.env) (name : ptydname) (rc : precord) =
 
 (* -------------------------------------------------------------------- *)
 let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
+  let lc = `Global in
   let { pl_loc = loc; pl_desc = (tyvars, name); } = name in
 
   (* Check type-parameters / env0 is the env. augmented with an
@@ -99,6 +100,7 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
     let myself = {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Abstract EcPath.Sp.empty;
+      tyd_loca   = lc;
     } in
       EcEnv.Ty.bind (unloc name) myself env
   in
@@ -143,7 +145,7 @@ let trans_datatype (env : EcEnv.env) (name : ptydname) (dt : pdatatype) =
       if EcPath.p_equal tname tpath then true else
 
       let tdecl = EcEnv.Ty.by_path_opt tname env0
-        |> ofdfl (EcDecl.abs_tydecl ~params:(`Named tparams)) in
+        |> odfl (EcDecl.abs_tydecl ~params:(`Named tparams) lc) in
       let tyinst () =
         fun ty -> ty_instanciate tdecl.tyd_params targs ty in
 

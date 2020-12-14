@@ -1759,6 +1759,12 @@ let pp_sform ppe fmt f =
   pp_form_r ppe ([], ((100, `Infix `NonAssoc), `NonAssoc)) fmt f
 
 (* -------------------------------------------------------------------- *)
+let pp_locality fmt = function
+  | `Global  -> ()
+  | `Local   -> Format.fprintf fmt "local "
+  | `Declare -> Format.fprintf fmt "declare "
+
+
 let pp_typedecl (ppe : PPEnv.t) fmt (x, tyd) =
   let ppe = PPEnv.add_locals ppe (List.map fst tyd.tyd_params) in
   let name = P.basename x in
@@ -1800,7 +1806,7 @@ let pp_typedecl (ppe : PPEnv.t) fmt (x, tyd) =
           Format.fprintf fmt " = {@ @[<hov 2>%a;@]@ }"
             (pp_list ";@ " pp_field) fields
   in
-    Format.fprintf fmt "@[%t%t.@]" pp_prelude pp_body
+    Format.fprintf fmt "@[%a%t%t.@]" pp_locality tyd.tyd_loca pp_prelude pp_body
 
 (* -------------------------------------------------------------------- *)
 let pp_tyvar_ctt (ppe : PPEnv.t) fmt (tvar, ctt) =
@@ -2007,7 +2013,7 @@ let pp_opdecl ?(long = false) (ppe : PPEnv.t) fmt (x, op) =
       let ppe = { ppe with PPEnv.ppe_fb = Sp.add x ppe.PPEnv.ppe_fb } in
       pp_opdecl_nt ppe fmt (P.basename x, op.op_tparams, op_ty op, i)
 
-  in Format.fprintf fmt "@[<v>%a%a@]" pp_name x pp_decl op
+  in Format.fprintf fmt "@[<v>%a%a%a@]" pp_locality op.op_loca pp_name x pp_decl op
 
 let pp_added_op (ppe : PPEnv.t) fmt op =
   let ppe = PPEnv.add_locals ppe (List.map fst op.op_tparams) in
@@ -2057,7 +2063,8 @@ let pp_axiom ?(long=false) (ppe : PPEnv.t) fmt (x, ax) =
          Format.fprintf fmt "(* %a *)@ " EcSymbols.pp_qsymbol qs in
 
   let pp_decl fmt () =
-    Format.fprintf fmt "@[<hov 2>%a %t%t:@ %t.@]"
+    Format.fprintf fmt "@[<hov 2>%a%a %t%t:@ %t.@]"
+      pp_locality ax.ax_loca
       (pp_list " " pp_string)
       (  [string_of_axkind ax.ax_kind]
        @ (if ax.ax_nosmt then ["nosmt"] else []))
@@ -2706,6 +2713,9 @@ let pp_modsig ppe fmt (p,ms) =
     (EcPath.basename p) pp
     (pp_list "@,@," (pp_sigitem ppe)) ms.mis_body
 
+let pp_top_modsig ppe fmt (p,ms) =
+  Format.fprintf fmt "%a%a" pp_locality ms.tms_loca (pp_modsig ppe) (p,ms.tms_sig)
+
 let rec pp_instr_r (ppe : PPEnv.t) fmt i =
   match i.i_node with
   | Sasgn (lv, e) -> begin
@@ -2836,9 +2846,10 @@ and pp_moditem ppe fmt (p, i) =
 let pp_modexp ppe fmt (mp, me) =
   Format.fprintf fmt "%a." (pp_modexp ppe) (mp, me)
 
-let pp_modexp_top ppe fmt (p, me) =
-  let mp = EcPath.mpath_crt p [] (Some (EcPath.psymbol me.me_name)) in
-  pp_modexp ppe fmt (mp, me)
+let pp_top_modexp ppe fmt (p, me) =
+  let mp = EcPath.mpath_crt p [] (Some (EcPath.psymbol me.tme_expr.me_name)) in
+  Format.fprintf fmt "%a%a"
+    pp_locality me.tme_loca (pp_modexp ppe) (mp, me.tme_expr)
 
 let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   let basename = EcPath.basename path in
@@ -2870,15 +2881,15 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
       pp_axiom ppe fmt (EcPath.pqname p id, ax)
 
   | EcTheory.Th_modtype (id, ms) ->
-      pp_modsig ppe fmt (EcPath.pqname p id, ms)
+      pp_top_modsig ppe fmt (EcPath.pqname p id, ms)
 
   | EcTheory.Th_module me ->
-      pp_modexp_top ppe fmt (p, me)
+      pp_top_modexp ppe fmt (p, me)
 
   | EcTheory.Th_theory (id, cth) ->
       pp_theory ppe fmt (EcPath.pqname p id, cth)
 
-  | EcTheory.Th_export p ->
+  | EcTheory.Th_export (p, _) ->
       (* Fixme should not use a pp_list, it should be a fold *)
       Format.fprintf fmt "export %a."
         EcSymbols.pp_qsymbol (PPEnv.th_symb ppe p)
@@ -2886,7 +2897,7 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   | EcTheory.Th_typeclass _ ->
       Format.fprintf fmt "typeclass <FIXME>."
 
-  | EcTheory.Th_instance ((typ, ty), tc) -> begin
+  | EcTheory.Th_instance ((typ, ty), tc, lc) -> begin
       let ppe = PPEnv.add_locals ppe (List.map fst typ) in (* FIXME *)
 
       match tc with
@@ -2924,7 +2935,9 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
             ops
           in
             Format.fprintf fmt
-              "instance %s with [%a] %a@\n@[<hov 2>  %a@]" name
+              "%ainstance %s with [%a] %a@\n@[<hov 2>  %a@]"
+              pp_locality lc
+              name
               (pp_paren (pp_list ",@ " (pp_tyvar ppe))) (List.map fst typ)
               (pp_type ppe) ty
               (pp_list "@\n"
@@ -2935,23 +2948,26 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
       end
 
       | `General p ->
-          Format.fprintf fmt "instance %a with %a."
-            (pp_type ppe) ty pp_path p
+          Format.fprintf fmt "%ainstance %a with %a."
+            pp_locality lc (pp_type ppe) ty pp_path p
   end
 
-  | EcTheory.Th_baserw name ->
+  | EcTheory.Th_baserw (name, lc) ->
+      (* FIXME: section lc + syntax *)
       Format.fprintf fmt "declare rewrite %s." name
 
-  | EcTheory.Th_addrw (p, l) ->
-      Format.fprintf fmt "hint rewrite %a : @[<hov 2>%a@]."
+  | EcTheory.Th_addrw (p, l, lc) ->
+      Format.fprintf fmt "%ahint rewrite %a : @[<hov 2>%a@]."
+        pp_locality lc
         (pp_rwname ppe) p (pp_list "@ " (pp_axname ppe)) l
 
   | EcTheory.Th_reduction _ ->
+      (* FIXME: section we should add the lemma in the reduction *)
       Format.fprintf fmt "hint simplify."
 
-  | EcTheory.Th_auto (lc, lvl, base, p) ->
-      Format.fprintf fmt "%a solve %d %s : %a."
-        (pp_list " " pp_string) ((if lc then ["local"] else []) @ ["hint"])
+  | EcTheory.Th_auto (lvl, base, p, lc) ->
+      Format.fprintf fmt "%ahint solve %d %s : %a."
+        pp_locality lc
         lvl (odfl "" base)
         (pp_list "@ " (pp_axname ppe)) p
 

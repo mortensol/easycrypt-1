@@ -116,14 +116,14 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Ty : sig
-  val add : scope -> ptydname -> pqsymbol list -> scope
+  val add : scope -> locality -> ptydname -> pqsymbol list -> scope
 
   val add_class    : scope -> ptypeclass located -> scope
   val add_instance : scope -> Ax.mode -> ptycinstance located -> scope
-  val add_datatype : scope -> ptydname -> pdatatype -> scope
-  val add_record   : scope -> ptydname -> precord -> scope
+  val add_datatype : scope -> locality -> ptydname -> pdatatype -> scope
+  val add_record   : scope -> locality -> ptydname -> precord -> scope
 
-  val define : scope -> ptydname -> pty -> scope
+  val define : scope -> locality -> ptydname -> pty -> scope
 end
 
 (* -------------------------------------------------------------------- *)

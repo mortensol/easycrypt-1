@@ -14,6 +14,11 @@ open EcUid
 open EcIdent
 
 (* -------------------------------------------------------------------- *)
+type locality  = [`Declare | `Local | `Global ]
+type is_local  =           [ `Local | `Global ]
+val locality_of_local : is_local -> locality
+val local_of_locality : locality -> is_local
+(* -------------------------------------------------------------------- *)
 type ty = private {
   ty_node : ty_node;
   ty_fv   : int Mid.t;

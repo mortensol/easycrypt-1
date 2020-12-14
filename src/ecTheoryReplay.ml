@@ -40,17 +40,17 @@ type 'a ovrenv = {
 
 and 'a ovrhooks = {
   henv     : 'a -> EcEnv.env;
-  hty      : 'a -> locality -> (symbol * tydecl) -> 'a;
-  hop      : 'a -> locality -> (symbol * operator) -> 'a;
-  hmodty   : 'a -> locality -> (symbol * module_sig) -> 'a;
-  hmod     : 'a -> locality -> module_expr -> 'a;
-  hax      : 'a -> locality -> (symbol * axiom) -> 'a;
-  hexport  : 'a -> EcPath.path -> 'a;
-  hbaserw  : 'a -> symbol -> 'a;
-  haddrw   : 'a -> EcPath.path * EcPath.path list -> 'a;
-  hauto    : 'a -> bool * int * string option * EcPath.path list -> 'a;
+  hty      : 'a -> (symbol * tydecl) -> 'a;
+  hop      : 'a -> (symbol * operator) -> 'a;
+  hmodty   : 'a -> (symbol * top_module_sig) -> 'a;
+  hmod     : 'a -> top_module_expr -> 'a;
+  hax      : 'a -> (symbol * axiom) -> 'a;
+  hexport  : 'a -> EcPath.path * is_local -> 'a;
+  hbaserw  : 'a -> symbol * is_local -> 'a;
+  haddrw   : 'a -> EcPath.path * EcPath.path list * is_local -> 'a;
+  hauto    : 'a -> int * string option * EcPath.path list * is_local -> 'a;
   htycl    : 'a -> symbol * typeclass -> 'a;
-  hinst    : 'a -> (ty_params * ty) * tcinstance -> 'a;
+  hinst    : 'a -> (ty_params * ty) * tcinstance * is_local -> 'a;
   husered  : 'a -> (EcPath.path * EcTheory.rule_option * EcTheory.rule option) list -> 'a;
   hthenter : 'a -> thmode -> symbol -> 'a;
   hthexit  : 'a -> [`Full | `ClearOnly | `No] -> 'a;
@@ -149,7 +149,7 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
   | None ->
       let otyd = EcSubst.subst_tydecl subst otyd in
       let subst, x = rename ove subst (`Type, x) in
-      (subst, ops, proofs, ove.ovre_hooks.hty scope Global (* FIXME: section*) (x, otyd))
+      (subst, ops, proofs, ove.ovre_hooks.hty scope (x, otyd))
 
   | Some { pl_desc = (nargs, ntyd, mode) } -> begin
       let nargs = List.map2
@@ -162,9 +162,11 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
       | `Alias ->
           let binding =
             { tyd_params = nargs;
-              tyd_type   = `Concrete ntyd; } in
+              tyd_type   = `Concrete ntyd;
+              tyd_loca   = `Global; (* FIXME section *)
+            } in
           let subst, x = rename ove subst (`Type, x) in
-          (subst, ops, proofs, ove.ovre_hooks.hty scope Global (* FIXME: section*) (x, binding))
+          (subst, ops, proofs, ove.ovre_hooks.hty scope (x, binding))
 
       | `Inline ->
           let subst =
@@ -200,7 +202,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
   | None ->
       let (subst, x) = rename ove subst (`Op, x) in
       let oopd = EcSubst.subst_op subst oopd in
-      (subst, ops, proofs, ove.ovre_hooks.hop scope Global (* FIXME: section*) (x, oopd))
+      (subst, ops, proofs, ove.ovre_hooks.hop scope (x, oopd))
 
   | Some { pl_desc = (opov, opmode); pl_loc = loc; } ->
       let nosmt = opov.opov_nosmt in
@@ -242,7 +244,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
         let body    = body |> EcTypes.e_mapty uni in
         let ty      = uni ty in
         let tparams = EcUnify.UniEnv.tparams ue in
-        let newop   = mk_op tparams ty (Some (OP_Plain (body, nosmt))) in
+        let newop   = mk_op tparams ty (Some (OP_Plain (body, nosmt))) `Global (* FIXME section *) in
           match opmode with
           | `Alias ->
               let subst, x = rename ove subst (`Op, x) in
@@ -258,7 +260,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
         let opp = EcPath.fromqsymbol (snd ove.ovre_prefix, x) in
         Mp.add opp (newop, alias) ops in
       let scope =
-        if alias then ove.ovre_hooks.hop scope Global (* FIXME: section*) (x, newop) else scope
+        if alias then ove.ovre_hooks.hop scope (x, newop) else scope
 
       in (subst, ops, proofs, scope)
 
@@ -270,7 +272,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
   | None ->
       let subst, x = rename ove subst (`Pred, x) in
       let oopr = EcSubst.subst_op subst oopr in
-      (subst, ops, proofs, ove.ovre_hooks.hop scope Global (* FIXME: section*) (x, oopr))
+      (subst, ops, proofs, ove.ovre_hooks.hop scope (x, oopr))
 
   | Some { pl_desc = (prov, prmode); pl_loc = loc; } ->
       let (reftyvars, refty) =
@@ -310,7 +312,9 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
          let newpr   =
            { op_tparams = tparams;
              op_ty      = body.EcFol.f_ty;
-             op_kind    = OB_pred (Some (PR_Plain body)); } in
+             op_kind    = OB_pred (Some (PR_Plain body));
+             op_loca    = `Global; (* FIXME: section*)
+           } in
 
           match prmode with
           | `Alias ->
@@ -325,7 +329,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
       in
 
       let scope =
-        if alias then ove.ovre_hooks.hop scope Global (* FIXME: section*) (x, newpr) else scope
+        if alias then ove.ovre_hooks.hop scope (x, newpr) else scope
       in (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -335,7 +339,7 @@ and replay_ntd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oont) =
   else
     let subst, x = rename ove subst (`Op, x) in
     let oont = EcSubst.subst_op subst oont in
-    let scope = ove.ovre_hooks.hop scope Global (* FIXME: section*) (x, oont) in
+    let scope = ove.ovre_hooks.hop scope (x, oont) in
     (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -373,7 +377,7 @@ and replay_axd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, ax) =
 
   let scope =
     if axclear then scope else
-      ove.ovre_hooks.hax scope Global (* FIXME: section*) (*ove.ovre_local*) (x, ax)
+      ove.ovre_hooks.hax scope (*ove.ovre_local*) (x, ax)
   in (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -381,21 +385,21 @@ and replay_modtype
   (ove : _ ovrenv) (subst, ops, proofs, scope) (x, modty)
 =
   let subst, x = rename ove subst (`ModType, x) in
-  let modty = EcSubst.subst_modsig subst modty in
-  (subst, ops, proofs, ove.ovre_hooks.hmodty scope Global (* FIXME: section*) (x, modty))
+  let modty = EcSubst.subst_top_modsig subst modty in
+  (subst, ops, proofs, ove.ovre_hooks.hmodty scope (x, modty))
 
 (* -------------------------------------------------------------------- *)
 and replay_mod
   (ove : _ ovrenv) (subst, ops, proofs, scope) me
 =
-  let subst, name = rename ove subst (`Module, me.me_name) in
-  let me = EcSubst.subst_module subst me in
-  let me = { me with me_name = name } in
-  (subst, ops, proofs, ove.ovre_hooks.hmod scope Global (* FIXME: section*) (*ove.ovre_local*) me)
+  let subst, name = rename ove subst (`Module, me.tme_expr.me_name) in
+  let me = EcSubst.subst_top_module subst me in
+  let me = { me with tme_expr = { me.tme_expr with me_name = name } } in
+  (subst, ops, proofs, ove.ovre_hooks.hmod scope (*ove.ovre_local*) me)
 
 (* -------------------------------------------------------------------- *)
 and replay_export
-  (ove : _ ovrenv) (subst, ops, proofs, scope) p
+  (ove : _ ovrenv) (subst, ops, proofs, scope) (p,lc)
 =
   let scenv = ove.ovre_hooks.henv scope in
   let p = EcSubst.subst_path subst p in
@@ -403,7 +407,7 @@ and replay_export
   if is_none (EcEnv.Theory.by_path_opt p scenv) then
     (subst, ops, proofs, scope)
   else
-    let scope = ove.ovre_hooks.hexport scope p in
+    let scope = ove.ovre_hooks.hexport scope (p,lc) in
     (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -415,19 +419,19 @@ and replay_baserw
 
 (* -------------------------------------------------------------------- *)
 and replay_addrw
-  (ove : _ ovrenv) (subst, ops, proofs, scope) (p, l)
+  (ove : _ ovrenv) (subst, ops, proofs, scope) (p, l, lc)
 =
   let p     = EcSubst.subst_path subst p in
   let l     = List.map (EcSubst.subst_path subst) l in
-  let scope = ove.ovre_hooks.haddrw scope (p, l) in
+  let scope = ove.ovre_hooks.haddrw scope (p, l, lc) in
   (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
 and replay_auto
-  (ove : _ ovrenv) (subst, ops, proofs, scope) (lc, lvl, base, ps)
+  (ove : _ ovrenv) (subst, ops, proofs, scope) (lvl, base, ps, lc)
 =
   let ps = List.map (EcSubst.subst_path subst) ps in
-  let scope = ove.ovre_hooks.hauto scope (lc, lvl, base, ps) in
+  let scope = ove.ovre_hooks.hauto scope (lvl, base, ps, lc) in
   (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -462,7 +466,7 @@ and replay_typeclass
 
 (* -------------------------------------------------------------------- *)
 and replay_instance
-  (ove : _ ovrenv) (subst, ops, proofs, scope) ((typ, ty), tc)
+  (ove : _ ovrenv) (subst, ops, proofs, scope) ((typ, ty), tc, lc)
 =
   let opath = ove.ovre_opath in
   let npath = ove.ovre_npath in
@@ -531,7 +535,7 @@ and replay_instance
         | `General p  -> `General (forpath p)
     in
 
-    let scope = ove.ovre_hooks.hinst scope ((typ, ty), tc) in
+    let scope = ove.ovre_hooks.hinst scope ((typ, ty), tc, lc) in
     (subst, ops, proofs, scope)
 
   with E.InvInstPath ->
@@ -561,26 +565,26 @@ and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
   | Th_module me ->
      replay_mod ove (subst, ops, proofs, scope) me
 
-  | Th_export p ->
-     replay_export ove (subst, ops, proofs, scope) p
+  | Th_export (p, lc) ->
+     replay_export ove (subst, ops, proofs, scope) (p,lc)
 
-  | Th_baserw x ->
-     replay_baserw ove (subst, ops, proofs, scope) x
+  | Th_baserw (x, lc) ->
+     replay_baserw ove (subst, ops, proofs, scope) (x, lc)
 
-  | Th_addrw (p, l) ->
-     replay_addrw ove (subst, ops, proofs, scope) (p, l)
+  | Th_addrw (p, l, lc) ->
+     replay_addrw ove (subst, ops, proofs, scope) (p, l, lc)
 
   | Th_reduction rules ->
      replay_reduction ove (subst, ops, proofs, scope) rules
 
-  | Th_auto (lc, lvl, base, ps) ->
-     replay_auto ove (subst, ops, proofs, scope) (lc, lvl, base, ps)
+  | Th_auto (lvl, base, ps, lc) ->
+     replay_auto ove (subst, ops, proofs, scope) (lvl, base, ps, lc)
 
   | Th_typeclass (x, tc) ->
      replay_typeclass ove (subst, ops, proofs, scope) (x, tc)
 
-  | Th_instance ((typ, ty), tc) ->
-     replay_instance ove (subst, ops, proofs, scope) ((typ, ty), tc)
+  | Th_instance ((typ, ty), tc, lc) ->
+     replay_instance ove (subst, ops, proofs, scope) ((typ, ty), tc, lc)
 
   | Th_theory (ox, (cth, thmode)) -> begin
       let (subst, x) = rename ove subst (`Theory, ox) in

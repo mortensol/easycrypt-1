@@ -36,17 +36,17 @@ type 'a ovrenv = {
 
 and 'a ovrhooks = {
   henv     : 'a -> EcEnv.env;
-  hty      : 'a -> locality -> (symbol * tydecl) -> 'a;
-  hop      : 'a -> locality -> (symbol * operator) -> 'a;
-  hmodty   : 'a -> locality -> (symbol * module_sig) -> 'a;
-  hmod     : 'a -> locality -> module_expr -> 'a;
-  hax      : 'a -> locality -> (symbol * axiom) -> 'a;
-  hexport  : 'a -> EcPath.path -> 'a;
-  hbaserw  : 'a -> symbol -> 'a;
-  haddrw   : 'a -> EcPath.path * EcPath.path list -> 'a;
-  hauto    : 'a -> bool * int * string option * EcPath.path list -> 'a;
+  hty      : 'a -> (symbol * tydecl) -> 'a;
+  hop      : 'a -> (symbol * operator) -> 'a;
+  hmodty   : 'a -> (symbol * top_module_sig) -> 'a;
+  hmod     : 'a -> top_module_expr -> 'a;
+  hax      : 'a -> (symbol * axiom) -> 'a;
+  hexport  : 'a -> EcPath.path * is_local -> 'a;
+  hbaserw  : 'a -> symbol * is_local -> 'a;
+  haddrw   : 'a -> EcPath.path * EcPath.path list * is_local -> 'a;
+  hauto    : 'a -> int * string option * EcPath.path list * is_local -> 'a;
   htycl    : 'a -> symbol * typeclass -> 'a;
-  hinst    : 'a -> (ty_params * ty) * tcinstance -> 'a;
+  hinst    : 'a -> (ty_params * ty) * tcinstance * is_local -> 'a;
   husered  : 'a -> (EcPath.path * EcTheory.rule_option * EcTheory.rule option) list -> 'a;
   hthenter : 'a -> thmode -> symbol -> 'a;
   hthexit  : 'a -> [`Full | `ClearOnly | `No] -> 'a;
