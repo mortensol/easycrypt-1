@@ -1521,7 +1521,7 @@ module Ty = struct
 
       let asty  =
         let body = ofold (fun p tc -> Sp.add p tc) Sp.empty uptc in
-          { tyd_params = []; tyd_type = `Abstract body; tyd_loca = locality_of_local lc} in
+          { tyd_params = []; tyd_type = `Abstract body; tyd_loca = (lc :> locality) } in
       let scenv = EcEnv.Ty.bind name asty scenv in
 
       (* Check for duplicated field names *)
@@ -1703,7 +1703,7 @@ module Ty = struct
     let symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
     let cr      = ring_of_symmap scope.sc_env (snd ty) kind symbols in
     let axioms  = EcAlgTactic.ring_axioms scope.sc_env cr in
-    let lc      = locality_of_local tci.pti_loca in
+    let lc      = (tci.pti_loca :> locality) in
     let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc in
     let scope   =
       { scope with sc_env =
@@ -1736,7 +1736,7 @@ module Ty = struct
     let symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
     let cr      = field_of_symmap scope.sc_env (snd ty) symbols in
     let axioms  = EcAlgTactic.field_axioms scope.sc_env cr in
-    let lc      = locality_of_local tci.pti_loca in
+    let lc      = (tci.pti_loca :> locality) in
     let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc; in
     let scope   =
       { scope with sc_env =

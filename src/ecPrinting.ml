@@ -254,7 +254,7 @@ module PPEnv = struct
             | None ->
                 let name = EcIdent.name x in
                   match EcEnv.Mod.sp_lookup_opt ([], name) ppe.ppe_env with
-                  | Some (p, _) when EcPath.mt_equal mp.P.m_top p.P.m_top -> name
+                  | Some (p, _, _) when EcPath.mt_equal mp.P.m_top p.P.m_top -> name
                   | _ -> EcIdent.tostring x
           in
             ([], name, None)
@@ -263,7 +263,7 @@ module PPEnv = struct
           let exists sm =
             match EcEnv.Mod.sp_lookup_opt sm ppe.ppe_env with
             | None -> false
-            | Some (mp1, _) -> P.mt_equal mp1.P.m_top (`Concrete (p1, None))
+            | Some (mp1, _, _) -> P.mt_equal mp1.P.m_top (`Concrete (p1, None))
           in
 
           let rec shorten prefix (nm, x) =
@@ -3065,7 +3065,7 @@ module ObjectInfo = struct
   let pr_mod_r =
     { od_name    = "modules";
       od_lookup  = EcEnv.Mod.lookup;
-      od_printer = (fun ppe fmt (p, me) -> pp_modexp ppe fmt (p, me)); }
+      od_printer = (fun ppe fmt (p, (me, _)) -> pp_modexp ppe fmt (p, me)); }
 
   let pr_mod = pr_gen pr_mod_r
 

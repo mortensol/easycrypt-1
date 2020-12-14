@@ -176,16 +176,18 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Mod : sig
-  type t = top_module_expr
+  type t   = top_module_expr
+  type lkt = module_expr * locality option
+  type spt = mpath * module_expr suspension * locality option
 
-  val by_mpath    : mpath -> env -> module_expr
-  val by_mpath_opt: mpath -> env -> module_expr option
-  val lookup      : qsymbol -> env -> mpath * module_expr
-  val lookup_opt  : qsymbol -> env -> (mpath * module_expr) option
+  val by_mpath    : mpath -> env -> lkt
+  val by_mpath_opt: mpath -> env -> lkt option
+  val lookup      : qsymbol -> env -> mpath * lkt
+  val lookup_opt  : qsymbol -> env -> (mpath * lkt) option
   val lookup_path : qsymbol -> env -> mpath
 
-  val sp_lookup     : qsymbol -> env -> mpath * (module_expr suspension)
-  val sp_lookup_opt : qsymbol -> env -> (mpath * (module_expr suspension)) option
+  val sp_lookup     : qsymbol -> env -> spt
+  val sp_lookup_opt : qsymbol -> env -> spt option
 
   val bind  : symbol -> t -> env -> env
   val enter : symbol -> (EcIdent.t * module_type) list -> env -> env

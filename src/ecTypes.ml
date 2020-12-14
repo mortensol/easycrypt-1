@@ -17,9 +17,6 @@ module BI = EcBigInt
 (* -------------------------------------------------------------------- *)
 type locality  = [`Local | `Declare | `Global]
 type is_local  = [`Local | `Global]
-let locality_of_local = function
-  | `Local -> `Local
-  | `Global -> `Global
 
 let local_of_locality = function
   | `Local   -> `Local
@@ -248,7 +245,7 @@ let symbol_of_ty (ty : ty) =
       let rec doit i =
         if   i >= String.length x
         then "x"
-        else match Char.lowercase x.[i] with
+        else match Char.lowercase_ascii x.[i] with
              | 'a' .. 'z' -> String.make 1 x.[i]
              | _ -> doit (i+1)
       in

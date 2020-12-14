@@ -91,7 +91,7 @@ type varbind = {
 type obj = [
   | `Variable of varbind
   | `Function of function_
-  | `Module   of module_expr
+  | `Module   of (module_expr * locality option)
   | `ModSig   of module_sig
   | `TypeDecl of EcDecl.tydecl
   | `Operator of EcDecl.operator
@@ -103,7 +103,7 @@ type mc = {
   mc_parameters : ((EcIdent.t * module_type) list) option;
   mc_variables  : (ipath * varbind) MMsym.t;
   mc_functions  : (ipath * function_) MMsym.t;
-  mc_modules    : (ipath * module_expr) MMsym.t;
+  mc_modules    : (ipath * (module_expr * locality option)) MMsym.t;
   mc_modsigs    : (ipath * module_sig) MMsym.t;
   mc_tydecls    : (ipath * EcDecl.tydecl) MMsym.t;
   mc_operators  : (ipath * EcDecl.operator) MMsym.t;
@@ -950,7 +950,7 @@ module MC = struct
       { env with env_current = mc }
 
   (* ------------------------------------------------------------------ *)
-  let rec mc_of_module_r (p1, args, p2) me =
+  let rec mc_of_module_r (p1, args, p2, lc) me =
     let subp2 x =
       let p = EcPath.pqoname p2 x in
         (p, pcat p1 p)
@@ -961,10 +961,10 @@ module MC = struct
           assert (subme.me_sig.mis_params = []);
 
           let (subp2, mep) = subp2 subme.me_name in
-          let submcs = mc_of_module_r (p1, args, Some subp2) subme in
+          let submcs = mc_of_module_r (p1, args, Some subp2, None) subme in
           let mc = _up_mc false mc (IPPath mep) in
-          let mc = _up_mod false mc subme.me_name (IPPath mep, subme) in
-            (mc, Some submcs)
+          let mc = _up_mod false mc subme.me_name (IPPath mep, (subme, lc)) in
+          (mc, Some submcs)
 
       | MI_Variable v ->
           let (_subp2, mep) = subp2 v.v_name in
@@ -987,18 +987,19 @@ module MC = struct
     in
       ((me.me_name, mc), List.rev_pmap (fun x -> x) submcs)
 
-  let mc_of_module (env : env) (me : module_expr) =
+  let mc_of_module (env : env) { tme_expr = me; tme_loca = lc; } =
     match env.env_scope.ec_scope with
     | `Theory ->
         let p1   = EcPath.pqname (root env) me.me_name
         and args = me.me_sig.mis_params in
-          mc_of_module_r (p1, args, None) me
+        mc_of_module_r (p1, args, None, Some lc) me
 
     | `Module mpath -> begin
+       assert (lc = `Global);
        match mpath.EcPath.m_top with
        | `Concrete (p1, p2) ->
            let p2 = EcPath.pqoname p2 me.me_name in
-             mc_of_module_r (p1, mpath.EcPath.m_args, Some p2) me
+           mc_of_module_r (p1, mpath.EcPath.m_args, Some p2, None) me
 
        | `Local _ -> assert false
     end
@@ -1051,11 +1052,12 @@ module MC = struct
       | Th_modtype (xmodty, modty) ->
           (add2mc _up_modty xmodty modty.tms_sig mc, None)
 
-      | Th_module subme ->
-          let subme = subme.tme_expr in
+      | Th_module { tme_expr = subme; tme_loca = lc; } ->
           let args = subme.me_sig.mis_params in
-          let submcs = mc_of_module_r (expath subme.me_name, args, None) subme in
-            (add2mc _up_mod subme.me_name subme mc, Some submcs)
+          let submcs =
+            mc_of_module_r (expath subme.me_name, args, None, Some lc) subme
+          in
+            (add2mc _up_mod subme.me_name (subme, Some lc) mc, Some submcs)
 
       | Th_theory (xsubth, ((cth, `Concrete) as subth)) ->
           let submcs = mc_of_theory_r subscope (xsubth, cth) in
@@ -1121,7 +1123,7 @@ module MC = struct
 
   and bind_mod x mod_ env =
     let (_, mc), submcs = mc_of_module env mod_ in
-    let env = bind _up_mod x mod_ env in
+    let env = bind _up_mod x (mod_.tme_expr, Some mod_.tme_loca) env in
     let env = bind_mc x mc env in
     let env =
       bind_submcs env
@@ -1884,7 +1886,9 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Mod = struct
-  type t = top_module_expr
+  type t   = top_module_expr
+  type lkt = module_expr * locality option
+  type spt = mpath * module_expr suspension * locality option
 
   let unsuspend_r f istop (i, args) (spi, params) o =
     if i <> spi || List.length args > List.length params then
@@ -1941,7 +1945,7 @@ module Mod = struct
       | None ->
           lookup_error (`MPath p)
 
-      | Some (params, o) ->
+      | Some (params, (o, lc)) ->
           let ((spi, params), op) = MC._downpath_for_mod false env ip params in
           let (params, istop) =
             match op.EcPath.m_top with
@@ -1957,7 +1961,7 @@ module Mod = struct
                 assert ((params = []) || spi = 0);
                 ((if args = [] then [] else o.me_sig.mis_params), true)
           in
-            unsuspend istop (i, args) (spi, params) o
+            (unsuspend istop (i, args) (spi, params) o, lc)
 
   let by_mpath_opt (p : EcPath.mpath) (env : env) =
     try_lf (fun () -> by_mpath p env)
@@ -1977,9 +1981,9 @@ module Mod = struct
     try_lf (fun () -> lookup name env)
 
   let sp_lookup qname (env : env) =
-    let (((i, a), p), x) = MC.lookup_mod qname env in
+    let (((i, a), p), (x, lc)) = MC.lookup_mod qname env in
     let obj = { sp_target = x; sp_params = (i, a); } in
-      (p, obj)
+    (p, obj, lc)
 
   let sp_lookup_opt name env =
     try_lf (fun () -> sp_lookup name env)
@@ -1988,7 +1992,7 @@ module Mod = struct
     fst (lookup name env)
 
   let bind name me env =
-    { (MC.bind_mod name me.tme_expr env) with
+    { (MC.bind_mod name me env) with
           env_item = Th_module me :: env.env_item;
           env_norm = ref !(env.env_norm); }
 
@@ -2020,7 +2024,7 @@ module Mod = struct
           env_current = (
             let current = env.env_current in
             let current = MC._up_mc  true current path in
-            let current = MC._up_mod true current me.me_name (path, me) in
+            let current = MC._up_mod true current me.me_name (path, (me, None)) in
               current);
           env_comps = Mip.add path comps env.env_comps;
           env_norm  = ref !(env.env_norm);
@@ -2048,10 +2052,10 @@ module Mod = struct
       in
       MMsym.map_at
         (List.map
-           (fun (ip, me) ->
+           (fun (ip, (me, lc)) ->
              if   ip = IPIdent (id, None)
-             then (ip, update me)
-             else (ip, me)))
+             then (ip, (update me, lc))
+             else (ip, (me, lc))))
         (EcIdent.name id) mods
     in
     let envc =  { env.env_current
@@ -2092,7 +2096,7 @@ module Mod = struct
       | _ -> env
     in
 
-    List.fold_left do1 env (by_mpath p env).me_comps
+    List.fold_left do1 env (fst (by_mpath p env)).me_comps
 end
 
 (* -------------------------------------------------------------------- *)
@@ -2100,7 +2104,7 @@ module NormMp = struct
   let rec norm_mpath_for_typing env p =
     let (ip, (i, args)) = ipath_of_mpath p in
     match Mod.by_ipath_r true ip env with
-    | Some ((spi, params), ({ me_body = ME_Alias (arity,alias) } as m)) ->
+    | Some ((spi, params), ({ me_body = ME_Alias (arity,alias) } as m, _)) ->
       assert (m.me_sig.mis_params = [] && arity = 0);
       let p =
         Mod.unsuspend_r EcSubst.subst_mpath
@@ -2132,7 +2136,7 @@ module NormMp = struct
     (* p is (top args).sub *)
     match Mod.by_mpath_opt top env with
     | None -> norm_mpath_for_typing env p
-    | Some me ->
+    | Some (me, _) ->
       begin match me.me_body with
       | ME_Alias (arity,mp) ->
         let nargs = List.length args in
@@ -2164,7 +2168,7 @@ module NormMp = struct
         begin
           let (ip, (i, args)) = ipath_of_mpath p in
           match Mod.by_ipath_r true ip env with
-          | Some ((spi, params), ({ me_body = ME_Alias (_,alias) } as m)) ->
+          | Some ((spi, params), ({ me_body = ME_Alias (_,alias) } as m, _)) ->
             assert (m.me_sig.mis_params = []);
             let p =
               Mod.unsuspend_r EcSubst.subst_mpath
@@ -2215,7 +2219,7 @@ module NormMp = struct
         let xp = EcPath.xpath mp p.x_sub in
         let res = xp_glob xp in
         res
-      | Some me ->
+      | Some (me, _) ->
         let params = me.me_sig.mis_params in
         let env', mp =
           if params = [] then env, mp
@@ -2285,7 +2289,7 @@ module NormMp = struct
 
   let mod_use env mp =
     let mp = norm_mpath env mp in
-    let me = Mod.by_mpath mp env in
+    let me, _ = Mod.by_mpath mp env in
     let params = me.me_sig.mis_params in
     let rm =
       List.fold_left (fun rm (id,_) -> Sid.add id rm) Sid.empty params in
@@ -2298,7 +2302,7 @@ module NormMp = struct
 
     let rec mod_use us mp =
       let mp = norm_mpath env' mp in
-      let me = Mod.by_mpath mp env' in
+      let me, _ = Mod.by_mpath mp env' in
       assert (me.me_sig.mis_params = []);
       body_use mp us me.me_comps me.me_body
 
@@ -2336,7 +2340,7 @@ module NormMp = struct
   let get_restr env mp =
     try Mm.find mp !(env.env_norm).get_restr with Not_found ->
       let res =
-        match (Mod.by_mpath mp env).me_body with
+        match (fst (Mod.by_mpath mp env)).me_body with
         | EcModules.ME_Decl(_,restr) -> norm_restr env restr
         | _ -> assert false in
       let en = !(env.env_norm) in
@@ -2966,10 +2970,9 @@ module Theory = struct
         | Th_modtype (x, ty) ->
             MC.import_modty (xpath x) ty.tms_sig env
 
-        | Th_module m ->
-            let m = m.tme_expr in
-            let env = MC.import_mod (IPPath (xpath m.me_name)) m env in
-            let env = MC.import_mc (IPPath (xpath m.me_name)) env in
+        | Th_module ({ tme_expr = me; tme_loca = lc; }) ->
+            let env = MC.import_mod (IPPath (xpath me.me_name)) (me, Some lc) env in
+            let env = MC.import_mc (IPPath (xpath me.me_name)) env in
               env
 
         | Th_export (p, _) ->

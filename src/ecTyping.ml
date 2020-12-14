@@ -662,7 +662,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
     match EcEnv.Mod.sp_lookup_opt top_qname.pl_desc env with
     | None ->
         tyerror top_qname.pl_loc env (UnknownModName top_qname.pl_desc)
-    | Some me -> me
+    | Some (mp, me, _) -> (mp, me)
   in
 
   let (params, istop) =
@@ -1366,7 +1366,7 @@ let transmodsig_body
   let mk_calls = function
     | None ->
       let do_one mp calls =
-        let sig_ = (EcEnv.Mod.by_mpath mp env).me_sig in
+        let sig_ = (fst (EcEnv.Mod.by_mpath mp env)).me_sig in
         if sig_.mis_params <> [] then calls
         else
           let fs = List.map (fun (Tys_function (fsig, _)) ->
@@ -1569,9 +1569,9 @@ and transmod_body ~attop (env : EcEnv.env) x params (me:pmodule_expr) =
     if allparams <> [] && not attop then
       tyerror me.pl_loc env
         (InvalidModAppl (MAE_WrongArgCount(0,List.length allparams)));
-    let me = EcEnv.Mod.by_mpath mp env in
+    let me, _ = EcEnv.Mod.by_mpath mp env in
     let arity = List.length stparams in
-    let me =
+    let me =                    (* FIXME: section *)
       { me with
         me_name  = x.pl_desc;
         me_body  = ME_Alias (arity,mp);

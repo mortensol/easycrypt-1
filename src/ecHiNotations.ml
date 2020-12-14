@@ -96,8 +96,8 @@ let trans_abbrev_r (env : env) (at : pabbrev located) =
   let xs      = List.map (snd_map (Tuni.offun uni)) xs in
   let tparams = EcUnify.UniEnv.tparams ue in
   let ponly   = trans_abbrev_opts at.ab_opts in
-  let tyat    = EcDecl.mk_abbrev ~ponly tparams xs (codom, body)
-                  (EcTypes.locality_of_local at.ab_local) in
+  let tyat    = EcDecl.mk_abbrev ~ponly
+                  tparams xs (codom, body) (at.ab_local :> locality) in
 
   if EcTypes.is_local body then
     nterror gloc env NTE_AbbrevIsVar;
