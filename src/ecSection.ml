@@ -985,7 +985,9 @@ let check_op scenv op =
       hierror "can't declare a notation"
     | _ -> ()
     end
-  | `Global -> on_opdecl (cb_glob scenv) op
+  | `Global ->
+    (* FIXME: need to do something special for fixpoint *)
+    on_opdecl (cb_glob scenv) op
 
 let check_ax scenv ax =
   match ax.ax_loca with
@@ -1076,6 +1078,9 @@ and check_ctheory scenv cth =
 
 and check_theory scenv th = ()
   (* FIXME section : how to check it recursively, need to add stuff in env ? *)
+
+let check_item item scenv =
+  if scenv.sc_insec then check_item item scenv
 
 let add_item (item : theory_item) (scenv:scenv) =
   let item = if scenv.sc_loca = `Local then set_local_item item else item in
