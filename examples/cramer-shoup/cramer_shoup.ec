@@ -54,7 +54,7 @@ theory DDH_ex.
 
   section PROOFS.
 
-  declare module A:Adversary.  
+  declare module A <: Adversary.  
 
   axiom A_ll : islossless A.guess.
 
@@ -277,7 +277,7 @@ proof. islossless. qed.
 
 section Security_Aux.
 
-  declare module A : CCA_ADV {CCA, B_TCR}.
+  declare module A <: CCA_ADV {CCA, B_TCR}.
   axiom guess_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).guess.
   axiom choose_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).choose.
 
@@ -969,7 +969,7 @@ end section Security_Aux.
 
 section Security.
 
-  declare module A : CCA_ADV {CCA, B_TCR}.
+  declare module A <: CCA_ADV {CCA, B_TCR}.
   axiom guess_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).guess.
   axiom choose_ll : forall (O <: CCA_ORC{A}), islossless O.dec => islossless A(O).choose.
 

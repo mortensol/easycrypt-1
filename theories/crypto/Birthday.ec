@@ -67,7 +67,7 @@ module Exp(S:Sampler,A:Adv) = {
     the probability that the same output is sampled twice is bounded
     by q^2/|T|                                                        **)
 section.
-  declare module A:Adv {Sample}.
+  declare module A <: Adv {Sample}.
   axiom A_ll (S <: ASampler {A}): islossless S.s => islossless A(S).a.
 
   lemma pr_Sample_le &m:
@@ -165,7 +165,7 @@ proof. by proc; inline*; sim. qed.
     probability that the same output is sampled twice is bounded by
     q^2/|T|                                                         **)
 section.
-  declare module A:Adv {Sample,Bounder}.
+  declare module A <: Adv {Sample,Bounder}.
 
   axiom A_ll (S <: ASampler {A}): islossless S.s => islossless A(S).a.
 

@@ -124,7 +124,7 @@ abstract theory Adversary.
 
   section PROOFS.
 
-  declare module A:AdvRndE { SampleB }.
+  declare module A <: AdvRndE { SampleB }.
 
   equiv A_sampleE_sampleEB : Main(R(SampleE),A).main ~ Main(R(SampleEB),A).main :
     ={glob A} ==> ={res, glob A}.
@@ -274,7 +274,7 @@ abstract theory AdversaryN.
 
   section PROOFS.
 
-  declare module A:AdvRndE { Count }.
+  declare module A <: AdvRndE { Count }.
 
   local clone import Bad as Bad1.
 
@@ -371,7 +371,7 @@ abstract theory Adversary1.
 
   section PROOFS.
 
-  declare module A:ADV.
+  declare module A <: ADV.
 
   axiom a1_ll : islossless A.a1.
   axiom a2_ll : islossless A.a2.
@@ -460,7 +460,7 @@ abstract theory Adversary1_1.
 
   section PROOFS.
 
-  declare module A:ADV.
+  declare module A <: ADV.
 
   axiom a1_ll : islossless A.a1.
   axiom a2_ll : islossless A.a2.

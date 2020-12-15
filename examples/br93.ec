@@ -233,7 +233,7 @@ module I(A:Adv): Inverter = {
 (* We now prove the result using a sequence of games                    *)
 section.
 (* All lemmas in this section hold for all (valid) CPA adversary A      *)
-declare module A : Adv { LRO, Log }.
+declare module A <: Adv { LRO, Log }.
 
 axiom A_a1_ll (O <: POracle {A}): islossless O.o => islossless A(O).a1.
 axiom A_a2_ll (O <: POracle {A}): islossless O.o => islossless A(O).a2.
@@ -609,7 +609,7 @@ module A_CPA (A : Adv) (H : POracle) = {
 }.
 
 section.
-declare module A : Adv { LRO, I }.
+declare module A <: Adv { LRO, I }.
 
 axiom A_a1_ll (O <: POracle {A}): islossless O.o => islossless A(O).a1.
 axiom A_a2_ll (O <: POracle {A}): islossless O.o => islossless A(O).a2.

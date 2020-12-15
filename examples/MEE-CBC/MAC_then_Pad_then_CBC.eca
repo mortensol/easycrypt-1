@@ -256,7 +256,7 @@ module Weak_PRPa (M : MAC_Scheme, A : RCPA_Adversary, P : PRP_Oracles) = {
 }.
 
 section RCPA.
-  declare module A : RCPA_Adversary { PRPi, PRP, RCPA_Wrap, RCPA_QueryBounder, Weak_PRPa }.
+  declare module A <: RCPA_Adversary { PRPi, PRP, RCPA_Wrap, RCPA_QueryBounder, Weak_PRPa }.
   axiom A_distinguish_ll (O <: RCPA_Oracles { A }):
     islossless O.enc => islossless A(O).distinguish.
 
@@ -540,7 +540,7 @@ module CMAa (P : PseudoRP) (A : PTXT_Adversary) (M : CMA_Oracles) = {
 }.
 
 section PTXT.
-  declare module A : PTXT_Adversary { WUF_Wrap, PTXT_Wrap, CMAa }.
+  declare module A <: PTXT_Adversary { WUF_Wrap, PTXT_Wrap, CMAa }.
   axiom A_forge_ll (O <: PTXT_Oracles { A }):
     islossless O.enc => islossless O.verify => islossless A(O).forge.
 

@@ -64,7 +64,7 @@ module DDHAdv (A:Adversary) = {
       = `| Pr[DDH0(DDHAdv(A)).main() @ &m : res]
            - Pr[DDH1(DDHAdv(A)).main() @ &m : res] |.        **)
 section Security.
-  declare module A:Adversary.
+  declare module A <: Adversary.
   axiom Ac_ll: islossless A.choose.
   axiom Ag_ll: islossless A.guess.
 

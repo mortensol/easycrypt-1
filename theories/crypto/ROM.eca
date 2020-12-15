@@ -173,7 +173,7 @@ clone include FiniteEager with
 proof * by exact/enum_spec.
 
 section.
-declare module D : Distinguisher { LRO, ERO }.
+declare module D <: Distinguisher { LRO, ERO }.
 
 axiom dout_ll x : is_lossless (dout x).
 
@@ -495,7 +495,7 @@ module G_bad (D : Dist) (H : Oracle) = {
 }.
 
 section.
-declare module D : Dist { Log, LRO }.
+declare module D <: Dist { Log, LRO }.
 axiom D_a1_ll (H <: POracle { D }): islossless H.o => islossless D(H).a1.
 axiom D_a2_ll (H <: POracle { D }): islossless H.o => islossless D(H).a2.
 
@@ -603,7 +603,7 @@ module G_bad (D : Dist) (H : Oracle) = {
 }.
 
 section.
-declare module D : Dist { Log, LRO }.
+declare module D <: Dist { Log, LRO }.
 axiom D_a1_ll (H <: POracle { D }): islossless H.o => islossless D(H).a1.
 axiom D_a2_ll (H <: POracle { D }): islossless H.o => islossless D(H).a2.
 

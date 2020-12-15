@@ -151,7 +151,7 @@ module D_PRF (D:PRGa.Distinguisher,F:PRFA) = {
 section Fact1.
   (* Lemmas in this section are true forall PRG distinguisher D
      that do not share memory with SRG, PRFr, PRFi, or D_PRF. *)
-  declare module D: PRGa.Distinguisher {SRG,PRFr,PRFi,D_PRF}.
+  declare module D <: PRGa.Distinguisher {SRG,PRFr,PRFi,D_PRF}.
 
   local lemma SRG_PRGp &m:
     Pr[IND_PRG(SRG,D).main() @ &m: res] = Pr[IND_PRF(PRFc,D_PRF(D)).main() @ &m: res].
@@ -333,7 +333,7 @@ qed.
   *   Pr[IND^PRF_PRFi(D^PRF_D): res] - Pr[IND^PRF_PRGi(D): res]
   *   <= Pr[IND^PRF_PRFi(D^PRF_D): !uniq D^PRF_D.log]                  **)
 section Fact2.
-  declare module D: PRGa.Distinguisher {SRG,PRFr,PRFi,D_PRF}.
+  declare module D <: PRGa.Distinguisher {SRG,PRFr,PRFi,D_PRF}.
   axiom D_distinguish_ll (G <: RGA {D}): islossless G.next => islossless D(G).distinguish.
 
   inductive inv (m : ('a,'b) fmap) (logP : 'a list) =
@@ -451,7 +451,7 @@ qed.
 op     qN : { int | 0 <= qN } as ge0_qN.
 
 section Lemma1.
-  declare module D : PRGa.Distinguisher {SRG,PRFc,PRFi,C_PRG,C_PRF,D_PRF}.
+  declare module D <: PRGa.Distinguisher {SRG,PRFc,PRFi,C_PRG,C_PRF,D_PRF}.
 
   axiom D_distinguish_ll (G <: PRGa.RGA {D}):
     islossless G.next => islossless D(G).distinguish.

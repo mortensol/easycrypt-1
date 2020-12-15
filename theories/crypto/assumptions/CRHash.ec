@@ -218,7 +218,7 @@ module (MkAdvCR(A:AdvInd):AdvCR) (O:OrclCR) = {
 
 section.
 
-  declare module A:AdvInd { RealHash, OrclCR}.
+  declare module A <: AdvInd { RealHash, OrclCR}.
   
   axiom Alossless :
     forall (O <: OrclInd{A}),

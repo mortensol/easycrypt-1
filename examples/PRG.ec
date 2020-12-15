@@ -185,7 +185,7 @@ module Exp'(A:Adv) = {
 
 section.
   (* Forall Adversary A that does not share memory with P or F... *)
-  declare module A:Adv {P,F}.
+  declare module A <: Adv {P,F}.
 
   (* ... and whose a procedure is lossless whenever F.f and P.prg are *)
   axiom AaL (F <: ARF {A}) (P <: APRG {A}):
@@ -438,7 +438,7 @@ by wp.
 qed.
 
 section.
-  declare module A:Adv {C,P,F}.
+  declare module A <: Adv {C,P,F}.
   axiom AaL (F <: ARF {A}) (P <: APRG {A}):
     islossless P.prg =>
     islossless F.f =>

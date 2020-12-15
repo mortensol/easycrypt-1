@@ -21,7 +21,7 @@ abstract theory ListPartitioning.
   type partition.
 
   section.
-  declare module M : T.
+  declare module M <: T.
 
   lemma list_partitioning
           (i : input)
@@ -54,7 +54,7 @@ abstract theory FSetPartitioning.
   type partition.
 
   section.
-  declare module M : T.
+  declare module M <: T.
 
   local clone import ListPartitioning with
     type partition <- partition.
@@ -80,7 +80,7 @@ abstract theory FPredPartitioning.
   type partition.
 
   section.
-  declare module M : T.
+  declare module M <: T.
 
   local clone import ListPartitioning with
     type partition <- partition.
@@ -104,7 +104,7 @@ end FPredPartitioning.
 
 theory ResultPartitioning.
   section.
-  declare module M : T.
+  declare module M <: T.
 
   local clone import ListPartitioning with
     type partition <- output.
@@ -128,7 +128,7 @@ theory TotalResultPartitioning.
   (*---*) import ResultPartitioning.
 
   section.
-  declare module M : T.
+  declare module M <: T.
 
   lemma total_result_partitioning
           (i : input)
@@ -154,7 +154,7 @@ theory TotalSubuniformResultOnly.
   import TotalResultPartitioning.
 
   section.
-  declare module M : T.
+  declare module M <: T.
 
   axiom M_suf a b i (X:input -> output list) &m:
        mem (X i) a
@@ -197,7 +197,7 @@ theory SubuniformReference.
   }.
 
   section.
-  declare module M : T.
+  declare module M <: T.
 
   axiom M_suf a b i X &m:
        List.mem (X i) a

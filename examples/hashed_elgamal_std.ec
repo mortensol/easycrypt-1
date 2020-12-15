@@ -122,7 +122,7 @@ module ESAdv(A:Adversary) = {
 }.
 
 section Security.
-  declare module A:Adversary.
+  declare module A <: Adversary.
   axiom Ac_ll: islossless A.choose.
   axiom Ag_ll: islossless A.guess.
 
