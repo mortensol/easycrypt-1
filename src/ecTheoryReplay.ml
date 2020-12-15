@@ -34,27 +34,16 @@ type 'a ovrenv = {
   ovre_prefix   : (symbol list) pair;
   ovre_glproof  : (ptactic_core option * evtags option) list;
   ovre_abstract : bool;
-  ovre_local    : bool;
+  ovre_local    : EcTypes.is_local;
   ovre_hooks    : 'a ovrhooks;
 }
 
 and 'a ovrhooks = {
-  henv     : 'a -> EcEnv.env;
-  hty      : 'a -> (symbol * tydecl) -> 'a;
-  hop      : 'a -> (symbol * operator) -> 'a;
-  hmodty   : 'a -> (symbol * top_module_sig) -> 'a;
-  hmod     : 'a -> top_module_expr -> 'a;
-  hax      : 'a -> (symbol * axiom) -> 'a;
-  hexport  : 'a -> EcPath.path * is_local -> 'a;
-  hbaserw  : 'a -> symbol * is_local -> 'a;
-  haddrw   : 'a -> EcPath.path * EcPath.path list * is_local -> 'a;
-  hauto    : 'a -> int * string option * EcPath.path list * is_local -> 'a;
-  htycl    : 'a -> symbol * typeclass -> 'a;
-  hinst    : 'a -> (ty_params * ty) * tcinstance * is_local -> 'a;
-  husered  : 'a -> (EcPath.path * EcTheory.rule_option * EcTheory.rule option) list -> 'a;
-  hthenter : 'a -> thmode -> symbol -> 'a;
-  hthexit  : 'a -> [`Full | `ClearOnly | `No] -> 'a;
-  herr     : 'b . ?loc:EcLocation.t -> string -> 'b;
+  henv      : 'a -> EcSection.scenv;
+  hadd_item : 'a -> EcTheory.theory_item -> 'a;
+  hthenter  : 'a -> thmode -> symbol -> is_local -> 'a;
+  hthexit   : 'a -> [`Full | `ClearOnly | `No] -> 'a;
+  herr      : 'b . ?loc:EcLocation.t -> string -> 'b;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -144,19 +133,19 @@ let rename ove subst (kind, name) =
 (* -------------------------------------------------------------------- *)
 let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
   let scenv = ove.ovre_hooks.henv scope in
-
+  let env   =  EcSection.env scenv in
   match Msym.find_opt x ove.ovre_ovrd.evc_types with
   | None ->
       let otyd = EcSubst.subst_tydecl subst otyd in
       let subst, x = rename ove subst (`Type, x) in
-      (subst, ops, proofs, ove.ovre_hooks.hty scope (x, otyd))
+      (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_type(x, otyd)))
 
   | Some { pl_desc = (nargs, ntyd, mode) } -> begin
       let nargs = List.map2
                     (fun (_, tc) x -> (EcIdent.create (unloc x), tc))
                     otyd.tyd_params nargs in
       let ue    = EcUnify.UniEnv.create (Some nargs) in
-      let ntyd  = EcTyping.transty EcTyping.tp_tydecl scenv ue ntyd in
+      let ntyd  = EcTyping.transty EcTyping.tp_tydecl env ue ntyd in
 
       match mode with
       | `Alias ->
@@ -166,7 +155,7 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
               tyd_loca   = `Global; (* FIXME section *)
             } in
           let subst, x = rename ove subst (`Type, x) in
-          (subst, ops, proofs, ove.ovre_hooks.hty scope (x, binding))
+          (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_type (x, binding)))
 
       | `Inline ->
           let subst =
@@ -177,7 +166,7 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
             (* FIXME: HACK *)
             match otyd.tyd_type, ntyd.ty_node with
             | `Datatype { tydt_ctors = octors }, Tconstr (np, _) -> begin
-                match (EcEnv.Ty.by_path np scenv).tyd_type with
+                match (EcEnv.Ty.by_path np env).tyd_type with
                 | `Datatype { tydt_ctors = _ } ->
                     List.fold_left (fun subst (name, _) ->
                       Printf.printf "%s / %s\n%!"
@@ -197,12 +186,12 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
 (* -------------------------------------------------------------------- *)
 and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
   let scenv = ove.ovre_hooks.henv scope in
-
+  let env   = EcSection.env scenv in
   match Msym.find_opt x ove.ovre_ovrd.evc_ops with
   | None ->
       let (subst, x) = rename ove subst (`Op, x) in
       let oopd = EcSubst.subst_op subst oopd in
-      (subst, ops, proofs, ove.ovre_hooks.hop scope (x, oopd))
+      (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_operator (x, oopd)))
 
   | Some { pl_desc = (opov, opmode); pl_loc = loc; } ->
       let nosmt = opov.opov_nosmt in
@@ -218,10 +207,9 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
 
       let (newop, subst, x, alias) =
         let tp = opov.opov_tyvars |> omap (List.map (fun tv -> (tv, []))) in
-        let ue = EcTyping.transtyvars scenv (loc, tp) in
+        let ue = EcTyping.transtyvars env (loc, tp) in
         let tp = EcTyping.tp_relax in
         let (ty, body) =
-          let env     = scenv in
           let codom   = EcTyping.transty tp env ue opov.opov_retty in
           let env, xs = EcTyping.trans_binding env ue opov.opov_args in
           let body    = EcTyping.transexpcast env `InOp ue codom opov.opov_body in
@@ -229,11 +217,11 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
           (lam.EcTypes.e_ty, lam)
         in
         begin
-          try ty_compatible scenv ue
+          try ty_compatible env ue
               (List.map fst reftyvars, refty)
               (List.map fst (EcUnify.UniEnv.tparams ue), ty)
           with Incompatible err ->
-            clone_error scenv (CE_OpIncompatible ((snd ove.ovre_prefix, x), err))
+            clone_error env (CE_OpIncompatible ((snd ove.ovre_prefix, x), err))
         end;
 
         if not (EcUnify.UniEnv.closed ue) then
@@ -260,19 +248,19 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
         let opp = EcPath.fromqsymbol (snd ove.ovre_prefix, x) in
         Mp.add opp (newop, alias) ops in
       let scope =
-        if alias then ove.ovre_hooks.hop scope (x, newop) else scope
+        if alias then ove.ovre_hooks.hadd_item scope (Th_operator (x, newop)) else scope
 
       in (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
 and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
   let scenv = ove.ovre_hooks.henv scope in
-
+  let env   = EcSection.env scenv in
   match Msym.find_opt x ove.ovre_ovrd.evc_preds with
   | None ->
       let subst, x = rename ove subst (`Pred, x) in
       let oopr = EcSubst.subst_op subst oopr in
-      (subst, ops, proofs, ove.ovre_hooks.hop scope (x, oopr))
+      (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_operator(x, oopr)))
 
   | Some { pl_desc = (prov, prmode); pl_loc = loc; } ->
       let (reftyvars, refty) =
@@ -282,9 +270,8 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
 
       let (newpr, subst, x, alias) =
          let tp = prov.prov_tyvars |> omap (List.map (fun tv -> (tv, []))) in
-         let ue = EcTyping.transtyvars scenv (loc, tp) in
+         let ue = EcTyping.transtyvars env (loc, tp) in
          let body =
-           let env     = scenv in
            let env, xs = EcTyping.trans_binding env ue prov.prov_args in
            let body    = EcTyping.trans_form_opt env ue prov.prov_body None in
            let xs      = List.map (fun (x, ty) -> x, EcFol.GTty ty) xs in
@@ -294,11 +281,11 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
 
          begin
            try
-             ty_compatible scenv ue
+             ty_compatible env ue
                (List.map fst reftyvars, refty)
                (List.map fst (EcUnify.UniEnv.tparams ue), body.EcFol.f_ty)
            with Incompatible err ->
-             clone_error scenv
+             clone_error env
                (CE_OpIncompatible ((snd ove.ovre_prefix, x), err))
          end;
 
@@ -329,7 +316,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
       in
 
       let scope =
-        if alias then ove.ovre_hooks.hop scope (x, newpr) else scope
+        if alias then ove.ovre_hooks.hadd_item scope (Th_operator(x, newpr)) else scope
       in (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -339,7 +326,7 @@ and replay_ntd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oont) =
   else
     let subst, x = rename ove subst (`Op, x) in
     let oont = EcSubst.subst_op subst oont in
-    let scope = ove.ovre_hooks.hop scope (x, oont) in
+    let scope = ove.ovre_hooks.hadd_item scope (Th_operator (x, oont)) in
     (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -377,7 +364,7 @@ and replay_axd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, ax) =
 
   let scope =
     if axclear then scope else
-      ove.ovre_hooks.hax scope (*ove.ovre_local*) (x, ax)
+      ove.ovre_hooks.hadd_item scope (Th_axiom(x, ax))
   in (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -386,7 +373,7 @@ and replay_modtype
 =
   let subst, x = rename ove subst (`ModType, x) in
   let modty = EcSubst.subst_top_modsig subst modty in
-  (subst, ops, proofs, ove.ovre_hooks.hmodty scope (x, modty))
+  (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_modtype (x, modty)))
 
 (* -------------------------------------------------------------------- *)
 and replay_mod
@@ -395,26 +382,27 @@ and replay_mod
   let subst, name = rename ove subst (`Module, me.tme_expr.me_name) in
   let me = EcSubst.subst_top_module subst me in
   let me = { me with tme_expr = { me.tme_expr with me_name = name } } in
-  (subst, ops, proofs, ove.ovre_hooks.hmod scope (*ove.ovre_local*) me)
+  (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_module me))
 
 (* -------------------------------------------------------------------- *)
 and replay_export
   (ove : _ ovrenv) (subst, ops, proofs, scope) (p,lc)
 =
   let scenv = ove.ovre_hooks.henv scope in
+  let env   = EcSection.env scenv in
   let p = EcSubst.subst_path subst p in
 
-  if is_none (EcEnv.Theory.by_path_opt p scenv) then
+  if is_none (EcEnv.Theory.by_path_opt p env) then
     (subst, ops, proofs, scope)
   else
-    let scope = ove.ovre_hooks.hexport scope (p,lc) in
+    let scope = ove.ovre_hooks.hadd_item scope (Th_export (p,lc)) in
     (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
 and replay_baserw
-  (ove : _ ovrenv) (subst, ops, proofs, scope) name
+  (ove : _ ovrenv) (subst, ops, proofs, scope) (name, lc)
 =
-  let scope = ove.ovre_hooks.hbaserw scope name in
+  let scope = ove.ovre_hooks.hadd_item scope (Th_baserw(name, lc)) in
   (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -423,7 +411,7 @@ and replay_addrw
 =
   let p     = EcSubst.subst_path subst p in
   let l     = List.map (EcSubst.subst_path subst) l in
-  let scope = ove.ovre_hooks.haddrw scope (p, l, lc) in
+  let scope = ove.ovre_hooks.hadd_item scope (Th_addrw(p, l, lc)) in
   (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -431,7 +419,7 @@ and replay_auto
   (ove : _ ovrenv) (subst, ops, proofs, scope) (lvl, base, ps, lc)
 =
   let ps = List.map (EcSubst.subst_path subst) ps in
-  let scope = ove.ovre_hooks.hauto scope (lvl, base, ps, lc) in
+  let scope = ove.ovre_hooks.hadd_item scope (Th_auto(lvl, base, ps, lc)) in
   (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -446,13 +434,13 @@ and replay_reduction
       obind (fun rule ->
         try
           Some (EcReduction.User.compile
-                 ~opts ~prio:rule.rl_prio (ove.ovre_hooks.henv scope) p)
+                 ~opts ~prio:rule.rl_prio (EcSection.env (ove.ovre_hooks.henv scope)) p)
         with EcReduction.User.InvalidUserRule _ -> None) rule
 
     in (p, opts, rule) in
 
   let rules = List.map for1 rules in
-  let scope = ove.ovre_hooks.husered scope rules in
+  let scope = ove.ovre_hooks.hadd_item scope (Th_reduction rules) in
 
   (subst, ops, proofs, scope)
 
@@ -461,7 +449,7 @@ and replay_typeclass
   (ove : _ ovrenv) (subst, ops, proofs, scope) (x, tc)
 =
   let tc = EcSubst.subst_tc subst tc in
-  let scope = ove.ovre_hooks.htycl scope (x, tc) in
+  let scope = ove.ovre_hooks.hadd_item scope (Th_typeclass(x, tc)) in
   (subst, ops, proofs, scope)
 
 (* -------------------------------------------------------------------- *)
@@ -535,7 +523,7 @@ and replay_instance
         | `General p  -> `General (forpath p)
     in
 
-    let scope = ove.ovre_hooks.hinst scope ((typ, ty), tc, lc) in
+    let scope = ove.ovre_hooks.hadd_item scope (Th_instance ((typ, ty), tc, lc)) in
     (subst, ops, proofs, scope)
 
   with E.InvInstPath ->
@@ -601,7 +589,7 @@ and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
       in
 
       let (subst, ops, proofs, subscope) =
-        let subscope = ove.ovre_hooks.hthenter scope thmode x in
+        let subscope = ove.ovre_hooks.hthenter scope thmode x ove.ovre_local in
         let (subst, ops, proofs, subscope) =
           List.fold_left (replay1 subove)
             (subst, ops, proofs, subscope) cth.cth_items in
@@ -632,7 +620,7 @@ let replay (hooks : 'a ovrhooks)
 
   try
     let mode  = if abstract then `Abstract else `Concrete in
-    let scope = if incl then scope else hooks.hthenter scope mode name in
+    let scope = if incl then scope else hooks.hthenter scope mode name local in
     let _, _, proofs, scope =
       List.fold_left (replay1 ove)
         (subst, Mp.empty, [], scope) items in

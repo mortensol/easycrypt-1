@@ -38,8 +38,8 @@ type scope
 
 type proof_uc = {
   puc_active : (proof_auc * proof_ctxt option) option;
-  puc_cont   : proof_ctxt list * (EcEnv.env option);
-  puc_init   : EcEnv.env;
+  puc_cont   : proof_ctxt list * (EcSection.scenv option);
+  puc_init   : EcSection.scenv;
 }
 
 and proof_auc = {
@@ -51,7 +51,7 @@ and proof_auc = {
 }
 
 and proof_ctxt =
-  (symbol option * EcDecl.axiom) * EcPath.path * EcEnv.env
+  (symbol option * EcDecl.axiom) * EcPath.path * EcSection.scenv
 
 and proof_state =
   PSNoCheck | PSCheck of EcCoreGoal.proof
@@ -146,7 +146,7 @@ module Theory : sig
 
   (* [enter scope mode name] start a theory in scope [scope] with
    * name [name] and mode (abstract/concrete) [mode]. *)
-  val enter : scope -> thmode -> symbol -> scope
+  val enter : scope -> thmode -> symbol -> EcTypes.is_local -> scope
 
   (* [exit scope] close and finalize the top-most theory and returns
    * its name. Raises [TopScope] if [scope] has not super scope. *)
@@ -227,7 +227,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Auto : sig
-  val add_rw   : scope -> local:bool -> base:pqsymbol -> pqsymbol list -> scope
+  val add_rw   : scope -> local:EcTypes.is_local -> base:pqsymbol -> pqsymbol list -> scope
   val add_hint : scope -> phint -> scope
 end
 

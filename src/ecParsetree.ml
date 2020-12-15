@@ -927,6 +927,7 @@ type ptypeclass = {
   ptc_inth : pqsymbol option;
   ptc_ops  : (psymbol * pty) list;
   ptc_axs  : (psymbol * pformula) list;
+  ptc_loca : is_local;
 }
 
 type ptycinstance = {
@@ -1112,7 +1113,7 @@ type global_action =
   | Ghint        of phint
   | Gprint       of pprint
   | Gsearch      of pformula list
-  | GthOpen      of (bool * psymbol)
+  | GthOpen      of (is_local * bool * psymbol)
   | GthClose     of (theory_clear * psymbol)
   | GthClear     of theory_clear
   | GthRequire   of threquire

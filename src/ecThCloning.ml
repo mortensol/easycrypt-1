@@ -49,7 +49,7 @@ let clone_error env error =
 type axclone = {
   axc_axiom : symbol * EcDecl.axiom;
   axc_path  : EcPath.path;
-  axc_env   : EcEnv.env;
+  axc_env   : EcSection.scenv;
   axc_tac   : EcParsetree.ptactic_core option;
 }
 
@@ -506,15 +506,16 @@ end = struct
 end
 
 (* -------------------------------------------------------------------- *)
-let clone (scenv : EcEnv.env) (thcl : theory_cloning) =
+let clone (scenv : EcSection.scenv) (thcl : theory_cloning) =
+  let env = EcSection.env scenv in
   let opath, (oth, othmode) =
-    match EcEnv.Theory.lookup_opt ~mode:`All (unloc thcl.pthc_base) scenv with
-    | None -> clone_error scenv (CE_UnkTheory (unloc thcl.pthc_base))
+    match EcEnv.Theory.lookup_opt ~mode:`All (unloc thcl.pthc_base) env with
+    | None -> clone_error env (CE_UnkTheory (unloc thcl.pthc_base))
     | Some x -> x
   in
 
   let name = odfl (EcPath.basename opath) (thcl.pthc_name |> omap unloc) in
-  let oc   = { oc_env = scenv; oc_oth = oth; } in
+  let oc   = { oc_env = env; oc_oth = oth; } in
 
   let (genproofs, ovrds) =
     List.fold_left
@@ -529,7 +530,7 @@ let clone (scenv : EcEnv.env) (thcl : theory_cloning) =
   let ntclr =
     let ntclr1 (`Abbrev, { pl_desc = (nm, x) as q }) =
       if is_none (find_nt oth q) then
-        clone_error scenv (CE_UnkAbbrev q);
+        clone_error env (CE_UnkAbbrev q);
       EcPath.pqname (EcPath.extend opath nm) x
 
     in List.map ntclr1 thcl.pthc_clears

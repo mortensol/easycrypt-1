@@ -1650,11 +1650,13 @@ typedecl:
 (* -------------------------------------------------------------------- *)
 (* Type classes                                                         *)
 typeclass:
-| TYPE CLASS x=lident inth=tc_inth? EQ LBRACE body=tc_body RBRACE {
+| loca=is_local TYPE CLASS x=lident inth=tc_inth? EQ LBRACE body=tc_body RBRACE {
     { ptc_name = x;
       ptc_inth = inth;
       ptc_ops  = fst body;
-      ptc_axs  = snd body; }
+      ptc_axs  = snd body;
+      ptc_loca = loca;
+    }
   }
 
 tc_inth:
@@ -1954,8 +1956,8 @@ theory_clear_items:
 | xs=theory_clear_item1* { xs }
 
 theory_open:
-| b=boption(ABSTRACT) THEORY x=uident
-    { (b, x) }
+| loca=is_local b=boption(ABSTRACT) THEORY x=uident
+    { (loca, b, x) }
 
 theory_close:
 | END xs=bracket(theory_clear_items)? x=uident

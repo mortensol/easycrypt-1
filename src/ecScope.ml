@@ -767,37 +767,35 @@ end
 (* -------------------------------------------------------------------- *)
 module Auto = struct
   let add_rw scope ~local ~base l =
-    let env = env scope in
-
-
-    (* FIXME section *)
-  (*  if local then
-      hierror "rewrite hints cannot be local"; *)
-
-    let env, base =
-      match EcEnv.BaseRw.lookup_opt base.pl_desc env with
+    let scope, base =
+      match EcEnv.BaseRw.lookup_opt base.pl_desc (env scope) with
       | None ->
         let pre, ibase = unloc base in
         if not (List.is_empty pre) then
           hierror ~loc:base.pl_loc
             "cannot create rewrite hints out of its enclosing theory";
-        let env = EcEnv.BaseRw.add ibase local env in
-        (env, fst (EcEnv.BaseRw.lookup base.pl_desc env))
+        let scope =
+          { scope with
+            sc_env = EcSection.add_item (Th_baserw (ibase, local)) scope.sc_env } in
+        (scope, fst (EcEnv.BaseRw.lookup base.pl_desc (env scope)))
 
-      | Some (base, _) -> (env, base) in
+      | Some (base, _) -> (scope, base) in
 
+    let env = env scope in
     let l = List.map (fun l -> EcEnv.Ax.lookup_path (unloc l) env) l in
-    { scope with sc_env = EcEnv.BaseRw.addto base l local env }
+    { scope with
+      sc_env =  EcSection.add_item (Th_addrw(base, l, local)) scope.sc_env }
 
   let bind_hint scope ~local ~level ?base names =
-    { scope with sc_env =
-        EcEnv.Auto.add ~level ?base names local scope.sc_env }
+    { scope with
+      sc_env =
+        EcSection.add_item (Th_auto(level, base, names, local)) scope.sc_env }
 
   let add_hint scope hint =
     let base = omap unloc hint.ht_base in
-
+    let env = env scope in
     let names = List.map
-      (fun l -> EcEnv.Ax.lookup_path (unloc l) scope.sc_env)
+      (fun l -> EcEnv.Ax.lookup_path (unloc l) env)
       hint.ht_names in
 
     bind_hint scope ~local:hint.ht_local ~level:hint.ht_prio ?base names
@@ -1337,6 +1335,7 @@ end
 module Mod = struct
   module TT = EcTyping
 
+  (* FIXME section: move this in EcEnv *)
   let add_local_restr env path m =
     let mpath = EcPath.pqname path m.me_name in
     match m.me_body with
@@ -1357,15 +1356,13 @@ module Mod = struct
 
   let bind (scope : scope) (m : top_module_expr) =
     assert (scope.sc_pr_uc = None);
-    let item  = EcSection.sc_th_item scope.sc_section (Th_module m) in
     { scope with
-        sc_env     = EcEnv.Mod.bind m.tme_expr.me_name m scope.sc_env;
-        sc_section = EcSection.add item scope.sc_section; }
+      sc_env = EcSection.add_item (Th_module m) scope.sc_env }
 
   let add_concrete (scope : scope) lc (ptm : pmodule_def) =
     assert (scope.sc_pr_uc = None);
 
-    let m = TT.transmod scope.sc_env ~attop:true ptm in
+    let m = TT.transmod (env scope) ~attop:true ptm in
     let ur = EcModules.get_uninit_read_of_module (path scope) m in
 
     if not (List.is_empty ur) then begin
@@ -1384,21 +1381,15 @@ module Mod = struct
 
     bind scope {tme_expr = m; tme_loca = lc}
 
-  let declare (scope : scope) (lc : locality) (m : pmodule_decl) =
-    assert (lc = `Declare);
+  let declare (scope : scope) (m : pmodule_decl) =
     let modty = m.ptm_modty in
-    let tysig = fst (TT.transmodtype scope.sc_env (fst modty)) in
-    let restr = List.map (TT.trans_topmsymbol scope.sc_env) (snd modty) in
+    let env = env scope in
+    let tysig = fst (TT.transmodtype env (fst modty)) in
+    let restr = List.map (TT.trans_topmsymbol env) (snd modty) in
     let name  = EcIdent.create (unloc m.ptm_name) in
-    let scope =
-      let restr = Sx.empty, Sm.of_list restr in
-      let item  = EcSection.sc_decl_mod scope.sc_section (name, tysig, restr) in
-      { scope with
-          sc_env = EcEnv.Mod.declare_local
-            name tysig restr scope.sc_env;
-          sc_section = EcSection.add item scope.sc_section; }
-    in
-      scope
+    let restr = Sx.empty, Sm.of_list restr in
+    { scope with
+      sc_env = EcSection.add_decl_mod name tysig restr scope.sc_env }
 
   let add (scope : scope) (m : pmodule_def_or_decl) =
     match m with
@@ -1406,26 +1397,26 @@ module Mod = struct
       add_concrete scope lc def
 
     | { ptm_locality = lc; ptm_def = `Abstract decl } ->
-      declare scope lc decl
+      if lc <> `Declare then
+        hierror "use declare for abstract module";
+      declare scope decl
 
   let import (scope : scope) (m : pmsymbol located) : scope =
     let m, _ = EcTyping.trans_msymbol (env scope) m in
-    { scope with sc_env = EcEnv.Mod.import_vars (env scope) m }
+    { scope with sc_env = EcSection.import_vars m scope.sc_env }
+
 end
 
 (* -------------------------------------------------------------------- *)
 module ModType = struct
   let bind (scope : scope) ((x, tysig) : _ * top_module_sig) =
     assert (scope.sc_pr_uc = None);
-    let item  =
-      EcSection.sc_th_item scope.sc_section (EcTheory.Th_modtype (x, tysig)) in
     { scope with
-        sc_env = EcEnv.ModTy.bind x tysig scope.sc_env;
-        sc_section = EcSection.add item scope.sc_section; }
+      sc_env = EcSection.add_item (Th_modtype (x, tysig)) scope.sc_env }
 
   let add (scope : scope) (intf : pinterface) =
     assert (scope.sc_pr_uc = None);
-    let tysig = EcTyping.transmodsig scope.sc_env intf in
+    let tysig = EcTyping.transmodsig (env scope) intf in
     bind scope (unloc intf.pi_name, tysig)
 end
 
@@ -1449,23 +1440,21 @@ module Ty = struct
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) ((x, tydecl) : (_ * tydecl)) =
     assert (scope.sc_pr_uc = None);
-    let item =
-      EcSection.sc_th_item scope.sc_section (EcTheory.Th_type (x, tydecl)) in
     { scope with
-        sc_env = EcEnv.Ty.bind x tydecl scope.sc_env;
-        sc_section = EcSection.add item scope.sc_section; }
+        sc_env = EcSection.add_item (Th_type (x, tydecl)) scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
   let add (scope : scope) (lc:locality) info tcs =
     assert (scope.sc_pr_uc = None);
 
     let (args, name) = info.pl_desc and loc = info.pl_loc in
+    let env = env scope in
     let tcs =
       List.map
-        (fun tc -> fst (EcEnv.TypeClass.lookup (unloc tc) scope.sc_env))
+        (fun tc -> fst (EcEnv.TypeClass.lookup (unloc tc) env))
         tcs
     in
-    let ue = TT.transtyvars scope.sc_env (loc, Some args) in
+    let ue = TT.transtyvars env (loc, Some args) in
     let tydecl = {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Abstract (Sp.of_list tcs);
@@ -1476,9 +1465,10 @@ module Ty = struct
   (* ------------------------------------------------------------------ *)
   let define (scope : scope) (lc : locality) info body =
     assert (scope.sc_pr_uc = None);
+    let env = env scope in
     let (args, name) = info.pl_desc and loc = info.pl_loc in
-    let ue     = TT.transtyvars scope.sc_env (loc, Some args) in
-    let body   = transty tp_tydecl scope.sc_env ue body in
+    let ue     = TT.transtyvars env (loc, Some args) in
+    let body   = transty tp_tydecl env ue body in
     let tydecl = {
       tyd_params = EcUnify.UniEnv.tparams ue;
       tyd_type   = `Concrete body;
@@ -1489,16 +1479,13 @@ module Ty = struct
   (* ------------------------------------------------------------------ *)
   let bindclass (scope : scope) (x, tc) =
     assert (scope.sc_pr_uc = None);
-    let item =
-      EcSection.sc_th_item scope.sc_section (EcTheory.Th_typeclass (x, tc)) in
     { scope with
-      sc_env     = EcEnv.TypeClass.bind x tc scope.sc_env;
-      sc_section = EcSection.add item scope.sc_section; }
+      sc_env = EcSection.add_item (Th_typeclass(x, tc)) scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
-  let add_class (scope : scope) (lc : is_local) { pl_desc = tcd } =
+  let add_class (scope : scope) { pl_desc = tcd } =
     assert (scope.sc_pr_uc = None);
-
+    let lc = tcd.ptc_loca in
     let name  = unloc tcd.ptc_name in
     let scenv = (env scope) in
 
@@ -1683,31 +1670,35 @@ module Ty = struct
          | None when EcReduction.EqTest.for_type env ty tint -> `Direct
          | None -> `Default | Some p -> `Embed p); }
 
-  (* FIXME: section instance are not binded *)
   let addring (scope : scope) mode (kind, { pl_desc = tci; pl_loc = loc }) =
-    if not (EcAlgTactic.is_module_loaded scope.sc_env) then
+    let env = env scope in
+    if not (EcAlgTactic.is_module_loaded env) then
       hierror "load AlgTactic/Ring first";
 
     let ty =
-      let ue = TT.transtyvars scope.sc_env (loc, Some (fst tci.pti_type)) in
-      let ty = transty tp_tydecl scope.sc_env ue (snd tci.pti_type) in
+      let ue = TT.transtyvars env (loc, Some (fst tci.pti_type)) in
+      let ty = transty tp_tydecl env ue (snd tci.pti_type) in
         assert (EcUnify.UniEnv.closed ue);
         (EcUnify.UniEnv.tparams ue, Tuni.offun (EcUnify.UniEnv.close ue) ty)
     in
-    let symbols = EcAlgTactic.ring_symbols scope.sc_env kind (snd ty) in
-    let symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
-    let cr      = ring_of_symmap scope.sc_env (snd ty) kind symbols in
-    let axioms  = EcAlgTactic.ring_axioms scope.sc_env cr in
+    let symbols = EcAlgTactic.ring_symbols env kind (snd ty) in
+    let symbols = check_tci_operators env ty tci.pti_ops symbols in
+    let cr      = ring_of_symmap env (snd ty) kind symbols in
+    let axioms  = EcAlgTactic.ring_axioms env cr in
     let lc      = (tci.pti_loca :> locality) in
     let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc in
+    let add env p =
+      EcSection.add_item (Th_instance(ty,`General p, tci.pti_loca)) env in
     let scope   =
+      (* FIXME section : why we erase fst ty ? *)
       { scope with sc_env =
-          List.fold_left
-            (fun env p ->
-              EcEnv.TypeClass.add_instance ty (`General p) tci.pti_loca env)
-            (EcEnv.Algebra.add_ring (snd ty) cr tci.pti_loca scope.sc_env)
+          List.fold_left add
+            (EcSection.add_item
+               (Th_instance (([], snd ty), `Ring cr, tci.pti_loca))
+               scope.sc_env)
             [p_zmod; p_ring; p_idomain] }
 
+    (* FIXME section strange to defer inter after adding the ring *)
     in Ax.add_defer scope inter
 
   (* ------------------------------------------------------------------ *)
@@ -1716,29 +1707,33 @@ module Ty = struct
       f_inv  = oget (Mstr.find_opt "inv" symbols);
       f_div  = Mstr.find_opt "div" symbols; }
 
-  (* FIXME: section instance are not binded *)
   let addfield (scope : scope) mode { pl_desc = tci; pl_loc = loc; } =
-    if not (EcAlgTactic.is_module_loaded scope.sc_env) then
+    let env = env scope in
+    if not (EcAlgTactic.is_module_loaded env) then
       hierror "load AlgTactic/Ring first";
 
     let ty =
-      let ue = TT.transtyvars scope.sc_env (loc, Some (fst tci.pti_type)) in
-      let ty = transty tp_tydecl scope.sc_env ue (snd tci.pti_type) in
+      let ue = TT.transtyvars env (loc, Some (fst tci.pti_type)) in
+      let ty = transty tp_tydecl env ue (snd tci.pti_type) in
         assert (EcUnify.UniEnv.closed ue);
         (EcUnify.UniEnv.tparams ue, Tuni.offun (EcUnify.UniEnv.close ue) ty)
     in
-    let symbols = EcAlgTactic.field_symbols scope.sc_env (snd ty) in
-    let symbols = check_tci_operators scope.sc_env ty tci.pti_ops symbols in
-    let cr      = field_of_symmap scope.sc_env (snd ty) symbols in
-    let axioms  = EcAlgTactic.field_axioms scope.sc_env cr in
+    let symbols = EcAlgTactic.field_symbols env (snd ty) in
+    let symbols = check_tci_operators env ty tci.pti_ops symbols in
+    let cr      = field_of_symmap env (snd ty) symbols in
+    let axioms  = EcAlgTactic.field_axioms env cr in
     let lc      = (tci.pti_loca :> locality) in
     let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc; in
+    let add env p =
+      EcSection.add_item (Th_instance(ty,`General p, tci.pti_loca)) env in
     let scope   =
-      { scope with sc_env =
-          List.fold_left
-            (fun env p ->
-              EcEnv.TypeClass.add_instance ty (`General p) tci.pti_loca env)
-            (EcEnv.Algebra.add_field (snd ty) cr tci.pti_loca scope.sc_env)
+      { scope with
+        sc_env =
+          (* FIXME section : why we erase fst ty ? *)
+          List.fold_left add
+            (EcSection.add_item
+               (Th_instance (([], snd ty), `Field cr, tci.pti_loca))
+               scope.sc_env)
             [p_zmod; p_ring; p_idomain; p_field] }
 
     in Ax.add_defer scope inter
@@ -1784,7 +1779,6 @@ module Ty = struct
 *)
 
   (* ------------------------------------------------------------------ *)
-  (* FIXME: section field and ring instance are not binded *)
   let add_instance (scope : scope) mode ({ pl_desc = tci } as toptci) =
     match unloc tci.pti_name with
     | ([], "bring") -> begin
@@ -1872,12 +1866,9 @@ module Theory = struct
   (* ------------------------------------------------------------------ *)
   let bind (scope : scope) (x, (cth, mode)) =
     assert (scope.sc_pr_uc = None);
-    let item =
-      EcSection.sc_th_item scope.sc_section (EcTheory.Th_theory (x, (cth, mode))) in
     { scope with
-        sc_env = EcEnv.Theory.bind ~mode x
-            ?src:cth.cth_source cth.cth_items scope.sc_env;
-        sc_section = EcSection.add item scope.sc_section; }
+      sc_env = EcSection.add_item (Th_theory (x, (cth, mode))) scope.sc_env }
+
 
   (* ------------------------------------------------------------------ *)
   let required (scope : scope) (name : required_info) =
@@ -1902,7 +1893,7 @@ module Theory = struct
       match Msym.find_opt id.rqd_name scope.sc_loaded with
       | Some ((rth, mode), ids) ->
           let scope = List.fold_right require_loaded ids scope in
-          let env   = EcEnv.Theory.require ~mode id.rqd_name rth scope.sc_env in
+          let env   = EcSection.require ~mode id.rqd_name rth scope.sc_env in
             { scope with
                 sc_env      = env;
                 sc_required = id :: scope.sc_required; }
@@ -1928,24 +1919,17 @@ module Theory = struct
     match scope.sc_top with
     | None     -> raise TopScope
     | Some sup ->
-        begin
-          match EcSection.opath scope.sc_section with
-          | None -> ()
-          | Some (_, sp) ->
-              if p_equal sp (EcEnv.root scope.sc_env) then
-                hierror "cannot close a theory with active sections";
-        end;
-        let clears   = scope.sc_clears in
-        let cth      = EcEnv.Theory.close ?pempty ~clears scope.sc_env in
-        let loaded   = scope.sc_loaded in
-        let section  = scope.sc_section in
-        let required = scope.sc_required in
-        let sup = { sup with sc_loaded = loaded; sc_section = section; } in
-
-        ((cth, required), section, scope.sc_name, sup)
+      let clears   = scope.sc_clears in
+      let _, cth, _ = EcSection.exit_theory ?pempty ~clears scope.sc_env in
+      let loaded   = scope.sc_loaded in
+      let required = scope.sc_required in
+      let sup = { sup with sc_loaded = loaded; } in
+      ((cth, required), scope.sc_name, sup)
 
   (* ------------------------------------------------------------------ *)
   let exit ?(pempty = `ClearOnly) ?(clears =[]) (scope : scope) =
+    (* FIXME section: this should be done in EcEnv *)
+(*
     let rec add_restr1 section where env item : EcEnv.env =
       match item with
       | EcTheory.Th_theory (name, th) ->
@@ -1974,27 +1958,31 @@ module Theory = struct
       | `Concrete ->
           List.fold_left (add_restr1 section where) env th.EcTheory.cth_items
     in
-
+ *)
     assert (scope.sc_pr_uc = None);
 
     let cth = exit_r ~pempty (add_clears clears scope) in
-    let ((cth, required), section, (name, mode), scope) = cth in
+    let ((cth, required), (name, mode), scope) = cth in
     let scope = List.fold_right require_loaded required scope in
+    let scope =
+      ofold (fun cth scope -> bind scope (name, (cth, mode)))
+          scope cth in
+(*
     let scope = cth |> ofold (fun cth scope ->
     let scope = bind scope (name, (cth, mode)) in
       { scope with sc_env =
           add_restr section
             (EcPath.pqname (path scope) name) (cth, mode) scope.sc_env })
-      scope
+      scope *)
 
-    in (name, scope)
+    (name, scope)
 
   (* ------------------------------------------------------------------ *)
   let bump_prelude (scope : scope) =
     match scope.sc_prelude with
     | `InPrelude, _ ->
          { scope with sc_prelude = (`InPrelude,
-             { pr_env      = scope.sc_env;
+             { pr_env      = env scope;
                pr_required = scope.sc_required; }) }
     | _ -> scope
 
@@ -2002,7 +1990,7 @@ module Theory = struct
   let import (scope : scope) (name : qsymbol) =
     assert (scope.sc_pr_uc = None);
 
-    match EcEnv.Theory.lookup_opt ~mode:`All name scope.sc_env with
+    match EcEnv.Theory.lookup_opt ~mode:`All name (env scope) with
     | None ->
         hierror
           "cannot import the non-existent theory `%s'"
@@ -2013,19 +2001,18 @@ module Theory = struct
 
     | Some (path, (_, `Concrete)) ->
         bump_prelude
-          { scope with sc_env = EcEnv.Theory.import path scope.sc_env }
+          { scope with
+            sc_env = EcSection.import path scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
-  let export_p scope p lc =
-    let item =
-      EcSection.sc_th_item scope.sc_section (Th_export (p,lc)) in
-    { scope with sc_env = EcEnv.Theory.export p lc scope.sc_env;
-                 sc_section = EcSection.add item scope.sc_section;}
+  let export_p scope (p, lc) =
+    { scope with
+      sc_env = EcSection.add_item (Th_export (p,lc)) scope.sc_env }
 
   let export (scope : scope) (name : qsymbol) =
     assert (scope.sc_pr_uc = None);
 
-    match EcEnv.Theory.lookup_opt ~mode:`All name scope.sc_env with
+    match EcEnv.Theory.lookup_opt ~mode:`All name (env scope) with
     | None ->
         hierror
           "cannot export the non-existent theory `%s'"
@@ -2036,7 +2023,7 @@ module Theory = struct
 
     | Some (path, (_, `Concrete)) ->
         (* The section will fix the locality *)
-        bump_prelude (export_p scope path `Global)
+        bump_prelude (export_p scope (path, `Global))
 
   (* ------------------------------------------------------------------ *)
   let check_end_required scope thname =
@@ -2059,15 +2046,15 @@ module Theory = struct
 
       | None ->
         try
-          let imported = enter (for_loading scope) mode name.rqd_name in
-          let imported = { imported with sc_env = EcEnv.astop imported.sc_env } in
+          let imported = enter (for_loading scope) mode name.rqd_name `Global in
+          let imported = { imported with sc_env = EcSection.astop imported.sc_env } in
           let thname   = fst imported.sc_name in
           let imported = loader imported in
 
           check_end_required imported thname;
 
           let cth = exit_r ~pempty:`No imported in
-          let (cth, rqs), _, (name1, _), imported = cth in
+          let (cth, rqs), (name1, _), imported = cth in
           assert (name.rqd_name = name1);
           let scope = { scope with sc_loaded =
             Msym.add name.rqd_name ((oget cth, mode), rqs) imported.sc_loaded; } in
@@ -2093,48 +2080,12 @@ module Section = struct
   let enter (scope : scope) (name : psymbol option) =
     assert (scope.sc_pr_uc = None);
     { scope with
-        sc_section =
-          EcSection.enter scope.sc_env
-            (omap unloc name) scope.sc_section; }
+      sc_env = EcSection.enter_section (omap unloc name) scope.sc_env }
 
   let exit (scope : scope) (name : psymbol option) =
-    let sc_env, sc_section, items =
-      EcSection.exit scope.sc_section (omap unloc name) in
-    let scope = { scope with sc_env; sc_section} in
-
-    let rec bind_item scope item =
-      match item with
-      | T.Th_type     (x, ty) -> Ty.bind scope `Global (x, ty)
-      | T.Th_operator (x, op) -> Op.bind scope `Global (x, op)
-      | T.Th_modtype  (x, mt) -> ModType.bind scope `Global (x, mt)
-      | T.Th_module   me      -> Mod.bind scope `Global me
-      | T.Th_axiom    (x, ax) -> Ax.bind scope `Global (x,ax)
-      | T.Th_export   (p,lc)  -> Theory.export_p scope p
-      | T.Th_theory   th      -> Theory.bind scope `Global th
-      | T.Th_typeclass (x, tc) -> Ty.bindclass scope `Global (x, tc)
-      (* FIXME: section
-         would be nice to have proper bind here *)
-      | T.Th_instance (p, cr, lc) ->
-        { scope with
-          sc_env = EcEnv.TypeClass.add_instance p cr scope.sc_env }
-
-      | T.Th_baserw x ->
-              { scope with sc_env = EcEnv.BaseRw.add x scope.sc_env }
-
-      | T.Th_addrw (p, l) ->
-              { scope with sc_env = EcEnv.BaseRw.addto p l scope.sc_env }
-
-      | T.Th_reduction rule ->
-        { scope with sc_env = EcEnv.Reduction.add rule scope.sc_env }
-
-      | T.Th_auto (local, level, base, ps) ->
-        { scope with
-          sc_env = EcEnv.Auto.add ~local ~level ?base ps scope.sc_env }
-
-    and bind_items scope items =
-      List.fold_left bind_item scope items  in
-
-    bind_items scope items
+    let sc_env =
+      EcSection.exit_section (omap unloc name) scope.sc_env in
+    { scope with sc_env }
 
 end
 
@@ -2161,11 +2112,8 @@ module Reduction = struct
 
     in
 
-    let item = EcSection.SC_th_item (EcTheory.Th_reduction rules) in
-
     { scope with
-        sc_env = EcEnv.Reduction.add rules (env scope);
-        sc_section = EcSection.add item scope.sc_section; }
+      sc_env = EcSection.add_item (Th_reduction rules) scope.sc_env }
 end
 
 (* -------------------------------------------------------------------- *)
@@ -2178,31 +2126,15 @@ module Cloning = struct
   module R = EcTheoryReplay
 
   (* ------------------------------------------------------------------ *)
-  let onenv (tx : 'a -> EcEnv.env -> EcEnv.env) =
-    fun sc x -> { sc with sc_env = tx x (env sc) }
-
-  (* ------------------------------------------------------------------ *)
   let hooks : scope R.ovrhooks =
-    let thenter sc mode x = Theory.enter sc mode x in
     let thexit  sc pempty = snd (Theory.exit ?clears:None ~pempty sc) in
-
-    { R.henv     = (fun sc -> env sc);
-      R.hty      = Ty     .bind;
-      R.hop      = Op     .bind;
-      R.hmodty   = ModType.bind;
-      R.hmod     = Mod    .bind;
-      R.hax      = Ax     .bind;
-      R.hexport  = onenv EcEnv.Theory.export;
-      R.hbaserw  = onenv EcEnv.BaseRw.add;
-      R.haddrw   = onenv (curry EcEnv.BaseRw.addto);
-      R.hauto    = onenv (fun (local, level, base, names) ->
-                            EcEnv.Auto.add ~local ~level ?base names);
-      R.husered  = onenv EcEnv.Reduction.add;
-      R.htycl    = onenv (curry EcEnv.TypeClass.bind);
-      R.hinst    = onenv (curry EcEnv.TypeClass.add_instance);
-      R.hthenter = thenter;
-      R.hthexit  = thexit;
-      R.herr     = (fun ?loc -> hierror ?loc "%s"); }
+    let add_item scope i =
+      { scope with sc_env = EcSection.add_item i scope.sc_env } in
+    { R.henv      = (fun scope -> scope.sc_env);
+      R.hadd_item = add_item;
+      R.hthenter  = Theory.enter;
+      R.hthexit   = thexit;
+      R.herr      = (fun ?loc -> hierror ?loc "%s"); }
 
   (* ------------------------------------------------------------------ *)
   module Options = struct
@@ -2222,6 +2154,7 @@ module Cloning = struct
   let clone (scope : scope) mode (thcl : theory_cloning) =
     assert (scope.sc_pr_uc = None);
 
+(*
     if EcSection.in_section scope.sc_section then begin
       let oname = unloc thcl.pthc_base in
       let oname = omap fst (EcEnv.Theory.lookup_opt oname scope.sc_env) in
@@ -2234,7 +2167,7 @@ module Cloning = struct
       if thcl.pthc_local then
         hierror "cannot do a local clone outside of a section"
     end;
-
+ *)
     let { cl_name   = name;
           cl_theory = (opath, oth);
           cl_clone  = ovrds;
@@ -2251,14 +2184,14 @@ module Cloning = struct
     if thcl.pthc_import = Some `Include && EcUtils.is_some thcl.pthc_name then
       hierror "cannot give an alias to an included clone";
 
-    let cpath = EcEnv.root scope.sc_env in
+    let cpath = EcEnv.root (env scope) in
     let npath = if incl then cpath else EcPath.pqname cpath name in
 
     let (proofs, scope) =
       EcTheoryReplay.replay hooks
         ~abstract:opts.R.clo_abstract ~local:thcl.pthc_local ~incl
         ~clears:ntclr ~renames:rnms ~opath ~npath ovrds
-        scope (name, (fst oth).cth_struct)
+        scope (name, (fst oth).cth_items)
     in
 
     let proofs = List.pmap (fun axc ->
@@ -2287,8 +2220,12 @@ module Cloning = struct
     let scope =
       thcl.pthc_import |> ofold (fun flag scope ->
         match flag with
-        | `Import  -> { scope with sc_env = EcEnv.Theory.import npath scope.sc_env; }
-        | `Export  -> { scope with sc_env = EcEnv.Theory.export npath scope.sc_env; }
+        | `Import  ->
+          { scope with sc_env = EcSection.import npath scope.sc_env; }
+        | `Export  ->
+          { scope with
+            sc_env =
+              EcSection.add_item (Th_export(npath,`Global)) scope.sc_env; }
         | `Include -> scope)
         scope
 
@@ -2299,11 +2236,12 @@ end
 (* -------------------------------------------------------------------- *)
 module Search = struct
   let search (scope : scope) qs =
+    let env = env scope in
     let paths =
       let do1 fp =
         match unloc fp with
         | PFident (q, None) -> begin
-            match EcEnv.Op.all q.pl_desc scope.sc_env with
+            match EcEnv.Op.all q.pl_desc env with
             | [] ->
                 hierror ~loc:q.pl_loc "unknown operator: `%s'"
                   (EcSymbols.string_of_qsymbol q.pl_desc)
@@ -2336,7 +2274,7 @@ module Search = struct
         | _ ->
           let ps = ref Mid.empty in
           let ue = EcUnify.UniEnv.create None in
-          let fp = EcTyping.trans_pattern scope.sc_env ps ue fp in
+          let fp = EcTyping.trans_pattern env ps ue fp in
           `ByPattern ((ps, ue), fp)
       in List.map do1 qs in
 
@@ -2344,12 +2282,12 @@ module Search = struct
       let get_path r = function `ByPath s -> Sp.union r s | _ -> r in
       List.fold_left get_path Sp.empty paths in
 
-    let axioms = EcSearch.search scope.sc_env paths in
+    let axioms = EcSearch.search env paths in
     let axioms = EcSearch.sort relevant axioms in
 
     let buffer = Buffer.create 0 in
     let fmt    = Format.formatter_of_buffer buffer in
-    let ppe    = EcPrinting.PPEnv.ofenv scope.sc_env in
+    let ppe    = EcPrinting.PPEnv.ofenv env in
 
     List.iter (fun ax ->
       Format.fprintf fmt "%a@." (EcPrinting.pp_axiom ~long:true ppe) ax)

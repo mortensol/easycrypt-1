@@ -415,12 +415,9 @@ let is_local scenv (who : cbarg) =
   | `Type       p -> (EcEnv.Ty.by_path p scenv.sc_env).tyd_loca = `Local
   | `Op         p -> (EcEnv.Op.by_path p scenv.sc_env).op_loca  = `Local
   | `Ax         p -> (EcEnv.Ax.by_path p scenv.sc_env).ax_loca  = `Local
-  | `Module mp    ->
-      (* FIXME: section *)
-      assert false
-  | `ModuleType p ->
-      (* FIXME: section *)
-      assert false
+  | `Module mp    -> snd (EcEnv.Mod.by_mpath mp scenv.sc_env) = Some `Local
+  | `ModuleType p -> (EcEnv.ModTy.by_path p scenv.sc_env).tms_loca = `Local
+
 (* -------------------------------------------------------------------- *)
 type to_clear =
   { lc_theory    : Sp.t;
@@ -765,9 +762,7 @@ let generalize_modtype to_gen (name, ms) =
     let ms = EcSubst.subst_top_modsig to_gen.tg_subst ms in
     to_gen, Some (Th_modtype (name, ms))
 
-let generalize_module to_gen prefix me =
-  let path = EcPath.pqname prefix me.tme_expr.me_name in
-  let mp = mpath_crt path [] None in
+let generalize_module to_gen me =
   match me.tme_loca with
   | `Local -> to_gen, None
   | `Global ->
@@ -808,14 +803,13 @@ let generalize_auto to_gen (n,s,ps,lc) =
     if ps = [] then to_gen, None
     else to_gen, Some (Th_auto (n,s,ps,lc))
 
-(* FIXME : add locality for baserw addrw reduction auto *)
 let rec generalize_th_item to_gen prefix th_item =
   match th_item with
   | Th_type tydecl     -> generalize_tydecl to_gen prefix tydecl
   | Th_operator opdecl -> generalize_opdecl to_gen prefix opdecl
   | Th_axiom  ax       -> generalize_axiom  to_gen prefix ax
   | Th_modtype ms      -> generalize_modtype to_gen ms
-  | Th_module me       -> generalize_module  to_gen prefix me
+  | Th_module me       -> generalize_module  to_gen me
   | Th_theory cth      -> generalize_ctheory to_gen prefix cth
   | Th_export (p,lc)   -> generalize_export to_gen (p,lc)
   | Th_instance (ty,i,lc) -> generalize_instance to_gen (ty,i,lc)
@@ -827,7 +821,6 @@ let rec generalize_th_item to_gen prefix th_item =
 
 and generalize_ctheory to_gen prefix (name, (cth, thmode)) =
   let path = pqname prefix name in
-  (* FIXME: c'est quoi ce ctheory_clone ? *)
   let to_gen, cth_items =
     generalize_ctheory_struct to_gen path cth.cth_items in
   if cth_items = [] then
@@ -872,7 +865,7 @@ let generalize_lc_items scenv =
       tg_subst  = EcSubst.empty;
       tg_clear  = empty_locals;
     } in
-  generalize_lc_items to_gen (EcEnv.root scenv.sc_env) scenv.sc_items
+  generalize_lc_items to_gen (EcEnv.root scenv.sc_env) (List.rev scenv.sc_items)
 
 (* --------------------------------------------------------------- *)
 let get_locality scenv = scenv.sc_loca
@@ -909,48 +902,6 @@ let sc_th_item t item =
 
 let sc_decl_mod (id,mt,mr) = SC_decl_mod (id,mt,mr)
 
-(* -----------------------------------------------------------*)
-let enter_section (name : symbol option) (scenv : scenv) =
-  { sc_env = scenv.sc_env;
-    sc_top = Some scenv;
-    sc_loca = `Global;
-    sc_name = Sc name;
-    sc_insec = true;
-    sc_items = []; }
-
-let exit_section (name : symbol option) (scenv:scenv) =
-  match scenv.sc_name with
-  | Top  -> hierror "no section to close"
-  | Th _ -> hierror "cannot close a section containing pending theories"
-  | Sc sname ->
-    let get = odfl "<empty>" in
-    if sname <> name then
-      hierror "expecting [%s], not [%s]" (get sname) (get name);
-    let items = generalize_lc_items scenv in
-    let scenv = oget scenv.sc_top in
-    scenv, items
-
-(* -----------------------------------------------------------*)
-
-let enter_theory (name:symbol) (lc:is_local) scenv : scenv =
-  if not scenv.sc_insec && lc = `Local then
-     hierror "can not start a local theory outside of a section";
-  let sc_env = EcEnv.Theory.enter name scenv.sc_env in
-  {scenv with
-    sc_env;
-    sc_top  = Some scenv;
-    sc_loca = scenv.sc_loca;
-    sc_name = Th name;
-    sc_items = []; }
-
-let exit_theory ?clears ?pempty scenv =
-  match scenv.sc_name with
-  | Sc _    -> hierror "cannot close a theory containing pending sections"
-  | Top     -> hierror "no theory to close"
-  | Th name ->
-    let cth = EcEnv.Theory.close ?clears ?pempty scenv.sc_env in
-    let scenv = oget scenv.sc_top in
-    name, cth, scenv
 
 (* ---------------------------------------------------------------- *)
 
@@ -961,7 +912,6 @@ let is_abstract_ty = function
 let rec check_glob_mp_ty s scenv mp =
   let mtop = `Module (mastrip mp) in
   if is_declared scenv mtop then
-    (* FIXME section error msg *)
     hierror "global %s can't depend on declared module" s;
   if is_local scenv mtop then
     hierror "global %s can't depend on local module" s;
@@ -1097,67 +1047,67 @@ let check_typeclass scenv tc =
   (* FIXME section *)
   assert false
 
-let rec add_item (item : theory_item) (scenv:scenv) =
+let rec check_item item scenv =
+  match item with
+  | Th_type     (_,tyd) -> check_tyd scenv tyd
+  | Th_operator  (_,op) -> check_op  scenv op
+  | Th_axiom    (_, ax) -> check_ax scenv ax
+  | Th_modtype  (_, ms) -> check_modtype scenv ms
+  | Th_module        me -> check_module scenv me
+  | Th_typeclass (_,tc) -> check_typeclass scenv tc
+  | Th_theory (_,(cth, _)) -> check_ctheory scenv cth
+  | Th_export   (_, lc) -> assert (lc = `Global || scenv.sc_insec);
+  | Th_instance       _ -> () (* FIXME section: what to check *)
+  | Th_baserw (_,lc) ->
+    if (lc = `Local && not scenv.sc_insec) then
+      hierror "local base rewrite can only be declared inside section";
+  | Th_addrw (_,_,lc) ->
+    if (lc = `Local && not scenv.sc_insec) then
+      hierror "local hint rewrite can only be declared inside section";
+
+  | Th_auto (_, _, _, lc) ->
+    if (lc = `Local && not scenv.sc_insec) then
+      hierror "local hint can only be declared inside section";
+
+  | Th_reduction _ -> ()
+
+and check_ctheory scenv cth =
+  check_theory scenv cth.cth_items
+
+and check_theory scenv th = ()
+  (* FIXME section : how to check it recursively, need to add stuff in env ? *)
+
+let add_item (item : theory_item) (scenv:scenv) =
+  let item = if scenv.sc_loca = `Local then set_local_item item else item in
   let sc_items = SC_th_item item :: scenv.sc_items in
   let doit f =
     { scenv with
       sc_env = f scenv.sc_env;
       sc_items } in
-
+  check_item item scenv;
   match item with
-  | Th_type  (s,tyd) ->
-    check_tyd scenv tyd;
-    doit (EcEnv.Ty.bind s tyd)
+  | Th_type    (s,tyd) -> doit (EcEnv.Ty.bind s tyd)
+  | Th_operator (s,op) -> doit (EcEnv.Op.bind s op)
+  | Th_axiom   (s, ax) -> doit (EcEnv.Ax.bind s ax)
+  | Th_modtype (s, ms) -> doit (EcEnv.ModTy.bind s ms)
+  | Th_module       me -> doit (EcEnv.Mod.bind me.tme_expr.me_name me)
 
-  | Th_operator (s,op) ->
-    check_op scenv op;
-    doit (EcEnv.Op.bind s op)
-
-  | Th_axiom (s, ax) ->
-    check_ax scenv ax;
-    doit (EcEnv.Ax.bind s ax)
-
-  | Th_modtype (s, ms) ->
-    check_modtype scenv ms;
-    doit (EcEnv.ModTy.bind s ms)
-
-  | Th_module me ->
-    check_module scenv me;
-    doit (EcEnv.Mod.bind me.tme_expr.me_name me)
-
-  | Th_typeclass (s,tc) ->
-    check_typeclass scenv tc;
-    doit (EcEnv.TypeClass.bind s tc)
+  | Th_typeclass (s,tc) -> doit (EcEnv.TypeClass.bind s tc)
 
   | Th_theory (s,(cth, mode)) ->
-    (* FIXME section *)
     doit (EcEnv.Theory.bind ~mode ?src:cth.cth_source s cth.cth_items);
 
-  | Th_export (p, lc) ->
-    assert (lc = `Global || scenv.sc_insec);
-    doit (EcEnv.Theory.export p lc)
+  | Th_export (p, lc) -> doit (EcEnv.Theory.export p lc)
 
-  | Th_instance (tys,i,lc) ->
-    (* FIXME section: what to check *)
-    doit (EcEnv.TypeClass.add_instance tys i lc)
+  | Th_instance (tys,i,lc) -> doit (EcEnv.TypeClass.add_instance tys i lc)
 
-  | Th_baserw (s,lc) ->
-    if (lc = `Local && not scenv.sc_insec) then
-      hierror "local base rewrite can only be declared inside section";
-    doit (EcEnv.BaseRw.add s lc)
+  | Th_baserw (s,lc) -> doit (EcEnv.BaseRw.add s lc)
 
-  | Th_addrw (p,ps,lc) ->
-    if (lc = `Local && not scenv.sc_insec) then
-      hierror "local hint rewrite can only be declared inside section";
-    doit (EcEnv.BaseRw.addto p ps lc)
+  | Th_addrw (p,ps,lc) -> doit (EcEnv.BaseRw.addto p ps lc)
 
-  | Th_auto (level, base, ps, lc) ->
-    if (lc = `Local && not scenv.sc_insec) then
-      hierror "local hint can only be declared inside section";
-    doit (EcEnv.Auto.add ~level ?base ps lc)
+  | Th_auto (level, base, ps, lc) -> doit (EcEnv.Auto.add ~level ?base ps lc)
 
-  | Th_reduction r ->
-    doit (EcEnv.Reduction.add r)
+  | Th_reduction r -> doit (EcEnv.Reduction.add r)
 
 
 
@@ -1174,3 +1124,61 @@ let add (item:sc_item) (scenv:scenv) =
   match item with
   | SC_th_item item -> add_item item scenv
   | SC_decl_mod(id,mt,mr) -> add_decl_mod id mt mr scenv
+
+(* -----------------------------------------------------------*)
+let enter_section (name : symbol option) (scenv : scenv) =
+  { sc_env = scenv.sc_env;
+    sc_top = Some scenv;
+    sc_loca = `Global;
+    sc_name = Sc name;
+    sc_insec = true;
+    sc_items = []; }
+
+let exit_section (name : symbol option) (scenv:scenv) =
+  match scenv.sc_name with
+  | Top  -> hierror "no section to close"
+  | Th _ -> hierror "cannot close a section containing pending theories"
+  | Sc sname ->
+    let get = odfl "<empty>" in
+    if sname <> name then
+      hierror "expecting [%s], not [%s]" (get sname) (get name);
+    let items = generalize_lc_items scenv in
+    let scenv = oget scenv.sc_top in
+    List.fold_left (fun env i -> add_item i env) scenv items
+
+(* -----------------------------------------------------------*)
+
+let enter_theory (name:symbol) (lc:is_local) scenv : scenv =
+  if not scenv.sc_insec && lc = `Local then
+     hierror "can not start a local theory outside of a section";
+  let sc_env = EcEnv.Theory.enter name scenv.sc_env in
+  {scenv with
+    sc_env;
+    sc_top  = Some scenv;
+    sc_loca = scenv.sc_loca;
+    sc_name = Th name;
+    sc_items = []; }
+
+let exit_theory ?clears ?pempty scenv =
+  match scenv.sc_name with
+  | Sc _    -> hierror "cannot close a theory containing pending sections"
+  | Top     -> hierror "no theory to close"
+  | Th name ->
+    let cth = EcEnv.Theory.close ?clears ?pempty scenv.sc_env in
+    let scenv = oget scenv.sc_top in
+    name, cth, scenv
+
+(* -----------------------------------------------------------*)
+let import p scenv =
+  { scenv with sc_env = EcEnv.Theory.import p scenv.sc_env }
+
+let import_vars m scenv =
+  { scenv with
+    sc_env = EcEnv.Mod.import_vars scenv.sc_env m }
+
+let require ?mode x cth scenv =
+  { scenv with sc_env = EcEnv.Theory.require ?mode x cth scenv.sc_env }
+
+let astop scenv =
+  if scenv.sc_insec then hierror "can not require inside a section";
+  { scenv with sc_env = EcEnv.astop scenv.sc_env }

@@ -2782,8 +2782,8 @@ module Algebra = struct
     { env with env_tci =
         TypeClass.bind_instance ([], ty) (`Field cr) env.env_tci }
 
-  let add_ring  ty cr env = TypeClass.add_instance ([], ty) (`Ring  cr) env
-  let add_field ty cr env = TypeClass.add_instance ([], ty) (`Field cr) env
+  let add_ring  ty cr lc env = TypeClass.add_instance ([], ty) (`Ring  cr) lc env
+  let add_field ty cr lc env = TypeClass.add_instance ([], ty) (`Field cr) lc env
 end
 
 (* -------------------------------------------------------------------- *)

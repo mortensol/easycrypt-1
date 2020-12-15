@@ -301,12 +301,13 @@ let rec process_type (scope : EcScope.scope) (tyd : ptydecl located) =
   EcScope.check_state `InTop "type" scope;
 
   let tyname = (tyd.pl_desc.pty_tyvars, tyd.pl_desc.pty_name) in
+  let lc     = tyd.pl_desc.pty_locality in
   let scope =
     match tyd.pl_desc.pty_body with
-    | PTYD_Abstract bd -> EcScope.Ty.add          scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Alias    bd -> EcScope.Ty.define       scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Datatype bd -> EcScope.Ty.add_datatype scope (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Record   bd -> EcScope.Ty.add_record   scope (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Abstract bd -> EcScope.Ty.add          scope lc (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Alias    bd -> EcScope.Ty.define       scope lc (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Datatype bd -> EcScope.Ty.add_datatype scope lc (mk_loc tyd.pl_loc tyname) bd
+    | PTYD_Record   bd -> EcScope.Ty.add_record   scope lc (mk_loc tyd.pl_loc tyname) bd
   in
     EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
     scope
@@ -388,9 +389,9 @@ and process_axiom (scope : EcScope.scope) (ax : paxiom located) =
     scope
 
 (* -------------------------------------------------------------------- *)
-and process_th_open (scope : EcScope.scope) (abs, name) =
+and process_th_open (scope : EcScope.scope) (loca, abs, name) =
   EcScope.check_state `InTop "theory" scope;
-  EcScope.Theory.enter scope (if abs then `Abstract else `Concrete) name
+  EcScope.Theory.enter scope (if abs then `Abstract else `Concrete) (unloc name) loca
 
 (* -------------------------------------------------------------------- *)
 and process_th_close (scope : EcScope.scope) (clears, name) =
@@ -649,7 +650,7 @@ and process (ld : Loader.loader) (scope : EcScope.scope) g =
       | Gnotation    n    -> `Fct   (fun scope -> process_notation   scope  (mk_loc loc n))
       | Gabbrev      n    -> `Fct   (fun scope -> process_abbrev     scope  (mk_loc loc n))
       | Gaxiom       a    -> `Fct   (fun scope -> process_axiom      scope  (mk_loc loc a))
-      | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  (snd_map unloc name))
+      | GthOpen      name -> `Fct   (fun scope -> process_th_open    scope  name)
       | GthClose     info -> `Fct   (fun scope -> process_th_close   scope  info)
       | GthClear     info -> `Fct   (fun scope -> process_th_clear   scope  info)
       | GthRequire   name -> `Fct   (fun scope -> process_th_require ld scope name)
@@ -838,7 +839,7 @@ let pp_current_goal ?(all = false) stream =
       Format.fprintf stream "Remaining lemmas to prove:@\n%!";
       List.iter
         (fun ((_, ax), p, env) ->
-           let ppe = EcPrinting.PPEnv.ofenv env in
+           let ppe = EcPrinting.PPEnv.ofenv (EcSection.env env)in
            Format.fprintf stream " %s: %a@\n%!"
              (EcPath.tostring p)
              (EcPrinting.pp_form ppe) ax.EcDecl.ax_spec)

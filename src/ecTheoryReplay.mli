@@ -10,9 +10,6 @@
 open EcSymbols
 open EcPath
 open EcParsetree
-open EcTypes
-open EcDecl
-open EcModules
 open EcTheory
 open EcThCloning
 
@@ -30,32 +27,21 @@ type 'a ovrenv = {
   ovre_prefix   : (symbol list) EcUtils.pair;
   ovre_glproof  : (ptactic_core option * evtags option) list;
   ovre_abstract : bool;
-  ovre_local    : bool;
+  ovre_local    : EcTypes.is_local;
   ovre_hooks    : 'a ovrhooks;
 }
 
 and 'a ovrhooks = {
-  henv     : 'a -> EcEnv.env;
-  hty      : 'a -> (symbol * tydecl) -> 'a;
-  hop      : 'a -> (symbol * operator) -> 'a;
-  hmodty   : 'a -> (symbol * top_module_sig) -> 'a;
-  hmod     : 'a -> top_module_expr -> 'a;
-  hax      : 'a -> (symbol * axiom) -> 'a;
-  hexport  : 'a -> EcPath.path * is_local -> 'a;
-  hbaserw  : 'a -> symbol * is_local -> 'a;
-  haddrw   : 'a -> EcPath.path * EcPath.path list * is_local -> 'a;
-  hauto    : 'a -> int * string option * EcPath.path list * is_local -> 'a;
-  htycl    : 'a -> symbol * typeclass -> 'a;
-  hinst    : 'a -> (ty_params * ty) * tcinstance * is_local -> 'a;
-  husered  : 'a -> (EcPath.path * EcTheory.rule_option * EcTheory.rule option) list -> 'a;
-  hthenter : 'a -> thmode -> symbol -> 'a;
+  henv     : 'a -> EcSection.scenv;
+  hadd_item : 'a -> EcTheory.theory_item -> 'a;
+  hthenter : 'a -> thmode -> symbol -> EcTypes.is_local -> 'a;
   hthexit  : 'a -> [`Full | `ClearOnly | `No] -> 'a;
   herr     : 'b . ?loc:EcLocation.t -> string -> 'b;
 }
 
 (* -------------------------------------------------------------------- *)
 val replay : 'a ovrhooks
-  -> abstract:bool -> local:bool -> incl:bool
+  -> abstract:bool -> local:is_local -> incl:bool
   -> clears:Sp.t -> renames:(renaming list)
   -> opath:path -> npath:path -> evclone
   -> 'a -> symbol * theory_item list
