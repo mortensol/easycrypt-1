@@ -1601,7 +1601,7 @@ module Fun = struct
              let s =
                List.fold_left2
                  (fun s (x, _) a -> EcSubst.add_module s x a)
-                 EcSubst.empty params args
+                 (EcSubst.empty ()) params args
              in
              EcSubst.subst_function s o
       end
@@ -1901,7 +1901,7 @@ module Mod = struct
     let s =
       List.fold_left2
         (fun s (x, _) a -> EcSubst.add_module s x a)
-        EcSubst.empty params args
+        (EcSubst.empty ()) params args
     in
       f s o
 
@@ -2010,7 +2010,7 @@ module Mod = struct
         | Some x -> x
       in
       EcSubst.subst_modsig
-        ~params:(List.map fst modty.mt_params) EcSubst.empty modsig.tms_sig
+        ~params:(List.map fst modty.mt_params) (EcSubst.empty ()) modsig.tms_sig
     in
     module_expr_of_module_sig name modty modsig restr
 
@@ -2146,7 +2146,7 @@ module NormMp = struct
           let s =
             List.fold_left2
               (fun s (x, _) a -> EcSubst.add_module s x a)
-              EcSubst.empty params args in
+              (EcSubst.empty ()) params args in
           let mp = EcSubst.subst_mpath s mp in
           let args' = mp.EcPath.m_args in
           let args2 = if extra = [] then args' else args' @ extra in
@@ -2539,7 +2539,7 @@ module ModTy = struct
           let p2 = EcSubst.subst_modtype subst p2 in
             mod_type_equiv env p1 p2;
             EcSubst.add_module subst x1 (EcPath.mident x2))
-        EcSubst.empty mty1.mt_params mty2.mt_params
+        (EcSubst.empty ()) mty1.mt_params mty2.mt_params
     in
 
     if not (
@@ -2562,7 +2562,7 @@ module ModTy = struct
     let { tms_sig = sig_ } = by_path mt.mt_name env in
     let subst =
       List.fold_left2 (fun s (x1,_) a ->
-        EcSubst.add_module s x1 a) EcSubst.empty sig_.mis_params mt.mt_args in
+        EcSubst.add_module s x1 a) (EcSubst.empty ()) sig_.mis_params mt.mt_args in
     let items =
       EcSubst.subst_modsig_body subst sig_.mis_body in
     let params = mt.mt_params in

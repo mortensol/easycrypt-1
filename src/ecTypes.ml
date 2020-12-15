@@ -84,7 +84,7 @@ module Hsty = Why3.Hashcons.Make (struct
     match ty with
     | Tglob m          -> EcPath.m_fv Mid.empty m
     | Tunivar _        -> Mid.empty
-    | Tvar    _        -> Mid.empty
+    | Tvar    x        -> EcIdent.fv_singleton x  (* FIXME: Section: it was Mid.empty before *)
     | Ttuple  tys      -> union (fun a -> a.ty_fv) tys
     | Tconstr (_, tys) -> union (fun a -> a.ty_fv) tys
     | Tfun    (t1, t2) -> union (fun a -> a.ty_fv) [t1; t2]
@@ -973,13 +973,13 @@ let rec e_subst (s: e_subst) e =
       let tys  = List.Smart.map s.es_ty tys in
       let ty   = s.es_ty e.e_ty in
       let body = oget (Mp.find_opt p s.es_opdef) in
-        e_subst_op ty tys (List.map (e_subst s) args) body
+        e_subst_op ~freshen:s.es_freshen ty tys (List.map (e_subst s) args) body
 
   | Eop (p, tys) when Mp.mem p s.es_opdef ->
       let tys  = List.Smart.map s.es_ty tys in
       let ty   = s.es_ty e.e_ty in
       let body = oget (Mp.find_opt p s.es_opdef) in
-        e_subst_op ty tys [] body
+        e_subst_op ~freshen:s.es_freshen ty tys [] body
 
   | Eop (p, tys) ->
       let p'   = s.es_p p in
@@ -1000,7 +1000,7 @@ let rec e_subst (s: e_subst) e =
 
   | _ -> e_map s.es_ty (e_subst s) e
 
-and e_subst_op ety tys args (tyids, e) =
+and e_subst_op ~freshen ety tys args (tyids, e) =
   (* FIXME: factor this out *)
   (* FIXME: is es_freshen value correct? *)
 
@@ -1008,7 +1008,7 @@ and e_subst_op ety tys args (tyids, e) =
     let sty = Tvar.init tyids tys in
     let sty = ty_subst { ty_subst_id with ts_v = Mid.find_opt^~ sty; } in
     let sty = { e_subst_id with
-                  es_freshen = true;
+                  es_freshen = freshen;
                   es_ty      = sty } in
       e_subst sty e
   in

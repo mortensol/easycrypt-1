@@ -426,6 +426,7 @@ type to_clear =
   }
 
 type to_gen = {
+    tg_env    : EcEnv.env;
     tg_params  : (EcIdent.t * Sp.t) list;
     tg_binds  : bind list;
     tg_subst : EcSubst.subst;
@@ -601,7 +602,7 @@ let generalize_tydecl to_gen prefix (name, tydecl) =
     let tosubst = (List.map fst tydecl.tyd_params, tconstr path args) in
     (* For recursive type *)
     let tyd_type =
-      (EcSubst.subst_tydecl (EcSubst.add_tydef EcSubst.empty path tosubst)
+      (EcSubst.subst_tydecl (EcSubst.add_tydef (EcSubst.empty ~freshen:false ()) path tosubst)
         tydecl).tyd_type in
     (* Build the substitution for the remaining *)
     let to_gen =
@@ -663,7 +664,7 @@ let generalize_opdecl to_gen prefix (name, operator) =
         let body =
           match body with
           | OP_Fix opfix ->
-            let subst = EcSubst.add_opdef EcSubst.empty path tosubst in
+            let subst = EcSubst.add_opdef (EcSubst.empty ~freshen:false ()) path tosubst in
             let nb_extra = List.length extra_a in
             let opf_struct =
               let (l,i) = opfix.opf_struct in
@@ -698,7 +699,7 @@ let generalize_opdecl to_gen prefix (name, operator) =
           match body with
           | PR_Plain _ -> body
           | PR_Ind pri ->
-            let subst = EcSubst.add_pddef EcSubst.empty path tosubst in
+            let subst = EcSubst.add_pddef (EcSubst.empty ~freshen:false ()) path tosubst in
             let pri_args = extra_a @ pri.pri_args in
             let mk_ctor ctor =
               {ctor with
@@ -860,9 +861,10 @@ let rec generalize_lc_items to_gen prefix items =
 
 let generalize_lc_items scenv =
   let to_gen = {
+      tg_env    = scenv.sc_env;
       tg_params = [];
       tg_binds  = [];
-      tg_subst  = EcSubst.empty;
+      tg_subst  = (EcSubst.empty ~freshen:false ());
       tg_clear  = empty_locals;
     } in
   generalize_lc_items to_gen (EcEnv.root scenv.sc_env) (List.rev scenv.sc_items)

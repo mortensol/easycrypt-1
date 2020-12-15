@@ -396,6 +396,7 @@ and process_th_open (scope : EcScope.scope) (loca, abs, name) =
 (* -------------------------------------------------------------------- *)
 and process_th_close (scope : EcScope.scope) (clears, name) =
   let name = unloc name in
+  (* FIXME section: why this is done here ? *)
   EcScope.check_state `InTop "theory closing" scope;
   if (fst (EcScope.name scope)) <> name then
     EcScope.hierror

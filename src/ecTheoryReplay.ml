@@ -604,7 +604,7 @@ let replay (hooks : 'a ovrhooks)
   ~abstract ~local ~incl ~clears ~renames
   ~opath ~npath ovrds (scope : 'a) (name, items)
 =
-  let subst = EcSubst.add_path EcSubst.empty opath npath in
+  let subst = EcSubst.add_path (EcSubst.empty ()) opath npath in
   let ove   = {
     ovre_ovrd     = ovrds;
     ovre_rnms     = renames;

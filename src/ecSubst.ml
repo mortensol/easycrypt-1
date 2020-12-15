@@ -31,6 +31,7 @@ exception InconsistentSubst
 
 (* -------------------------------------------------------------------- *)
 type subst = {
+  sb_freshen : bool;
   sb_modules : EcPath.mpath Mid.t;
   sb_path    : EcPath.path Mp.t;
   sb_tydef   : (EcIdent.t list * ty) Mp.t;
@@ -39,7 +40,8 @@ type subst = {
 }
 
 (* -------------------------------------------------------------------- *)
-let empty : subst = {
+let empty ?(freshen=true) () : subst = {
+  sb_freshen = freshen;
   sb_modules = Mid.empty;
   sb_path    = Mp.empty;
   sb_tydef   = Mp.empty;
@@ -98,7 +100,7 @@ let _subst_of_subst s =
       s_pd  = s.sb_pddef; }
 
 let e_subst_of_subst (s:_subst) =
-  { es_freshen = true;
+  { es_freshen = s.s_s.sb_freshen;
     es_p       = s.s_p;
     es_ty      = s.s_ty;
     es_opdef   = s.s_op;
@@ -108,7 +110,7 @@ let e_subst_of_subst (s:_subst) =
 
 let f_subst_of_subst (s:_subst) =
   Fsubst.f_subst_init
-    ~freshen:true ~mods:s.s_s.sb_modules ~sty:s.s_sty
+    ~freshen:s.s_s.sb_freshen ~mods:s.s_s.sb_modules ~sty:s.s_sty
     ~opdef:s.s_op ~prdef:s.s_pd ()
 
 (* -------------------------------------------------------------------- *)
@@ -565,7 +567,7 @@ let subst_instance     s = subst_instance (_subst_of_subst s)
 
 (* -------------------------------------------------------------------- *)
 let freshen_type (typ, ty) =
-  let empty = _subst_of_subst empty in
+  let empty = _subst_of_subst (empty ()) in
   let typ' = List.map (subst_typaram empty) typ in
   let s = init_tparams empty typ typ' in
     (typ', s.s_ty ty)

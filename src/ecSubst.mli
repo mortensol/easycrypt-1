@@ -26,7 +26,7 @@ exception InconsistentSubst
 (* -------------------------------------------------------------------- *)
 type subst
 
-val empty      : subst
+val empty      : ?freshen:bool -> unit -> subst
 val is_empty   : subst -> bool
 
 (* -------------------------------------------------------------------- *)
@@ -57,7 +57,7 @@ val subst_top_module   : subst -> top_module_expr -> top_module_expr
 val subst_module_comps : subst -> module_comps -> module_comps
 val subst_modtype      : subst -> module_type -> module_type
 val subst_modsig       : ?params:(ident list) -> subst -> module_sig -> module_sig
-val subst_top_modsig       : subst -> top_module_sig -> top_module_sig
+val subst_top_modsig   : subst -> top_module_sig -> top_module_sig
 val subst_modsig_body  : subst -> module_sig_body -> module_sig_body
 
 (* -------------------------------------------------------------------- *)

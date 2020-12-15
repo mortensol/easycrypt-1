@@ -460,7 +460,7 @@ let rec check_sig_cnv mode (env:EcEnv.env) (sin:module_sig) (sout:module_sig) =
               (E_TyModCnv_SubTypeArg(xin, tyout, tyin, err))
         end;
         EcSubst.add_module subst xout (EcPath.mident xin))
-      EcSubst.empty sin.mis_params sout.mis_params
+      (EcSubst.empty ()) sin.mis_params sout.mis_params
   in
   (* Check for body inclusion (w.r.t the parameters names substitution).
    * This includes:
@@ -715,7 +715,7 @@ let rec trans_msymbol (env : EcEnv.env) (msymb : pmsymbol located) =
       let subst =
           List.fold_left2
             (fun s (x,_) a -> EcSubst.add_module s x a)
-            EcSubst.empty params args
+            (EcSubst.empty ()) params args
       in
 
       let keepcall =
