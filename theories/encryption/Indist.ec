@@ -142,13 +142,13 @@ section.
     }
   }.
 
-  axiom losslessL: islossless O.leaks.
-  axiom losslessO: islossless O.orcl.
-  axiom losslessA (O <: Orcl{A}) (LR <: LR{A}):
+  declare axiom losslessL: islossless O.leaks.
+  declare axiom losslessO: islossless O.orcl.
+  declare axiom losslessA (O <: Orcl{A}) (LR <: LR{A}):
     islossless LR.orcl =>
     islossless O.leaks => islossless O.orcl =>
     islossless A(O, LR).main.
-  axiom q_pos : 0 < q.
+  declare axiom q_pos : 0 < q.
 
   lemma IND1_INDn &m (p:glob A -> glob O -> int -> bool):
      Pr[INDL(O,HybGame2(A)).main() @ &m : res /\ p (glob A) (glob O) HybOrcl.l /\

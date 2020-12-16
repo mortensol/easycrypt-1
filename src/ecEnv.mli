@@ -196,8 +196,6 @@ module Mod : sig
   val declare_local : EcIdent.t -> module_type -> mod_restr -> env -> env
   val is_declared   : EcIdent.t -> env -> bool
 
-  val add_restr_to_locals : mod_restr -> env -> env
-
   val import_vars : env -> mpath -> env
 
   (* Only bind module, ie no memory and no local variable *)

@@ -195,10 +195,10 @@ section.
     by wp;rnd;wp;skip;progress => //;smt.
   qed.
 
-  axiom losslessL: islossless Ob.leaks.
-  axiom losslessOb1: islossless Ob.orclL.
-  axiom losslessOb2: islossless Ob.orclR.
-  axiom losslessA (Ob0 <: Orclb{A}) (LR <: Orcl{A}):
+  declare axiom losslessL: islossless Ob.leaks.
+  declare axiom losslessOb1: islossless Ob.orclL.
+  declare axiom losslessOb2: islossless Ob.orclR.
+  declare axiom losslessA (Ob0 <: Orclb{A}) (LR <: Orcl{A}):
     islossless LR.orcl =>
     islossless Ob0.leaks => islossless Ob0.orclL => islossless Ob0.orclR =>
     islossless A(Ob0, LR).main.
@@ -366,7 +366,7 @@ section.
   declare module Ob <: Orclb    {Count,HybOrcl}.
   declare module A <: AdvOrclb {Count,HybOrcl,Ob}.
 
-  axiom A_call : forall (O<:Orcl{Count,A}), hoare [ Orcln(A(Ob), O).main : true ==> Count.c <= q ].
+  declare axiom A_call : forall (O<:Orcl{Count,A}), hoare [ Orcln(A(Ob), O).main : true ==> Count.c <= q ].
 
   local module Al = Orcln(A(Ob),HybOrcl(Ob,L(Ob))).
 
@@ -452,10 +452,10 @@ section.
     apply eq_sym.  byequiv B_Br => //.
   qed.
 
-  axiom losslessL: islossless Ob.leaks.
-  axiom losslessOb1: islossless Ob.orclL.
-  axiom losslessOb2: islossless Ob.orclR.
-  axiom losslessA (Ob0 <: Orclb{A}) (LR <: Orcl{A}):
+  declare axiom losslessL: islossless Ob.leaks.
+  declare axiom losslessOb1: islossless Ob.orclL.
+  declare axiom losslessOb2: islossless Ob.orclR.
+  declare axiom losslessA (Ob0 <: Orclb{A}) (LR <: Orcl{A}):
     islossless LR.orcl =>
     islossless Ob0.leaks => islossless Ob0.orclL => islossless Ob0.orclR =>
     islossless A(Ob0, LR).main.

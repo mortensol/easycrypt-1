@@ -410,7 +410,7 @@ qed.
  **)
 section Upto.
   declare module D <: PRFt.Distinguisher {RP, PRFi}.
-  axiom D_ll (O <: PRF_Oracles {D}): islossless O.f => islossless D(O).distinguish.
+  declare axiom D_ll (O <: PRF_Oracles {D}): islossless O.f => islossless D(O).distinguish.
 
   local module PRP_indirect_bad = {
     var bad : bool
@@ -539,8 +539,8 @@ end section PRPi_PRPi'_Indirect.
 section CollisionProbability.
   declare module D <: Distinguisher {RP, PRFi}.
 
-  axiom D_ll (O <: PRF_Oracles {D}): islossless O.f => islossless D(O).distinguish.
-  axiom D_bounded  : hoare [D(PRFi).distinguish : PRFi.m = empty ==> card (fdom PRFi.m) <= q].
+  declare axiom D_ll (O <: PRF_Oracles {D}): islossless O.f => islossless D(O).distinguish.
+  declare axiom D_bounded  : hoare [D(PRFi).distinguish : PRFi.m = empty ==> card (fdom PRFi.m) <= q].
 
   local clone import Birthday as BBound with
     op   q <- q,
@@ -553,6 +553,8 @@ section CollisionProbability.
   proof.
   by move=> x; exact/StdOrder.RealOrder.lerr_eq/dD_funi.
   qed.
+
+  local module D1 : Distinguisher = D.
 
   (* We construct a Birthday Bound adversary from the IND
      experiment. *)

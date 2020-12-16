@@ -2846,10 +2846,13 @@ and pp_moditem ppe fmt (p, i) =
 let pp_modexp ppe fmt (mp, me) =
   Format.fprintf fmt "%a." (pp_modexp ppe) (mp, me)
 
+let pp_modexp_lc ppe fmt (mp, (me, olc)) =
+  let lc = odfl `Global olc in
+ Format.fprintf fmt "%a%a" pp_locality lc (pp_modexp ppe) (mp, me)
+
 let pp_top_modexp ppe fmt (p, me) =
   let mp = EcPath.mpath_crt p [] (Some (EcPath.psymbol me.tme_expr.me_name)) in
-  Format.fprintf fmt "%a%a"
-    pp_locality me.tme_loca (pp_modexp ppe) (mp, me.tme_expr)
+  pp_modexp_lc ppe fmt (mp, (me.tme_expr, Some me.tme_loca))
 
 let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
   let basename = EcPath.basename path in
@@ -3065,7 +3068,7 @@ module ObjectInfo = struct
   let pr_mod_r =
     { od_name    = "modules";
       od_lookup  = EcEnv.Mod.lookup;
-      od_printer = (fun ppe fmt (p, (me, _)) -> pp_modexp ppe fmt (p, me)); }
+      od_printer = pp_modexp_lc; }
 
   let pr_mod = pr_gen pr_mod_r
 

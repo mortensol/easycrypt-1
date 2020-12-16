@@ -1991,10 +1991,61 @@ module Mod = struct
   let lookup_path name env =
     fst (lookup name env)
 
+  let add_xs_to_declared xs env =
+    Sx.iter (fun xp -> Format.eprintf "[W]%s@." (EcPath.x_tostring xp)) xs;
+    let update_id id mods =
+      Format.eprintf "[W] to %s@." (EcIdent.tostring id);
+      let update me =
+        match me.me_body with
+        | ME_Decl (mt, (rx2, r2)) ->
+          { me with me_body = ME_Decl (mt, (Sx.union xs rx2, r2)) }
+        | _ -> me
+      in
+      MMsym.map_at
+        (List.map
+           (fun (ip, (me, lc)) ->
+             if   ip = IPIdent (id, None)
+             then (ip, (update me, lc))
+             else (ip, (me, lc))))
+        (EcIdent.name id) mods
+    in
+    let envc =  { env.env_current
+              with mc_modules =
+        Sid.fold update_id env.env_modlcs
+          env.env_current.mc_modules; } in
+    let en = !(env.env_norm) in
+    let norm = { en with get_restr = Mm.empty } in
+    { env with env_current = envc;
+      env_norm = ref norm;
+    }
+
+  let rec vars_me mp xs me =
+    vars_mb (EcPath.mqname mp me.me_name) xs me.me_body
+  and vars_mb mp xs = function
+    | ME_Alias _ | ME_Decl _ -> xs
+    | ME_Structure ms ->
+      List.fold_left (vars_item mp) xs ms.ms_body
+   and vars_item mp xs = function
+     | MI_Module me  -> vars_me mp xs me
+     | MI_Variable v -> Sx.add (EcPath.xpath_fun mp v.v_name) xs
+     | MI_Function _ -> xs
+
+  let add_restr_to_declared me env =
+    if me.tme_loca = `Local then
+      let p = pqname (root env) me.tme_expr.me_name in
+      Format.eprintf "[W] add restr %s@." (EcPath.tostring p);
+      let mp = EcPath.mpath_crt p [] None in
+      let xs = vars_mb mp Sx.empty me.tme_expr.me_body  in
+      add_xs_to_declared xs env
+    else env
+
   let bind name me env =
-    { (MC.bind_mod name me env) with
-          env_item = Th_module me :: env.env_item;
-          env_norm = ref !(env.env_norm); }
+    assert (name = me.tme_expr.me_name);
+    let env =
+      { (MC.bind_mod name me env) with
+        env_item = Th_module me :: env.env_item;
+        env_norm = ref !(env.env_norm); } in
+    add_restr_to_declared me env
 
   let me_of_mt env name modty restr =
     let modsig =
@@ -2037,36 +2088,6 @@ module Mod = struct
         env_modlcs = Sid.add id env.env_modlcs; }
 
   let is_declared id env = Sid.mem id env.env_modlcs
-
-  let add_restr_to_locals restr env =
-
-    let union_restr (rx1,r1) (rx2,r2) =
-      Sx.union rx1 rx2, Sm.union r1 r2 in
-
-    let update_id id mods =
-      let update me =
-        match me.me_body with
-        | ME_Decl (mt, r) ->
-          { me with me_body = ME_Decl (mt, union_restr restr r) }
-        | _ -> me
-      in
-      MMsym.map_at
-        (List.map
-           (fun (ip, (me, lc)) ->
-             if   ip = IPIdent (id, None)
-             then (ip, (update me, lc))
-             else (ip, (me, lc))))
-        (EcIdent.name id) mods
-    in
-    let envc =  { env.env_current
-              with mc_modules =
-        Sid.fold update_id env.env_modlcs
-          env.env_current.mc_modules; } in
-    let en = !(env.env_norm) in
-    let norm = { en with get_restr = Mm.empty } in
-    { env with env_current = envc;
-      env_norm = ref norm;
-    }
 
   let bind_locals bindings env =
     List.fold_left

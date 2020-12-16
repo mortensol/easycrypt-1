@@ -199,7 +199,7 @@ lemma FRO_set_ll : islossless FRO.set.
 proof. by proc; auto. qed.
 
 section ConditionalLL.
-axiom dout_ll x: is_lossless (dout x).
+declare axiom dout_ll x: is_lossless (dout x).
 
 lemma RO_get_ll : islossless RO.get.
 proof. by proc; auto=> />; rewrite dout_ll. qed.

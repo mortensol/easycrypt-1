@@ -1335,25 +1335,6 @@ end
 module Mod = struct
   module TT = EcTyping
 
-  (* FIXME section: move this in EcEnv *)
-  let add_local_restr env path m =
-    let mpath = EcPath.pqname path m.me_name in
-    match m.me_body with
-    | ME_Alias _ | ME_Decl _ -> env
-    | ME_Structure _ ->
-      (* We keep only the internal part, i.e the inner global variables *)
-      (* TODO : using mod_use here to compute the set of inner global
-         variables is inefficient, change this algo *)
-      let mp = EcPath.mpath_crt mpath [] None in
-      let use = EcEnv.NormMp.mod_use env mp in
-      let rx =
-        let add x _ rx =
-          if EcPath.m_equal (EcPath.m_functor x.EcPath.x_top) mp then
-            Sx.add x rx
-          else rx in
-        Mx.fold add use.EcEnv.us_pv EcPath.Sx.empty in
-      EcEnv.Mod.add_restr_to_locals (rx,EcPath.Sm.empty) env
-
   let bind (scope : scope) (m : top_module_expr) =
     assert (scope.sc_pr_uc = None);
     { scope with
@@ -1928,37 +1909,6 @@ module Theory = struct
 
   (* ------------------------------------------------------------------ *)
   let exit ?(pempty = `ClearOnly) ?(clears =[]) (scope : scope) =
-    (* FIXME section: this should be done in EcEnv *)
-(*
-    let rec add_restr1 section where env item : EcEnv.env =
-      match item with
-      | EcTheory.Th_theory (name, th) ->
-          add_restr section (EcPath.pqname where name) th env
-
-      | EcTheory.Th_module me ->
-          if EcSection.in_section section then begin
-            let islocal =
-              EcSection.is_local `Module
-                (EcPath.pqname where me.me_name)
-                (EcSection.locals section)
-            in
-
-            if islocal then
-              Mod.add_local_restr env where me
-            else
-              env
-          end else
-            env
-
-      | _ -> env
-
-    and add_restr section where (th, thmode) env =
-      match thmode with
-      | `Abstract -> env
-      | `Concrete ->
-          List.fold_left (add_restr1 section where) env th.EcTheory.cth_items
-    in
- *)
     assert (scope.sc_pr_uc = None);
 
     let cth = exit_r ~pempty (add_clears clears scope) in
@@ -1967,14 +1917,6 @@ module Theory = struct
     let scope =
       ofold (fun cth scope -> bind scope (name, (cth, mode)))
           scope cth in
-(*
-    let scope = cth |> ofold (fun cth scope ->
-    let scope = bind scope (name, (cth, mode)) in
-      { scope with sc_env =
-          add_restr section
-            (EcPath.pqname (path scope) name) (cth, mode) scope.sc_env })
-      scope *)
-
     (name, scope)
 
   (* ------------------------------------------------------------------ *)

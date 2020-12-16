@@ -68,7 +68,7 @@ module Exp(S:Sampler,A:Adv) = {
     by q^2/|T|                                                        **)
 section.
   declare module A <: Adv {Sample}.
-  axiom A_ll (S <: ASampler {A}): islossless S.s => islossless A(S).a.
+  declare axiom A_ll (S <: ASampler {A}): islossless S.s => islossless A(S).a.
 
   lemma pr_Sample_le &m:
     Pr[Exp(Sample,A).main() @ &m : size Sample.l <= q /\ !uniq Sample.l]
@@ -93,7 +93,7 @@ section.
     smt(ge0_q).
   qed.
 
-  axiom A_bounded: hoare [A(Sample).a : size Sample.l = 0 ==> size Sample.l <= q].
+  declare axiom A_bounded: hoare [A(Sample).a : size Sample.l = 0 ==> size Sample.l <= q].
 
   local lemma aux &m : 
     Pr[Exp(Sample,A).main() @ &m: !uniq Sample.l] =
@@ -167,7 +167,7 @@ proof. by proc; inline*; sim. qed.
 section.
   declare module A <: Adv {Sample,Bounder}.
 
-  axiom A_ll (S <: ASampler {A}): islossless S.s => islossless A(S).a.
+  declare axiom A_ll (S <: ASampler {A}): islossless S.s => islossless A(S).a.
 
   lemma pr_collision_bounded_oracles &m:
     Pr[Exp(Bounder(Sample),A).main() @ &m: !uniq Sample.l]

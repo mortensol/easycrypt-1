@@ -308,50 +308,52 @@ let on_tydecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (tyd : tydecl) =
      List.iter (on_form cb) [dt.tydt_schelim; dt.tydt_schcase]
 
 (* -------------------------------------------------------------------- *)
-let on_opdecl (cb : cb) (opdecl : operator) =
+let on_opdecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (opdecl : operator) =
   let for_kind () =
     match opdecl.op_kind with
    | OB_pred None -> ()
 
    | OB_pred (Some (PR_Plain f)) ->
-      on_form cb f
+      on_form (cb env) f
 
    | OB_pred (Some (PR_Ind pri)) ->
-      on_bindings cb pri.pri_args;
-      List.iter (fun ctor ->
-        on_gbindings cb ctor.prc_bds;
-        List.iter (on_form cb) ctor.prc_spec)
-      pri.pri_ctors
+     let cb = cb env in
+     on_bindings cb pri.pri_args;
+     List.iter (fun ctor ->
+         on_gbindings cb ctor.prc_bds;
+         List.iter (on_form cb) ctor.prc_spec)
+       pri.pri_ctors
 
-   | OB_nott nott -> begin
-      List.iter (on_ty cb |- snd) nott.ont_args;
-      on_ty cb nott.ont_resty;
-      on_expr cb nott.ont_body
-     end
+   | OB_nott nott ->
+     let cb = cb env in
+     List.iter (on_ty cb |- snd) nott.ont_args;
+     on_ty cb nott.ont_resty;
+     on_expr cb nott.ont_body
 
    | OB_oper None   -> ()
    | OB_oper Some b ->
-       match b with
-       | OP_Constr _ -> ()
-       | OP_Record _ -> ()      (* FIXME: section *)
-       | OP_Proj   _ -> ()      (* FIXME: section *)
-       | OP_TC       -> ()
-       | OP_Plain  (e, _) -> on_expr cb e
-       | OP_Fix    f ->
-         let rec on_mpath_branches br =
-           match br with
-           | OPB_Leaf (bds, e) ->
-               List.iter (on_bindings cb) bds;
-               on_expr cb e
-           | OPB_Branch br ->
-               Parray.iter on_mpath_branch br
+     match b with
+     | OP_Constr _ | OP_Record _ | OP_Proj   _ -> assert false
+     | OP_TC -> assert false
+     | OP_Plain  (e, _) -> on_expr (cb env) e
+     | OP_Fix    f ->
+       let env =
+         EcEnv.Op.bind name { opdecl with op_kind = OB_oper None } env in
+       let cb = cb env in
+       let rec on_mpath_branches br =
+         match br with
+         | OPB_Leaf (bds, e) ->
+           List.iter (on_bindings cb) bds;
+           on_expr cb e
+         | OPB_Branch br ->
+           Parray.iter on_mpath_branch br
 
-         and on_mpath_branch br =
-           on_mpath_branches br.opb_sub
+       and on_mpath_branch br =
+         on_mpath_branches br.opb_sub
 
-         in on_mpath_branches f.opf_branches
+       in on_mpath_branches f.opf_branches
 
-  in on_ty cb opdecl.op_ty; for_kind ()
+  in on_ty (cb env) opdecl.op_ty; for_kind ()
 
 (* -------------------------------------------------------------------- *)
 let on_axiom (cb : cb) (ax : axiom) =
@@ -419,7 +421,12 @@ let is_local (env : EcEnv.env) (who : cbarg) =
   | `Type       p -> (EcEnv.Ty.by_path p env).tyd_loca = `Local
   | `Op         p -> (EcEnv.Op.by_path p env).op_loca  = `Local
   | `Ax         p -> (EcEnv.Ax.by_path p env).ax_loca  = `Local
-  | `Module mp    -> snd (EcEnv.Mod.by_mpath mp env) = Some `Local
+  | `Module mp    ->
+    begin match EcEnv.Mod.by_mpath_opt mp env with
+    | Some (_, lc) -> lc = Some `Local
+     (* it this case it should be a quantified module *)
+    | None         -> false
+    end
   | `ModuleType p -> (EcEnv.ModTy.by_path p env).tms_loca = `Local
 
 (* -------------------------------------------------------------------- *)
@@ -708,6 +715,8 @@ let generalize_opdecl to_gen prefix (name, operator) =
           EcSubst.add_opdef to_gen.tg_subst path tosubst in
         let body =
           match body with
+          | OP_Constr _ | OP_Record _ | OP_Proj _ -> assert false
+          | OP_TC -> assert false (* ??? *)
           | OP_Plain (e,nosmt) ->
             OP_Plain (e_lam extra_a e, nosmt)
           | OP_Fix opfix ->
@@ -723,9 +732,11 @@ let generalize_opdecl to_gen prefix (name, operator) =
                 opf_branches = EcSubst.subst_branches subst opfix.opf_branches;
                 opf_nosmt    = opfix.opf_nosmt;
               }
-
-          | _ -> body in
-        tg_subst, {op_tparams; op_ty; op_kind = OB_oper (Some body); op_loca = `Global }
+        in
+        let operator =
+          {op_tparams; op_ty;
+           op_kind = OB_oper (Some body); op_loca = `Global } in
+        tg_subst, operator
 
       | OB_pred (Some body) ->
         let fv = pr_body_fv body operator.op_ty in
@@ -747,18 +758,13 @@ let generalize_opdecl to_gen prefix (name, operator) =
           | PR_Plain f ->
             PR_Plain (f_lambda (List.map (fun (x,ty) -> (x,GTty ty)) extra_a) f)
           | PR_Ind pri ->
-            let subst = EcSubst.add_pddef (EcSubst.empty ~freshen:false ()) path tosubst in
             let pri_args = extra_a @ pri.pri_args in
-            let mk_ctor ctor =
-              {ctor with
-                (* FIXME section should we generalize here *)
-                prc_bds =
-                  List.map (fun (id,ty) -> id, gtty ty) extra_a @ ctor.prc_bds;
-                prc_spec = List.map (EcSubst.subst_form subst) ctor.prc_spec;
-              } in
-            let pri_ctors = List.map mk_ctor pri.pri_ctors in
-            PR_Ind { pri_args; pri_ctors } in
-        tg_subst, {op_tparams; op_ty; op_kind = OB_pred (Some body); op_loca = `Global }
+            PR_Ind { pri with pri_args }
+        in
+        let operator =
+          {op_tparams; op_ty;
+           op_kind = OB_pred (Some body); op_loca = `Global } in
+        tg_subst, operator
 
 
       | OB_nott nott ->
@@ -1024,7 +1030,7 @@ let cb_glob scenv (who:cbarg) =
         (EcPath.tostring p)
   | `Ax _ -> assert false
 
-let check_op scenv op =
+let check_op scenv name op =
   match op.op_loca with
   | `Local ->
     check_local scenv
@@ -1041,9 +1047,9 @@ let check_op scenv op =
     end
   | `Global ->
     (* FIXME: need to do something special for fixpoint *)
-    on_opdecl (cb_glob scenv.sc_env) op
+    on_opdecl scenv.sc_env cb_glob name op
 
-let check_ax scenv ax =
+let check_ax scenv name ax =
   match ax.ax_loca with
   | `Local ->
     check_local scenv;
@@ -1057,8 +1063,17 @@ let check_ax scenv ax =
       hierror "can't declare a lemma";
     on_axiom (cb_glob scenv.sc_env) ax
   | `Global ->
-    if scenv.sc_insec then
-      on_axiom (cb_glob scenv.sc_env) ax
+    let as_decl = ref false in
+    let env = scenv.sc_env in
+    let doit who =
+      if is_declared env who then as_decl := true;
+      cb_glob env who in
+    let doit =
+      if is_axiom ax.ax_kind then doit
+      else cb_glob env in
+    on_axiom doit ax;
+    if !as_decl then
+      Format.eprintf "[W]Warning global axiom in section@."
 
 
 let cb_mod scenv s (who : cbarg) =
@@ -1107,8 +1122,8 @@ let check_typeclass scenv tc =
 let rec check_item item scenv =
   match item with
   | Th_type     (s,tyd) -> check_tyd scenv s tyd
-  | Th_operator  (_,op) -> check_op  scenv op
-  | Th_axiom    (_, ax) -> check_ax scenv ax
+  | Th_operator  (s,op) -> check_op  scenv s op
+  | Th_axiom    (s, ax) -> check_ax scenv s ax
   | Th_modtype  (_, ms) -> check_modtype scenv ms
   | Th_module        me -> check_module scenv me
   | Th_typeclass (_,tc) -> check_typeclass scenv tc
@@ -1215,7 +1230,7 @@ let enter_theory (name:symbol) (lc:is_local) scenv : scenv =
   {scenv with
     sc_env;
     sc_top  = Some scenv;
-    sc_loca = scenv.sc_loca;
+    sc_loca = if lc = `Local then lc else scenv.sc_loca;
     sc_name = Th name;
     sc_items = []; }
 

@@ -164,9 +164,9 @@ section.
 
   declare module A <: AdvCPA {K,H.Count,H.HybOrcl,S}.
 
-  axiom Lkg  : islossless S.kg.
-  axiom Lenc : islossless S.enc.
-  axiom La   : forall (LR<:LR{A}), islossless LR.orcl => islossless A(LR).main.
+  declare axiom Lkg  : islossless S.kg.
+  declare axiom Lenc : islossless S.enc.
+  declare axiom La   : forall (LR<:LR{A}), islossless LR.orcl => islossless A(LR).main.
 
   lemma CPA1_CPAn &m : 0 < H.q =>
     Pr[CPAL(S,B(S,A)).main() @ &m : res /\ H.HybOrcl.l <= H.q /\ K.c <= 1] -
