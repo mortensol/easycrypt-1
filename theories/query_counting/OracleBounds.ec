@@ -103,10 +103,10 @@ module IND (O:Oracle, A:Adv) = {
 
 section.
   declare module O <: Oracle {Count}.
-  axiom O_fL: islossless O.f.
+  declare axiom O_fL: islossless O.f.
 
   declare module A <: Adv {Count(O)}.
-  axiom A_distinguishL (O <: Oracle {A}):
+  declare axiom A_distinguishL (O <: Oracle {A}):
     islossless O.f =>
     islossless A(O).distinguish.
 
@@ -140,10 +140,10 @@ theory EnfPen.
 
   section.
     declare module O <: Oracle {Count}.
-    axiom O_fL: islossless O.f.
+    declare axiom O_fL: islossless O.f.
 
     declare module A <: Adv {Count(O)}.
-    axiom A_distinguishL (O <: Oracle {A}):
+    declare axiom A_distinguishL (O <: Oracle {A}):
       islossless O.f =>
       islossless A(O).distinguish.
 
@@ -183,15 +183,15 @@ theory PenBnd.
 
   section.
     declare module O <: Oracle {Count}.
-    axiom O_fL: islossless O.f.
+    declare axiom O_fL: islossless O.f.
 
     declare module A <: Adv {Count(O)}.
-    axiom A_distinguishL (O <: Oracle {A}):
+    declare axiom A_distinguishL (O <: Oracle {A}):
       islossless O.f =>
       islossless A(O).distinguish.
-    axiom A_distinguishC:
+    declare axiom A_distinguishC:
       phoare[A(Count(O)).distinguish: Counter.c = 0 ==> Counter.c <= bound] = 1%r.
-    axiom A_distinguishC_E:
+    declare axiom A_distinguishC_E:
       equiv[A(Count(O)).distinguish ~ A(Count(O)).distinguish:
               ={glob A, glob O, Counter.c} /\ Counter.c{1} = 0 ==>
               ={glob A, glob O, res, Counter.c} /\ Counter.c{1} <= bound].
@@ -227,10 +227,10 @@ theory BndPen.
 
   section.
     declare module O <: Oracle {Count}.
-    axiom O_fL: islossless O.f.
+    declare axiom O_fL: islossless O.f.
 
     declare module A <: Adv {Count(O)}.
-    axiom A_distinguishL (O <: Oracle {A}):
+    declare axiom A_distinguishL (O <: Oracle {A}):
       islossless O.f =>
       islossless A(O).distinguish.
 

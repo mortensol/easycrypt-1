@@ -718,7 +718,7 @@ end EagerCore.
 (* -------------------------------------------------------------------- *)
 section.
 declare module D <: RO_Distinguisher { RO, FRO }.
-axiom dout_ll x: is_lossless (dout x).
+declare axiom dout_ll x: is_lossless (dout x).
 
 local clone import EagerCore as InnerProof
 proof dout_ll by exact/dout_ll.

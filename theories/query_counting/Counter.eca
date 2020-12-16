@@ -63,7 +63,7 @@ op q : { int | 0 <= q } as ge0_q.
 section.
   declare module D <: Distinguisher { Counter }.
 
-  axiom D_bounded (S <: System { Counter, D }) c0 &m:
+  declare axiom D_bounded (S <: System { Counter, D }) c0 &m:
     islossless S.oracle =>
     Counter.c{m} = c0 =>
     Pr[D(Counter(S)).distinguish() @ &m : Counter.c <= c0 + q] = 1%r.

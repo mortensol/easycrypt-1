@@ -61,7 +61,7 @@ section.
 
   declare module A <: H.AdvOrclb{Count,HybOrcl,DDHb}.
 
-  axiom losslessA : forall (Ob0 <: Orclb{A}) (LR <: Orcl{A}),
+  declare axiom losslessA : forall (Ob0 <: Orclb{A}) (LR <: Orcl{A}),
     islossless LR.orcl =>
     islossless Ob0.leaks =>
     islossless Ob0.orclL =>

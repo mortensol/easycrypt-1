@@ -182,7 +182,9 @@ local clone import PROM.FullRO as H with
   type out_t   <- out_t,
   type d_in_t  <- d_in_t,
   type d_out_t <- d_out_t,
-  op   dout    <- dout.
+  op   dout    <- dout
+  proof *.
+
 
 local module Wrap (O : RO) : Oracle = {
   proc init() = {

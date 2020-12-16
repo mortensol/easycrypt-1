@@ -1054,7 +1054,7 @@ let check_ax scenv name ax =
   | `Local ->
     check_local scenv;
     if is_axiom ax.ax_kind then
-      hierror "axiom can't be local"
+      hierror "axiom %s can't be local" name
   | `Declare ->
     check_declare scenv;
     if ax.ax_tparams <> [] then
@@ -1063,18 +1063,9 @@ let check_ax scenv name ax =
       hierror "can't declare a lemma";
     on_axiom (cb_glob scenv.sc_env) ax
   | `Global ->
-    let as_decl = ref false in
-    let env = scenv.sc_env in
-    let doit who =
-      if is_declared env who then as_decl := true;
-      cb_glob env who in
-    let doit =
-      if is_axiom ax.ax_kind then doit
-      else cb_glob env in
-    on_axiom doit ax;
-    if !as_decl then
-      Format.eprintf "[W]Warning global axiom in section@."
-
+    if is_axiom ax.ax_kind && scenv.sc_insec then
+      hierror "axiom %s should be declare in section" name;
+    on_axiom (cb_glob scenv.sc_env) ax
 
 let cb_mod scenv s (who : cbarg) =
   match who with
@@ -1127,7 +1118,7 @@ let rec check_item item scenv =
   | Th_modtype  (_, ms) -> check_modtype scenv ms
   | Th_module        me -> check_module scenv me
   | Th_typeclass (_,tc) -> check_typeclass scenv tc
-  | Th_theory (_,(cth, _)) -> check_ctheory scenv cth
+  | Th_theory (_,(cth, mode)) -> check_ctheory scenv cth mode
   | Th_export   (_, lc) -> assert (lc = `Global || scenv.sc_insec);
   | Th_instance       _ -> () (* FIXME section: what to check *)
   | Th_baserw (_,lc) ->
@@ -1143,8 +1134,9 @@ let rec check_item item scenv =
 
   | Th_reduction _ -> ()
 
-and check_ctheory scenv cth =
-  check_theory scenv cth.cth_items
+and check_ctheory scenv cth mode =
+  if mode = `Abstract then ()
+  else check_theory scenv cth.cth_items
 
 and check_theory scenv th = ()
   (* FIXME section : how to check it recursively, need to add stuff in env ? *)

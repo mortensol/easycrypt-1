@@ -11,7 +11,6 @@
 
 (* -------------------------------------------------------------------- *)
 require import AllCore.
-
 (* -------------------------------------------------------------------- *)
 type 'a list = [
   | "[]"
@@ -26,7 +25,7 @@ op size (xs : 'a list) =
 lemma size_ge0 (s : 'a list): 0 <= size s.
 proof. by elim: s => //= x s; smt. qed.
 
-local hint exact : size_ge0.
+local hint exact : size_ge0. 
 
 lemma size_eq0 (s : 'a list): (size s = 0) <=> (s = []).
 proof. by case: s => //=; smt. qed.
@@ -2831,3 +2830,4 @@ lemma lex_total (e : 'a -> 'a -> bool):
      (forall x y, e x y \/ e y x)
   => (forall s1 s2, lex e s1 s2 \/ lex e s2 s1).
 proof. by move=> h; elim=> [|x1 s1 IHs1] [|x2 s2] //=; smt. qed.
+

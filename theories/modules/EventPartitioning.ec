@@ -156,7 +156,7 @@ theory TotalSubuniformResultOnly.
   section.
   declare module M <: T.
 
-  axiom M_suf a b i (X:input -> output list) &m:
+  declare axiom M_suf a b i (X:input -> output list) &m:
        mem (X i) a
     => mem (X i) b
     => Pr[M.f(i) @ &m: res = a] = Pr[M.f(i) @ &m: res = b].
@@ -199,12 +199,12 @@ theory SubuniformReference.
   section.
   declare module M <: T.
 
-  axiom M_suf a b i X &m:
+  declare axiom M_suf a b i X &m:
        List.mem (X i) a
     => mem (X i) b
     => Pr[M.f(i) @ &m: res = a] = Pr[M.f(i) @ &m: res = b].
 
-  axiom weight_M: phoare [M.f: true ==> true] =(k arg).
+  declare axiom weight_M: phoare [M.f: true ==> true] =(k arg).
 
   lemma pr_res_notin_X a i X &m:
        (forall i, hoare [M.f: arg = i ==> List.mem (X i) res])

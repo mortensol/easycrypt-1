@@ -142,7 +142,7 @@ abstract theory Adversary.
     inline*;auto.
   qed.
 
-  axiom A_ll : (forall (O <: SAMPLE_ADV{A}), islossless O.sample => islossless A(O).main).
+  declare axiom A_ll : (forall (O <: SAMPLE_ADV{A}), islossless O.sample => islossless A(O).main).
 
   equiv A_upto :
      Main(R(SampleEB),A).main ~ Main(R(SampleB),A).main :
@@ -278,7 +278,7 @@ abstract theory AdversaryN.
 
   local clone import Bad as Bad1.
 
-  axiom A_ll : (forall (O <: SAMPLE_ADV{A}), islossless O.sample => islossless A(O).main).
+  declare axiom A_ll : (forall (O <: SAMPLE_ADV{A}), islossless O.sample => islossless A(O).main).
 
   local lemma pr_bad &m :
     Pr[Main(CountI(R(SampleB)),A).main() @ &m : SampleB.bad /\ 0 <= Count.c <= q ] <= q%r * p%r / n%r .
@@ -373,8 +373,8 @@ abstract theory Adversary1.
 
   declare module A <: ADV.
 
-  axiom a1_ll : islossless A.a1.
-  axiom a2_ll : islossless A.a2.
+  declare axiom a1_ll : islossless A.a1.
+  declare axiom a2_ll : islossless A.a2.
 
   local clone AdversaryN as Ad1 with
     op p <- p,
@@ -462,8 +462,8 @@ abstract theory Adversary1_1.
 
   declare module A <: ADV.
 
-  axiom a1_ll : islossless A.a1.
-  axiom a2_ll : islossless A.a2.
+  declare axiom a1_ll : islossless A.a1.
+  declare axiom a2_ll : islossless A.a2.
 
   local lemma n_pos : 0 < n by smt (gt1_n).
 

@@ -220,7 +220,7 @@ section.
 
   declare module A <: AdvInd { RealHash, OrclCR}.
   
-  axiom Alossless :
+  declare axiom Alossless :
     forall (O <: OrclInd{A}),
           islossless O.hash => 
           islossless O.check => islossless A(O).main.
