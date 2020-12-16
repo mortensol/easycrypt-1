@@ -1992,9 +1992,7 @@ module Mod = struct
     fst (lookup name env)
 
   let add_xs_to_declared xs env =
-    Sx.iter (fun xp -> Format.eprintf "[W]%s@." (EcPath.x_tostring xp)) xs;
     let update_id id mods =
-      Format.eprintf "[W] to %s@." (EcIdent.tostring id);
       let update me =
         match me.me_body with
         | ME_Decl (mt, (rx2, r2)) ->
@@ -2030,10 +2028,10 @@ module Mod = struct
      | MI_Variable v -> Sx.add (EcPath.xpath_fun mp v.v_name) xs
      | MI_Function _ -> xs
 
-  let add_restr_to_declared me env =
+
+  let add_restr_to_declared p me env =
     if me.tme_loca = `Local then
-      let p = pqname (root env) me.tme_expr.me_name in
-      Format.eprintf "[W] add restr %s@." (EcPath.tostring p);
+      let p = pqname p me.tme_expr.me_name in
       let mp = EcPath.mpath_crt p [] None in
       let xs = vars_mb mp Sx.empty me.tme_expr.me_body  in
       add_xs_to_declared xs env
@@ -2045,7 +2043,7 @@ module Mod = struct
       { (MC.bind_mod name me env) with
         env_item = Th_module me :: env.env_item;
         env_norm = ref !(env.env_norm); } in
-    add_restr_to_declared me env
+    add_restr_to_declared (root env) me env
 
   let me_of_mt env name modty restr =
     let modsig =
@@ -2950,6 +2948,13 @@ module Theory = struct
     in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
+  let add_restr_th =
+    let for1 path env = function
+      | Th_module me -> Some (Mod.add_restr_to_declared path me env)
+      | _ -> None
+    in bind_base_th for1
+
+  (* ------------------------------------------------------------------ *)
   let bind ?(mode = `Concrete) ?src name items env =
     let cth = ({ cth_items = items; cth_source = src; }, mode) in
 
@@ -2965,7 +2970,10 @@ module Theory = struct
         let env_atbase  = bind_at_th thname env.env_atbase items in
         let env_ntbase  = bind_nt_th thname env.env_ntbase items in
         let env_redbase = bind_rd_th thname env.env_redbase items in
-        { env with env_tci; env_tc; env_rwbase; env_atbase; env_ntbase; env_redbase; }
+        let env =
+          { env with env_tci; env_tc; env_rwbase; env_atbase; env_ntbase; env_redbase; }
+        in
+        add_restr_th thname env items
 
     | `Abstract ->
         env

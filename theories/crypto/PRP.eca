@@ -554,8 +554,6 @@ section CollisionProbability.
   by move=> x; exact/StdOrder.RealOrder.lerr_eq/dD_funi.
   qed.
 
-  local module D1 : Distinguisher = D.
-
   (* We construct a Birthday Bound adversary from the IND
      experiment. *)
   local module (A:Adv) (S:ASampler) = {
