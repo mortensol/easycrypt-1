@@ -290,18 +290,22 @@ and on_fun_oi (cb : cb) (oi : oracle_info) =
   List.iter (fun x -> cb (`Module x.x_top)) oi.oi_calls
 
 (* -------------------------------------------------------------------- *)
-let on_tydecl (cb : cb) (tydecl : tydecl) =
-  match tydecl.tyd_type with
-  | `Concrete ty -> on_ty cb ty
+let on_tydecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (tyd : tydecl) =
+  match tyd.tyd_type with
+  | `Concrete ty -> on_ty (cb env) ty
   | `Abstract _  -> ()
 
   | `Record (f, fds) ->
+      let env = EcEnv.Ty.bind name tyd env in
+      let cb = cb env in
       on_form cb f;
       List.iter (on_ty cb |- snd) fds
 
   | `Datatype dt ->
-      List.iter (List.iter (on_ty cb) |- snd) dt.tydt_ctors;
-      List.iter (on_form cb) [dt.tydt_schelim; dt.tydt_schcase]
+     let env = EcEnv.Ty.bind name tyd env in
+     let cb  = cb env in
+     List.iter (List.iter (on_ty cb) |- snd) dt.tydt_ctors;
+     List.iter (on_form cb) [dt.tydt_schelim; dt.tydt_schcase]
 
 (* -------------------------------------------------------------------- *)
 let on_opdecl (cb : cb) (opdecl : operator) =
@@ -397,26 +401,26 @@ let env scenv = scenv.sc_env
 
 (* -------------------------------------------------------------------- *)
 
-let is_declared (scenv : scenv) (who : cbarg) =
+let is_declared (env : EcEnv.env) (who : cbarg) =
   match who with
-  | `Type p -> (EcEnv.Ty.by_path p scenv.sc_env).tyd_loca = `Declare
-  | `Op   p -> (EcEnv.Op.by_path p scenv.sc_env).op_loca  = `Declare
-  | `Ax p   -> (EcEnv.Ax.by_path p scenv.sc_env).ax_loca  = `Declare
+  | `Type p -> (EcEnv.Ty.by_path p env).tyd_loca = `Declare
+  | `Op   p -> (EcEnv.Op.by_path p env).op_loca  = `Declare
+  | `Ax p   -> (EcEnv.Ax.by_path p env).ax_loca  = `Declare
   | `ModuleType _ -> false
   | `Module    mp ->
     begin match mp.m_top with
-    | `Local id   -> EcEnv.Mod.is_declared id scenv.sc_env
+    | `Local id   -> EcEnv.Mod.is_declared id env
     | `Concrete _ -> false
     end
 
 
-let is_local scenv (who : cbarg) =
+let is_local (env : EcEnv.env) (who : cbarg) =
   match who with
-  | `Type       p -> (EcEnv.Ty.by_path p scenv.sc_env).tyd_loca = `Local
-  | `Op         p -> (EcEnv.Op.by_path p scenv.sc_env).op_loca  = `Local
-  | `Ax         p -> (EcEnv.Ax.by_path p scenv.sc_env).ax_loca  = `Local
-  | `Module mp    -> snd (EcEnv.Mod.by_mpath mp scenv.sc_env) = Some `Local
-  | `ModuleType p -> (EcEnv.ModTy.by_path p scenv.sc_env).tms_loca = `Local
+  | `Type       p -> (EcEnv.Ty.by_path p env).tyd_loca = `Local
+  | `Op         p -> (EcEnv.Op.by_path p env).op_loca  = `Local
+  | `Ax         p -> (EcEnv.Ax.by_path p env).ax_loca  = `Local
+  | `Module mp    -> snd (EcEnv.Mod.by_mpath mp env) = Some `Local
+  | `ModuleType p -> (EcEnv.ModTy.by_path p env).tms_loca = `Local
 
 (* -------------------------------------------------------------------- *)
 type to_clear =
@@ -599,17 +603,58 @@ let generalize_tydecl to_gen prefix (name, tydecl) =
     let extra = generalize_extra_ty to_gen fv in
     let tyd_params = extra @ tydecl.tyd_params in
     let args = List.map (fun (id, _) -> tvar id) tyd_params in
-    let tosubst = (List.map fst tydecl.tyd_params, tconstr path args) in
-    (* For recursive type *)
-    let tyd_type =
-      (EcSubst.subst_tydecl (EcSubst.add_tydef (EcSubst.empty ~freshen:false ()) path tosubst)
-        tydecl).tyd_type in
-    (* Build the substitution for the remaining *)
-    let to_gen =
-      {to_gen with
-       tg_subst = EcSubst.add_tydef to_gen.tg_subst path tosubst} in
+    let fst_params = List.map fst tydecl.tyd_params in
+    let tosubst = fst_params, tconstr path args in
+    let tg_subst, tyd_type =
+      match tydecl.tyd_type with
+      | `Concrete _ | `Abstract _ ->
+        EcSubst.add_tydef to_gen.tg_subst path tosubst, tydecl.tyd_type
+      | `Record (f, prs) ->
+        let subst    = EcSubst.empty ~freshen:false () in
+        let tg_subst = to_gen.tg_subst in
+        let subst    = EcSubst.add_tydef subst path tosubst in
+        let tg_subst = EcSubst.add_tydef tg_subst path tosubst in
+        let rsubst   = ref subst in
+        let rtg_subst = ref tg_subst in
+        let tin = tconstr path args in
+        let add_op (s, ty) =
+          let p = pqname prefix s in
+          let tosubst = fst_params, e_op p args (tfun tin ty) in
+          rsubst := EcSubst.add_opdef !rsubst p tosubst;
+          rtg_subst := EcSubst.add_opdef !rtg_subst p tosubst;
+          s, ty
+        in
+        let prs = List.map add_op prs in
+        let f = EcSubst.subst_form !rsubst f in
+        !rtg_subst, `Record (f, prs)
+      | `Datatype dt ->
+        let subst    = EcSubst.empty ~freshen:false () in
+        let tg_subst = to_gen.tg_subst in
+        let subst    = EcSubst.add_tydef subst path tosubst in
+        let tg_subst = EcSubst.add_tydef tg_subst path tosubst in
+        let subst_ty = EcSubst.subst_ty subst in
+        let rsubst   = ref subst in
+        let rtg_subst = ref tg_subst in
+        let tout = tconstr path args in
+        let add_op (s,tys) =
+          let tys = List.map subst_ty tys in
+          let p = pqname prefix s in
+          let pty = toarrow tys tout in
+          let tosubst = fst_params, e_op p args pty in
+          rsubst := EcSubst.add_opdef !rsubst p tosubst;
+          rtg_subst := EcSubst.add_opdef !rtg_subst p tosubst ;
+          s, tys in
+        let tydt_ctors   = List.map add_op dt.tydt_ctors in
+        let tydt_schelim = EcSubst.subst_form !rsubst dt.tydt_schelim in
+        let tydt_schcase = EcSubst.subst_form !rsubst dt.tydt_schcase in
+        !rtg_subst, `Datatype {tydt_ctors; tydt_schelim; tydt_schcase }
 
-    to_gen, Some (Th_type (name, { tyd_params; tyd_type; tyd_loca = `Global }))
+    in
+
+    let to_gen = { to_gen with tg_subst} in
+    let tydecl = { tyd_params; tyd_type; tyd_loca = `Global } in
+    to_gen, Some (Th_type (name, tydecl))
+
   | `Declare ->
     let to_gen = add_declared_ty to_gen path tydecl in
     to_gen, None
@@ -663,6 +708,8 @@ let generalize_opdecl to_gen prefix (name, operator) =
           EcSubst.add_opdef to_gen.tg_subst path tosubst in
         let body =
           match body with
+          | OP_Plain (e,nosmt) ->
+            OP_Plain (e_lam extra_a e, nosmt)
           | OP_Fix opfix ->
             let subst = EcSubst.add_opdef (EcSubst.empty ~freshen:false ()) path tosubst in
             let nb_extra = List.length extra_a in
@@ -697,7 +744,8 @@ let generalize_opdecl to_gen prefix (name, operator) =
           EcSubst.add_pddef to_gen.tg_subst path tosubst in
         let body =
           match body with
-          | PR_Plain _ -> body
+          | PR_Plain f ->
+            PR_Plain (f_lambda (List.map (fun (x,ty) -> (x,GTty ty)) extra_a) f)
           | PR_Ind pri ->
             let subst = EcSubst.add_pddef (EcSubst.empty ~freshen:false ()) path tosubst in
             let pri_args = extra_a @ pri.pri_args in
@@ -933,9 +981,10 @@ let check_declare scenv =
   if not (scenv.sc_insec) then
     hierror "declare are only allowed in section"
 
-let check_tyd scenv tyd =
+let check_tyd scenv name tyd =
   match tyd.tyd_loca with
-  | `Local -> check_local scenv
+  | `Local ->
+    check_local scenv
 
   | `Declare ->
     check_declare scenv;
@@ -944,16 +993,18 @@ let check_tyd scenv tyd =
     if not (is_abstract_ty tyd.tyd_type) then
       hierror "only abstract type can be declared"
   | `Global ->
-    if scenv.sc_insec then
-      let cb (who:cbarg) =
-        match who with
-        | `Type p ->
-          if is_local scenv who then
-            hierror "global definition can't depend of local type %s"
-              (EcPath.tostring p)
-        | `Module mp -> check_glob_mp_ty "type" scenv mp
-        | `Op _ | `Ax _  | `ModuleType _ -> assert false in
-      on_tydecl cb tyd
+    let cb env (who:cbarg) =
+      match who with
+      | `Type p ->
+        if is_local env who then
+          hierror "global definition can't depend of local type %s"
+            (EcPath.tostring p)
+      | `Module mp -> check_glob_mp_ty "type" env mp
+      | `Op _ ->
+        (* This case can occur because of elim/case scheme *)
+        assert (not (is_local env who || is_declared env who))
+      | `Ax _  | `ModuleType _ -> assert false in
+    on_tydecl scenv.sc_env cb name tyd
 
 let cb_glob scenv (who:cbarg) =
   match who with
@@ -973,11 +1024,12 @@ let cb_glob scenv (who:cbarg) =
         (EcPath.tostring p)
   | `Ax _ -> assert false
 
-
 let check_op scenv op =
   match op.op_loca with
-  | `Local -> ()
+  | `Local ->
+    check_local scenv
   | `Declare ->
+    check_declare scenv;
     if op.op_tparams <> [] then
       hierror "declared op can not be polymorphic";
     begin match op.op_kind with
@@ -989,7 +1041,7 @@ let check_op scenv op =
     end
   | `Global ->
     (* FIXME: need to do something special for fixpoint *)
-    on_opdecl (cb_glob scenv) op
+    on_opdecl (cb_glob scenv.sc_env) op
 
 let check_ax scenv ax =
   match ax.ax_loca with
@@ -1002,10 +1054,11 @@ let check_ax scenv ax =
     if ax.ax_tparams <> [] then
       hierror "declared axiom can not be polymorphic";
     if is_lemma ax.ax_kind then
-      hierror "can't declare a lemma"
+      hierror "can't declare a lemma";
+    on_axiom (cb_glob scenv.sc_env) ax
   | `Global ->
     if scenv.sc_insec then
-      on_axiom (cb_glob scenv) ax
+      on_axiom (cb_glob scenv.sc_env) ax
 
 
 let cb_mod scenv s (who : cbarg) =
@@ -1037,13 +1090,13 @@ let check_modtype scenv ms =
   match ms.tms_loca with
   | `Local -> check_local scenv
   | `Global ->
-    if scenv.sc_insec then on_modsig (cb_mod scenv "module type") ms.tms_sig
+    if scenv.sc_insec then on_modsig (cb_mod scenv.sc_env "module type") ms.tms_sig
 
 let check_module scenv me =
   match me.tme_loca with
   | `Local -> check_local scenv
   | `Global ->
-    if scenv.sc_insec then on_module (cb_mod scenv "module") me.tme_expr
+    if scenv.sc_insec then on_module (cb_mod scenv.sc_env "module") me.tme_expr
   | `Declare -> (* Should be SC_decl_mod ... *)
     assert false
 
@@ -1053,7 +1106,7 @@ let check_typeclass scenv tc =
 
 let rec check_item item scenv =
   match item with
-  | Th_type     (_,tyd) -> check_tyd scenv tyd
+  | Th_type     (s,tyd) -> check_tyd scenv s tyd
   | Th_operator  (_,op) -> check_op  scenv op
   | Th_axiom    (_, ax) -> check_ax scenv ax
   | Th_modtype  (_, ms) -> check_modtype scenv ms
