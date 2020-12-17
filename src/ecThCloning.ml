@@ -101,7 +101,7 @@ let rec evc_get (nm : symbol list) (evc : evclone) =
 let find_mc =
   let for1 cth nm =
     let test = function
-      | Th_theory (x, (sub, _)) when x = nm -> Some sub.cth_items
+      | Th_theory (x, sub) when x = nm -> Some sub.cth_items
       | _ -> None
     in List.opick test cth
   in
@@ -159,7 +159,7 @@ let find_nt cth (nm, x) =
 (* -------------------------------------------------------------------- *)
 type clone = {
   cl_name   : symbol;
-  cl_theory : EcPath.path * (EcEnv.Theory.t * EcTheory.thmode);
+  cl_theory : EcPath.path * EcEnv.Theory.t;
   cl_clone  : evclone;
   cl_rename : renaming list;
   cl_ntclr  : Sp.t;
@@ -311,9 +311,9 @@ end = struct
 
     let dth =
       match find_theory oc.oc_oth name with
-      | None | Some (_, `Abstract) ->
+      | None | Some { cth_mode = `Abstract } ->
          clone_error oc.oc_env (CE_UnkOverride (OVK_Theory, name))
-      | Some (th, `Concrete) -> th
+      | Some ({cth_mode = `Concrete} as th) -> th
     in
 
     let sp =
@@ -384,7 +384,7 @@ end = struct
            in (pr :: proofs, evc)
          else (proofs, evc)
 
-      | Th_theory (x, (dth, `Concrete)) ->
+      | Th_theory (x, dth) when dth.cth_mode = `Concrete ->
          List.fold_left (doit (prefix @ [x])) (proofs, evc) dth.cth_items
 
       | Th_export _ ->
@@ -508,7 +508,7 @@ end
 (* -------------------------------------------------------------------- *)
 let clone (scenv : EcSection.scenv) (thcl : theory_cloning) =
   let env = EcSection.env scenv in
-  let opath, (oth, othmode) =
+  let opath, oth =
     match EcEnv.Theory.lookup_opt ~mode:`All (unloc thcl.pthc_base) env with
     | None -> clone_error env (CE_UnkTheory (unloc thcl.pthc_base))
     | Some x -> x
@@ -537,7 +537,7 @@ let clone (scenv : EcSection.scenv) (thcl : theory_cloning) =
   in
 
   { cl_name   = name;
-    cl_theory = (opath, (oth, othmode));
+    cl_theory = (opath, oth);
     cl_clone  = ovrds;
     cl_rename = rename;
     cl_ntclr  = Sp.of_list ntclr; }

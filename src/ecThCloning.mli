@@ -67,7 +67,7 @@ type axclone = {
 (* -------------------------------------------------------------------- *)
 type clone = {
   cl_name   : symbol;
-  cl_theory : EcPath.path * (EcEnv.Theory.t * EcTheory.thmode);
+  cl_theory : EcPath.path * EcEnv.Theory.t;
   cl_clone  : evclone;
   cl_rename : renaming list;
   cl_ntclr  : EcPath.Sp.t;

@@ -327,7 +327,7 @@ type prelude = {
   pr_required : required;
 }
 
-type thloaded = (EcTheory.ctheory * EcTheory.thmode)
+type thloaded = EcTheory.ctheory
 
 type scope = {
   sc_name     : (symbol * EcTheory.thmode);
@@ -470,7 +470,7 @@ let for_loading (scope : scope) =
 
 (* -------------------------------------------------------------------- *)
 let subscope (scope : scope) (mode : EcTheory.thmode) (name : symbol) lc =
-  let env = EcSection.enter_theory name lc scope.sc_env in
+  let env = EcSection.enter_theory name lc mode scope.sc_env in
 
   { sc_name       = (name, mode);
     sc_env        = env;
@@ -1845,10 +1845,10 @@ module Theory = struct
   exception TopScope
 
   (* ------------------------------------------------------------------ *)
-  let bind (scope : scope) (x, (cth, mode)) =
+  let bind (scope : scope) (x, cth) =
     assert (scope.sc_pr_uc = None);
     { scope with
-      sc_env = EcSection.add_item (Th_theory (x, (cth, mode))) scope.sc_env }
+      sc_env = EcSection.add_item (Th_theory (x, cth)) scope.sc_env }
 
 
   (* ------------------------------------------------------------------ *)
@@ -1872,9 +1872,9 @@ module Theory = struct
       scope
     else
       match Msym.find_opt id.rqd_name scope.sc_loaded with
-      | Some ((rth, mode), ids) ->
+      | Some (rth, ids) ->
           let scope = List.fold_right require_loaded ids scope in
-          let env   = EcSection.require ~mode id.rqd_name rth scope.sc_env in
+          let env   = EcSection.require id.rqd_name rth scope.sc_env in
             { scope with
                 sc_env      = env;
                 sc_required = id :: scope.sc_required; }
@@ -1912,10 +1912,10 @@ module Theory = struct
     assert (scope.sc_pr_uc = None);
 
     let cth = exit_r ~pempty (add_clears clears scope) in
-    let ((cth, required), (name, mode), scope) = cth in
+    let ((cth, required), (name, _), scope) = cth in
     let scope = List.fold_right require_loaded required scope in
     let scope =
-      ofold (fun cth scope -> bind scope (name, (cth, mode)))
+      ofold (fun cth scope -> bind scope (name, cth))
           scope cth in
     (name, scope)
 
@@ -1938,13 +1938,12 @@ module Theory = struct
           "cannot import the non-existent theory `%s'"
           (string_of_qsymbol name)
 
-    | Some (_, (_, `Abstract)) ->
-        hierror "cannot import an abstract theory"
-
-    | Some (path, (_, `Concrete)) ->
-        bump_prelude
-          { scope with
-            sc_env = EcSection.import path scope.sc_env }
+    | Some (path, cth) ->
+      if cth.cth_mode = `Abstract then
+        hierror "cannot import an abstract theory";
+      bump_prelude
+        { scope with
+          sc_env = EcSection.import path scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
   let export_p scope (p, lc) =
@@ -1960,12 +1959,11 @@ module Theory = struct
           "cannot export the non-existent theory `%s'"
           (string_of_qsymbol name)
 
-    | Some (_, (_, `Abstract)) ->
-        hierror "cannot export an abstract theory"
-
-    | Some (path, (_, `Concrete)) ->
-        (* The section will fix the locality *)
-        bump_prelude (export_p scope (path, `Global))
+    | Some (path, cth) ->
+      if cth.cth_mode = `Abstract then
+        hierror "cannot export an abstract theory";
+      (* The section will fix the locality *)
+      bump_prelude (export_p scope (path, `Global))
 
   (* ------------------------------------------------------------------ *)
   let check_end_required scope thname =
@@ -1999,7 +1997,7 @@ module Theory = struct
           let (cth, rqs), (name1, _), imported = cth in
           assert (name.rqd_name = name1);
           let scope = { scope with sc_loaded =
-            Msym.add name.rqd_name ((oget cth, mode), rqs) imported.sc_loaded; } in
+            Msym.add name.rqd_name (oget cth, rqs) imported.sc_loaded; } in
 
           bump_prelude (require_loaded name scope)
 
@@ -2133,7 +2131,7 @@ module Cloning = struct
       EcTheoryReplay.replay hooks
         ~abstract:opts.R.clo_abstract ~local:thcl.pthc_local ~incl
         ~clears:ntclr ~renames:rnms ~opath ~npath ovrds
-        scope (name, (fst oth).cth_items)
+        scope (name, oth.cth_items)
     in
 
     let proofs = List.pmap (fun axc ->

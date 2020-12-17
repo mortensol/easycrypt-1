@@ -334,7 +334,7 @@ qed.
   *   <= Pr[IND^PRF_PRFi(D^PRF_D): !uniq D^PRF_D.log]                  **)
 section Fact2.
   declare module D <: PRGa.Distinguisher {SRG,PRFr,PRFi,D_PRF}.
-  axiom D_distinguish_ll (G <: RGA {D}): islossless G.next => islossless D(G).distinguish.
+  declare axiom D_distinguish_ll (G <: RGA {D}): islossless G.next => islossless D(G).distinguish.
 
   inductive inv (m : ('a,'b) fmap) (logP : 'a list) =
     | EqQueries of (dom m = mem logP).
@@ -453,10 +453,10 @@ op     qN : { int | 0 <= qN } as ge0_qN.
 section Lemma1.
   declare module D <: PRGa.Distinguisher {SRG,PRFc,PRFi,C_PRG,C_PRF,D_PRF}.
 
-  axiom D_distinguish_ll (G <: PRGa.RGA {D}):
+  declare axiom D_distinguish_ll (G <: PRGa.RGA {D}):
     islossless G.next => islossless D(G).distinguish.
 
-  axiom D_bounded (G <: PRGa.RG {D,C_PRG}) &m:
+  declare axiom D_bounded (G <: PRGa.RG {D,C_PRG}) &m:
     islossless G.init => islossless G.next =>
     Pr[IND_PRG(C_PRG(G),D).main() @ &m: C_PRG.c <= qN] = 1%r.
 

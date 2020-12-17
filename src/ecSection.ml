@@ -370,17 +370,18 @@ let on_modsig (cb:cb) (ms:module_sig) =
 (* -------------------------------------------------------------------- *)
 
 type sc_name =
-  | Th of symbol
+  | Th of symbol * is_local * thmode
   | Sc of symbol option
   | Top
 
 type scenv = {
-  sc_env     : EcEnv.env;
-  sc_top     : scenv option;
-  sc_loca    : is_local;
-  sc_name    : sc_name;
-  sc_insec   : bool;
-  sc_items   : sc_items;
+  sc_env   : EcEnv.env;
+  sc_top   : scenv option;
+  sc_loca  : is_local;
+  sc_name  : sc_name;
+  sc_insec : bool;
+  sc_abstr : bool;
+  sc_items : sc_items;
 }
 
 and sc_item =
@@ -396,6 +397,7 @@ let initial env =
     sc_loca    = `Global;
     sc_name    = Top;
     sc_insec   = false;
+    sc_abstr   = false;
     sc_items   = [];
   }
 
@@ -785,13 +787,16 @@ let generalize_opdecl to_gen prefix (name, operator) =
     let to_gen = add_declared_op to_gen path operator in
     to_gen, None
 
-let generalize_axiom to_gen prefix (name, ax) =
+let rec generalize_axiom to_gen prefix (name, ax) =
   let ax = EcSubst.subst_ax to_gen.tg_subst ax in
   let path = pqname prefix name in
   match ax.ax_loca with
   | `Local ->
-    assert (not (is_axiom ax.ax_kind));
-    add_clear to_gen (`Ax path), None
+    if is_axiom ax.ax_kind then
+      generalize_axiom to_gen prefix (name, { ax with ax_loca = `Global })
+    else
+(*    assert (not (is_axiom ax.ax_kind)); *)
+      add_clear to_gen (`Ax path), None
   | `Global ->
     let ax_spec =
       match ax.ax_kind with
@@ -874,15 +879,18 @@ let rec generalize_th_item to_gen prefix th_item =
   | Th_reduction rl    -> generalize_reduction to_gen rl
   | Th_auto hints      -> generalize_auto to_gen hints
 
-and generalize_ctheory to_gen prefix (name, (cth, thmode)) =
+and generalize_ctheory to_gen prefix (name, cth) =
   let path = pqname prefix name in
-  let to_gen, cth_items =
-    generalize_ctheory_struct to_gen path cth.cth_items in
-  if cth_items = [] then
+  if cth.cth_mode = `Abstract && cth.cth_loca = `Local then
     add_clear to_gen (`Th path), None
   else
-    let cth = { cth with cth_items } in
-    to_gen, Some (Th_theory (name, (cth, thmode)))
+    let to_gen, cth_items =
+      generalize_ctheory_struct to_gen path cth.cth_items in
+    if cth_items = [] then
+      add_clear to_gen (`Th path), None
+    else
+      let cth = { cth with cth_items; cth_loca = `Global } in
+      to_gen, Some (Th_theory (name, cth))
 
 and generalize_ctheory_struct to_gen prefix cth_struct =
   match cth_struct with
@@ -938,7 +946,7 @@ let rec set_local_item  = function
   | Th_modtype      (s,ms) -> Th_modtype   (s, { ms with tms_loca = set_local ms.tms_loca  })
   | Th_module          me  -> Th_module        { me with tme_loca = set_local me.tme_loca  }
   | Th_typeclass    (s,tc) -> Th_typeclass (s, { tc with tc_loca  = set_local tc.tc_loca   })
-  | Th_theory   (s,(th,m)) -> Th_theory    (s, (set_local_th th, m))
+  | Th_theory      (s, th) -> Th_theory    (s, set_local_th th)
   | Th_export       (p,lc) -> Th_export    (p, set_local lc)
   | Th_instance (ty,ti,lc) -> Th_instance  (ty,ti, set_local lc)
   | Th_baserw       (s,lc) -> Th_baserw    (s, set_local lc)
@@ -947,7 +955,9 @@ let rec set_local_item  = function
   | Th_auto     (i,s,p,lc) -> Th_auto      (i, s, p, set_local lc)
 
 and set_local_th th =
-  { th with cth_items = List.map set_local_item th.cth_items }
+  { th with cth_items = List.map set_local_item th.cth_items;
+            cth_loca  = set_local th.cth_loca
+  }
 
 let sc_th_item t item =
   let item =
@@ -1049,21 +1059,26 @@ let check_op scenv name op =
     (* FIXME: need to do something special for fixpoint *)
     on_opdecl scenv.sc_env cb_glob name op
 
+let is_inth scenv =
+  match scenv.sc_name with
+  | Th _ -> true
+  | _    -> false
+
 let check_ax scenv name ax =
   match ax.ax_loca with
   | `Local ->
     check_local scenv;
-    if is_axiom ax.ax_kind then
-      hierror "axiom %s can't be local" name
+(*    if is_axiom ax.ax_kind && not scenv.sc_abstr then
+      hierror "axiom %s can't be local" name *)
   | `Declare ->
     check_declare scenv;
     if ax.ax_tparams <> [] then
-      hierror "declared axiom can not be polymorphic";
+      hierror "declared axiom can't be polymorphic";
     if is_lemma ax.ax_kind then
       hierror "can't declare a lemma";
     on_axiom (cb_glob scenv.sc_env) ax
   | `Global ->
-    if is_axiom ax.ax_kind && scenv.sc_insec then
+    if is_axiom ax.ax_kind && scenv.sc_insec && is_inth scenv then
       hierror "axiom %s should be declare in section" name;
     on_axiom (cb_glob scenv.sc_env) ax
 
@@ -1118,7 +1133,7 @@ let rec check_item item scenv =
   | Th_modtype  (_, ms) -> check_modtype scenv ms
   | Th_module        me -> check_module scenv me
   | Th_typeclass (_,tc) -> check_typeclass scenv tc
-  | Th_theory (_,(cth, mode)) -> check_ctheory scenv cth mode
+  | Th_theory  (_, cth) -> check_ctheory scenv cth
   | Th_export   (_, lc) -> assert (lc = `Global || scenv.sc_insec);
   | Th_instance       _ -> () (* FIXME section: what to check *)
   | Th_baserw (_,lc) ->
@@ -1134,9 +1149,8 @@ let rec check_item item scenv =
 
   | Th_reduction _ -> ()
 
-and check_ctheory scenv cth mode =
-  if mode = `Abstract then ()
-  else check_theory scenv cth.cth_items
+and check_ctheory scenv cth =
+   check_theory scenv cth.cth_items
 
 and check_theory scenv th = ()
   (* FIXME section : how to check it recursively, need to add stuff in env ? *)
@@ -1159,10 +1173,9 @@ let add_item (item : theory_item) (scenv:scenv) =
   | Th_modtype (s, ms) -> doit (EcEnv.ModTy.bind s ms)
   | Th_module       me -> doit (EcEnv.Mod.bind me.tme_expr.me_name me)
 
-  | Th_typeclass (s,tc) -> doit (EcEnv.TypeClass.bind s tc)
+  | Th_typeclass(s,tc) -> doit (EcEnv.TypeClass.bind s tc)
 
-  | Th_theory (s,(cth, mode)) ->
-    doit (EcEnv.Theory.bind ~mode ?src:cth.cth_source s cth.cth_items);
+  | Th_theory (s, cth) -> doit (EcEnv.Theory.bind s cth)
 
   | Th_export (p, lc) -> doit (EcEnv.Theory.export p lc)
 
@@ -1199,6 +1212,7 @@ let enter_section (name : symbol option) (scenv : scenv) =
     sc_loca = `Global;
     sc_name = Sc name;
     sc_insec = true;
+    sc_abstr = false;
     sc_items = []; }
 
 let exit_section (name : symbol option) (scenv:scenv) =
@@ -1215,23 +1229,23 @@ let exit_section (name : symbol option) (scenv:scenv) =
 
 (* -----------------------------------------------------------*)
 
-let enter_theory (name:symbol) (lc:is_local) scenv : scenv =
+let enter_theory (name:symbol) (lc:is_local) (mode:thmode) scenv : scenv =
   if not scenv.sc_insec && lc = `Local then
      hierror "can not start a local theory outside of a section";
-  let sc_env = EcEnv.Theory.enter name scenv.sc_env in
-  {scenv with
-    sc_env;
-    sc_top  = Some scenv;
-    sc_loca = if lc = `Local then lc else scenv.sc_loca;
-    sc_name = Th name;
+  { sc_env   = EcEnv.Theory.enter name scenv.sc_env;
+    sc_top   = Some scenv;
+    sc_loca  = if lc = `Local then lc else scenv.sc_loca;
+    sc_abstr = mode = `Abstract;
+    sc_insec = scenv.sc_insec;
+    sc_name  = Th (name, lc, mode);
     sc_items = []; }
 
 let exit_theory ?clears ?pempty scenv =
   match scenv.sc_name with
   | Sc _    -> hierror "cannot close a theory containing pending sections"
   | Top     -> hierror "no theory to close"
-  | Th name ->
-    let cth = EcEnv.Theory.close ?clears ?pempty scenv.sc_env in
+  | Th (name, lc, mode) ->
+    let cth = EcEnv.Theory.close ?clears ?pempty lc mode scenv.sc_env in
     let scenv = oget scenv.sc_top in
     name, cth, scenv
 
@@ -1243,8 +1257,8 @@ let import_vars m scenv =
   { scenv with
     sc_env = EcEnv.Mod.import_vars scenv.sc_env m }
 
-let require ?mode x cth scenv =
-  { scenv with sc_env = EcEnv.Theory.require ?mode x cth scenv.sc_env }
+let require x cth scenv =
+  { scenv with sc_env = EcEnv.Theory.require x cth scenv.sc_env }
 
 let astop scenv =
   if scenv.sc_insec then hierror "can not require inside a section";

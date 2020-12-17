@@ -500,8 +500,8 @@ let rec subst_theory_item (s : _subst) (item : theory_item) =
   | Th_module m ->
       Th_module (subst_top_module s m)
 
-  | Th_theory (x, (th, thmode)) ->
-      Th_theory (x, (subst_ctheory s th, thmode))
+  | Th_theory (x, th) ->
+      Th_theory (x, subst_ctheory s th)
 
   | Th_export (p, lc) ->
       Th_export (s.s_p p, lc)
@@ -533,6 +533,8 @@ and subst_theory (s : _subst) (items : theory) =
 (* -------------------------------------------------------------------- *)
 and subst_ctheory (s : _subst) (cth : ctheory) =
   { cth_items  = subst_theory s cth.cth_items;
+    cth_loca   = cth.cth_loca;
+    cth_mode   = cth.cth_mode;
     cth_source = omap (subst_theory_source s) cth.cth_source; }
 
 (* -------------------------------------------------------------------- *)

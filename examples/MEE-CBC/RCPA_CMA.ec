@@ -226,15 +226,15 @@ theory MtE.
       declare module A <: PTXT_Adversary  { PTXT_Wrap, MACa.WUF_CMA.WUF_Wrap, CMAa, E, M }.
 
       (* Equivalence up to failure requires termination of oracles and adversaries *)
-      axiom E_keygen_ll: islossless E.keygen.
-      axiom E_enc_ll   : islossless E.enc.
-      axiom E_dec_ll   : islossless E.dec.
+      declare axiom E_keygen_ll: islossless E.keygen.
+      declare axiom E_enc_ll   : islossless E.enc.
+      declare axiom E_dec_ll   : islossless E.dec.
 
-      axiom M_keygen_ll: islossless M.keygen.
-      axiom M_tag_ll   : islossless M.tag.
-      axiom M_verify_ll: islossless M.verify.
+      declare axiom M_keygen_ll: islossless M.keygen.
+      declare axiom M_tag_ll   : islossless M.tag.
+      declare axiom M_verify_ll: islossless M.verify.
 
-      axiom A_forge_ll (O <: PTXT_Oracles { A }):
+      declare axiom A_forge_ll (O <: PTXT_Oracles { A }):
         islossless O.enc => islossless O.verify => islossless A(O).forge.
 
       (* Adv^{INT-PTXT}_{MacThenEncrypt(E,M)}(A) <= Adv^{WUF-CMA}_{M}(CMAa(E,A)) *)
@@ -501,20 +501,20 @@ theory EtM.
       declare module A <: CTXT_Adversary  { CTXT_Wrap, MACa.SUF_CMA.SUF_Wrap, CMAa, E, M }.
 
       (* Equivalence up to failure requires termination of oracles and adversaries *)
-      axiom E_keygen_ll: islossless E.keygen.
-      axiom E_enc_ll   : islossless E.enc.
-      axiom E_dec_ll   : islossless E.dec.
+      declare axiom E_keygen_ll: islossless E.keygen.
+      declare axiom E_enc_ll   : islossless E.enc.
+      declare axiom E_dec_ll   : islossless E.dec.
 
-      axiom M_keygen_ll: islossless M.keygen.
-      axiom M_tag_ll   : islossless M.tag.
-      axiom M_verify_ll: islossless M.verify.
+      declare axiom M_keygen_ll: islossless M.keygen.
+      declare axiom M_tag_ll   : islossless M.tag.
+      declare axiom M_verify_ll: islossless M.verify.
 
-      axiom A_forge_ll (O <: CTXT_Oracles { A }):
+      declare axiom A_forge_ll (O <: CTXT_Oracles { A }):
         islossless O.enc => islossless O.verify => islossless A(O).forge.
 
       (* In addition, this result requires that the encryption scheme is correct,
          and that the decryption algorithm is deterministic and stateless *)
-      axiom dec_op: exists dec,
+      declare axiom dec_op: exists dec,
            (forall ge _k _c,
               hoare [E.dec: (glob E) = ge /\ k = _k /\ c = _c
                         ==> (glob E) = ge /\ res = dec _k _c])

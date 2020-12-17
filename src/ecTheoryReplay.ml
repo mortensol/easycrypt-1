@@ -574,7 +574,8 @@ and replay1 (ove : _ ovrenv) (subst, ops, proofs, scope) item =
   | Th_instance ((typ, ty), tc, lc) ->
      replay_instance ove (subst, ops, proofs, scope) ((typ, ty), tc, lc)
 
-  | Th_theory (ox, (cth, thmode)) -> begin
+  | Th_theory (ox, cth) -> begin
+      let thmode = cth.cth_mode in
       let (subst, x) = rename ove subst (`Theory, ox) in
       let subovrds = Msym.find_opt x ove.ovre_ovrd.evc_ths in
       let subovrds = EcUtils.odfl evc_empty subovrds in

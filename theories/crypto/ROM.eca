@@ -185,7 +185,6 @@ local clone import PROM.FullRO as H with
   op   dout    <- dout
   proof *.
 
-
 local module Wrap (O : RO) : Oracle = {
   proc init() = {
     var w, f;

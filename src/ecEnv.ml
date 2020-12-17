@@ -108,7 +108,7 @@ type mc = {
   mc_tydecls    : (ipath * EcDecl.tydecl) MMsym.t;
   mc_operators  : (ipath * EcDecl.operator) MMsym.t;
   mc_axioms     : (ipath * EcDecl.axiom) MMsym.t;
-  mc_theories   : (ipath * (ctheory * thmode)) MMsym.t;
+  mc_theories   : (ipath * ctheory) MMsym.t;
   mc_typeclasses: (ipath * typeclass) MMsym.t;
   mc_rwbase     : (ipath * path) MMsym.t;
   mc_components : ipath MMsym.t;
@@ -1059,13 +1059,13 @@ module MC = struct
           in
             (add2mc _up_mod subme.me_name (subme, Some lc) mc, Some submcs)
 
-      | Th_theory (xsubth, ((cth, `Concrete) as subth)) ->
+      | Th_theory (xsubth, cth) ->
+        if cth.cth_mode = `Concrete then
           let submcs = mc_of_theory_r subscope (xsubth, cth) in
           let mc = _up_mc false mc (IPPath (expath xsubth)) in
-            (add2mc _up_theory xsubth subth mc, Some submcs)
-
-      | Th_theory (xsubth, ((_, `Abstract) as subth)) ->
-          (add2mc _up_theory xsubth subth mc, None)
+            (add2mc _up_theory xsubth cth mc, Some submcs)
+        else
+          (add2mc _up_theory xsubth cth mc, None)
 
       | Th_typeclass (x, tc) ->
           (add2mc _up_typeclass x tc mc, None)
@@ -1083,8 +1083,8 @@ module MC = struct
     in
       ((x, mc), List.rev_pmap identity submcs)
 
-  let mc_of_theory (env : env) (x : symbol) ((cth, thmode) : ctheory * thmode) =
-    match thmode with
+  let mc_of_theory (env : env) (x : symbol) (cth : ctheory) =
+    match cth.cth_mode with
     | `Concrete -> Some (mc_of_theory_r (root env) (x, cth))
     | `Abstract -> None
 
@@ -1113,7 +1113,7 @@ module MC = struct
             (IPPath (root env))
             (Mip.add (IPPath path) mc env.env_comps); }
 
-  and bind_theory x th env =
+  and bind_theory x (th:ctheory) env =
     match mc_of_theory env x th with
     | None -> bind _up_theory x th env
     | Some ((_, mc), submcs) ->
@@ -2818,8 +2818,8 @@ module Theory = struct
   let by_path_opt ?(mode = `All)(p : EcPath.path) (env : env) =
     let obj =
       match MC.by_path (fun mc -> mc.mc_theories) (IPPath p) env, mode with
-      | (Some (_, (_, `Concrete))) as obj, (`All | `Concrete) -> obj
-      | (Some (_, (_, `Abstract))) as obj, (`All | `Abstract) -> obj
+      | (Some (_, {cth_mode = `Concrete })) as obj, (`All | `Concrete) -> obj
+      | (Some (_, {cth_mode = `Abstract })) as obj, (`All | `Abstract) -> obj
       | _, _ -> None
 
     in omap check_not_suspended obj
@@ -2835,8 +2835,8 @@ module Theory = struct
 
   let lookup ?(mode = `Concrete) qname (env : env) =
     match MC.lookup_theory qname env, mode with
-    | (_, (_, `Concrete)) as obj, (`All | `Concrete) -> obj
-    | (_, (_, `Abstract)) as obj, (`All | `Abstract) -> obj
+    | (_, { cth_mode = `Concrete }) as obj, (`All | `Concrete) -> obj
+    | (_, { cth_mode = `Abstract }) as obj, (`All | `Abstract) -> obj
     | _ -> lookup_error (`QSymbol qname)
 
   let lookup_opt ?mode name env =
@@ -2856,7 +2856,7 @@ module Theory = struct
     | Th_instance (ty, k, _) ->
         TypeClass.bind_instance ty k inst
 
-    | Th_theory (x, (cth, `Concrete)) ->
+    | Th_theory (x, cth) when cth.cth_mode = `Concrete ->
         bind_instance_th (xpath x) inst cth.cth_items
 
     | Th_type (x, tyd) -> begin
@@ -2883,10 +2883,10 @@ module Theory = struct
     let xpath x = EcPath.pqname path x in
 
     match item with
-    | Th_theory (x, (cth, `Concrete)) ->
+    | Th_theory (x, cth) ->
+      if cth.cth_mode = `Concrete then
         bind_base_th tx (xpath x) base cth.cth_items
-    | Th_theory _ ->
-        base
+      else base
     | _ -> odfl base (tx path base item)
 
   (* ------------------------------------------------------------------ *)
@@ -2955,8 +2955,7 @@ module Theory = struct
     in bind_base_th for1
 
   (* ------------------------------------------------------------------ *)
-  let bind ?(mode = `Concrete) ?src name items env =
-    let cth = ({ cth_items = items; cth_source = src; }, mode) in
+  let bind name ({cth_items=items; cth_mode = mode} as cth) env =
 
     let env = MC.bind_theory name cth env in
     let env = { env with env_item = (Th_theory (name, cth)) :: env.env_item } in
@@ -3005,14 +3004,14 @@ module Theory = struct
               env
 
         | Th_export (p, _) ->
-            import env p (fst (by_path ~mode:`Concrete p env)).cth_items
+            import env p (by_path ~mode:`Concrete p env).cth_items
 
-        | Th_theory (x, ((_, `Concrete) as th)) ->
+        | Th_theory (x, ({cth_mode = `Concrete} as th)) ->
             let env = MC.import_theory (xpath x) th env in
             let env = MC.import_mc (IPPath (xpath x)) env in
               env
 
-        | Th_theory (x, ((_, `Abstract) as th)) ->
+        | Th_theory (x, ({cth_mode = `Abstract} as th)) ->
             MC.import_theory (xpath x) th env
 
         | Th_typeclass (x, tc) ->
@@ -3028,7 +3027,7 @@ module Theory = struct
         List.fold_left import_th_item env th
 
     in
-      import env path (fst (by_path ~mode:`Concrete path env)).cth_items
+      import env path (by_path ~mode:`Concrete path env).cth_items
 
   (* ------------------------------------------------------------------ *)
   let export (path : EcPath.path) lc (env : env) =
@@ -3054,13 +3053,13 @@ module Theory = struct
 
     fun cleared item ->
       match item with
-      | Th_theory (x, (cth, mode)) ->
+      | Th_theory (x, cth) ->
          let cleared, items =
            let xpath = EcPath.pqname root x in
            filter_th clears xpath cleared cth.cth_items in
          let item = items |> omap (fun items ->
            let cth = { cth with cth_items = items } in
-           Th_theory (x, (cth, mode))) in
+           Th_theory (x, cth)) in
          (cleared, item)
 
       | _ -> let item = match item with
@@ -3088,7 +3087,7 @@ module Theory = struct
       in (cleared, item)
 
   (* ------------------------------------------------------------------ *)
-  let close ?(clears = []) ?(pempty = `No) env =
+  let close ?(clears = []) ?(pempty = `No) loca mode env =
     let items = List.rev env.env_item in
     let items =
       if   List.is_empty clears
@@ -3101,15 +3100,20 @@ module Theory = struct
       | _, _ -> items
     in
 
-    items |> omap (fun items -> { cth_items = items; cth_source = None; })
+    items |> omap (fun items ->
+                 { cth_items = items;
+                   cth_source = None;
+                   cth_loca   = loca;
+                   cth_mode   = mode;
+               })
 
   (* ------------------------------------------------------------------ *)
-  let require ?(mode = `Concrete) x cth env =
+  let require x cth env =
     let rootnm  = EcCoreLib.p_top in
     let thpath  = EcPath.pqname rootnm x in
 
     let env =
-      match mode with
+      match cth.cth_mode with
       | `Concrete ->
           let (_, thmc), submcs =
             MC.mc_of_theory_r rootnm (x, cth)
@@ -3118,7 +3122,7 @@ module Theory = struct
       | `Abstract -> env
     in
 
-    let th = (cth, mode) in
+    let th = cth in
 
     let topmc = Mip.find (IPPath rootnm) env.env_comps in
     let topmc = MC._up_theory false topmc x (IPPath thpath, th) in
@@ -3133,7 +3137,7 @@ module Theory = struct
 
     let env = { env with env_current = current; env_comps = comps; } in
 
-    match mode with
+    match cth.cth_mode with
     | `Abstract -> env
 
     | `Concrete ->

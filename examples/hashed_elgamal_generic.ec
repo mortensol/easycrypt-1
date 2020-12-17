@@ -111,8 +111,8 @@ module SCDH_from_CPA(A:Adversary,O:Oracle): Top.SCDH.Adversary = {
 section.
   declare module A <: Adversary { LRO, Log, OnBound.G1, OnBound.G_bad }.
 
-  axiom choose_ll (O <: POracle {A}): islossless O.o => islossless A(O).choose.
-  axiom guess_ll (O <: POracle {A}) : islossless O.o => islossless A(O).guess.
+  declare axiom choose_ll (O <: POracle {A}): islossless O.o => islossless A(O).choose.
+  declare axiom guess_ll (O <: POracle {A}) : islossless O.o => islossless A(O).guess.
 
   local module BA = A(Bound(LRO)).
 

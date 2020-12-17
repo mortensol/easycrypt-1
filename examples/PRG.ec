@@ -188,7 +188,7 @@ section.
   declare module A <: Adv {P,F}.
 
   (* ... and whose a procedure is lossless whenever F.f and P.prg are *)
-  axiom AaL (F <: ARF {A}) (P <: APRG {A}):
+  declare axiom AaL (F <: ARF {A}) (P <: APRG {A}):
     islossless P.prg =>
     islossless F.f =>
     islossless A(F,P).a.
@@ -439,7 +439,7 @@ qed.
 
 section.
   declare module A <: Adv {C,P,F}.
-  axiom AaL (F <: ARF {A}) (P <: APRG {A}):
+  declare axiom AaL (F <: ARF {A}) (P <: APRG {A}):
     islossless P.prg =>
     islossless F.f =>
     islossless A(F,P).a.

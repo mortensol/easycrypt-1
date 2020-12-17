@@ -2854,7 +2854,7 @@ let pp_top_modexp ppe fmt (p, me) =
   let mp = EcPath.mpath_crt p [] (Some (EcPath.psymbol me.tme_expr.me_name)) in
   pp_modexp_lc ppe fmt (mp, (me.tme_expr, Some me.tme_loca))
 
-let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
+let rec pp_theory ppe (fmt : Format.formatter) (path, cth) =
   let basename = EcPath.basename path in
   let pp_clone fmt thsrc =
     thsrc |> oiter (fun EcTheory.{ ths_base } ->
@@ -2862,7 +2862,7 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, (cth, mode)) =
         EcSymbols.pp_qsymbol (PPEnv.th_symb ppe ths_base) basename) in
 
   let thkw =
-    match mode with
+    match cth.EcTheory.cth_mode with
     | `Abstract -> "abstract theory"
     | `Concrete -> "theory"
   in

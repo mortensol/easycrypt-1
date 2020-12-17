@@ -445,7 +445,7 @@ module Compute = {
 
 section Reduce.
   declare module A <: RCPA_Adversary { RCPA_Wrap, PRFi, Compute }.
-  axiom A_distinguish_ll (O <: RCPA_Oracles {A}): islossless O.enc => islossless A(O).distinguish.
+  declare axiom A_distinguish_ll (O <: RCPA_Oracles {A}): islossless O.enc => islossless A(O).distinguish.
 
   local module DoubleQuery (F : PRF) = {
     var qs : block fset
@@ -687,7 +687,7 @@ module QueryBounder(A:RCPA_Adversary, O:RCPA_Oracles) = {
 
 section Probability_RP_RF.
   declare module A <: RCPA_Adversary { PRPi, PRFi, QueryBounder }.
-  axiom A_run_ll (O <: RCPA_Oracles { A }): islossless O.enc => islossless A(O).distinguish.
+  declare axiom A_run_ll (O <: RCPA_Oracles { A }): islossless O.enc => islossless A(O).distinguish.
 
   local clone PRPi_RF as RP_RFc with
     op   q    <- q * ell
@@ -748,7 +748,7 @@ end section Probability_RP_RF.
 
 section Probability_Collision.
   declare module A <: RCPA_Adversary { PRPi, PRFi, Compute, QueryBounder }.
-  axiom A_run_ll (O <: RCPA_Oracles { A }): islossless O.enc => islossless A(O).distinguish.
+  declare axiom A_run_ll (O <: RCPA_Oracles { A }): islossless O.enc => islossless A(O).distinguish.
 
   local clone import Birthday as BBound with
     type T  <- block,

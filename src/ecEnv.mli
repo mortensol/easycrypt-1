@@ -253,17 +253,17 @@ module Theory : sig
   type t    = ctheory
   type mode = [`All | thmode]
 
-  val by_path     : ?mode:mode -> path -> env -> (t * thmode)
-  val by_path_opt : ?mode:mode -> path -> env -> (t * thmode) option
-  val lookup      : ?mode:mode -> qsymbol -> env -> path * (t * thmode)
-  val lookup_opt  : ?mode:mode -> qsymbol -> env -> (path * (t * thmode)) option
+  val by_path     : ?mode:mode -> path -> env -> t
+  val by_path_opt : ?mode:mode -> path -> env -> t option
+  val lookup      : ?mode:mode -> qsymbol -> env -> path * t
+  val lookup_opt  : ?mode:mode -> qsymbol -> env -> (path * t) option
   val lookup_path : ?mode:mode -> qsymbol -> env -> path
 
   val add  : path -> env -> env
-  val bind : ?mode:thmode -> ?src:thsource -> symbol -> theory -> env -> env
+  val bind : symbol -> ctheory -> env -> env
 
  (* FIXME: section ? ctheory -> theory *)
-  val require : ?mode:thmode -> symbol -> ctheory -> env -> env
+  val require : symbol -> ctheory -> env -> env
   val import  : path -> env -> env
   val export  : path -> is_local -> env -> env
 
@@ -272,6 +272,8 @@ module Theory : sig
   val close :
        ?clears:(path list)
     -> ?pempty:[`Full | `ClearOnly | `No]
+    -> EcTypes.is_local
+    -> EcTheory.thmode
     -> env -> ctheory option
 end
 

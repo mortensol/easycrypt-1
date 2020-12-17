@@ -26,7 +26,7 @@ and theory_item =
   | Th_axiom     of (symbol * axiom)
   | Th_modtype   of (symbol * top_module_sig)
   | Th_module    of top_module_expr
-  | Th_theory    of (symbol * (ctheory * thmode))
+  | Th_theory    of (symbol * ctheory)
   | Th_export    of EcPath.path * is_local
   | Th_instance  of (ty_params * EcTypes.ty) * tcinstance * is_local
   | Th_typeclass of (symbol * typeclass)
@@ -41,6 +41,8 @@ and thsource = {
 
 and ctheory = {
   cth_items  : theory;
+  cth_mode   : thmode;
+  cth_loca   : is_local;
   cth_source : thsource option;
 }
 
