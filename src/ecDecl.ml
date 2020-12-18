@@ -132,6 +132,7 @@ type operator = {
   op_ty      : EcTypes.ty;
   op_kind    : operator_kind;
   op_loca    : locality;
+  op_opaque  : bool;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -190,20 +191,21 @@ let is_prind op =
   | OB_pred (Some (PR_Ind _)) -> true
   | _ -> false
 
-let gen_op tparams ty kind lc = {
+let gen_op ~opaque tparams ty kind lc = {
   op_tparams = tparams;
   op_ty      = ty;
   op_kind    = kind;
   op_loca    = lc;
+  op_opaque  = opaque;
 }
 
-let mk_pred tparams dom body lc =
+let mk_pred ~opaque tparams dom body lc =
   let kind = OB_pred body in
-    gen_op tparams (EcTypes.toarrow dom EcTypes.tbool) kind lc
+    gen_op ~opaque tparams (EcTypes.toarrow dom EcTypes.tbool) kind lc
 
-let mk_op tparams ty body lc =
+let mk_op ~opaque tparams ty body lc =
   let kind = OB_oper body in
-    gen_op tparams ty kind lc
+    gen_op ~opaque tparams ty kind lc
 
 let mk_abbrev ?(ponly = false) tparams xs (codom, body) lc =
   let kind = {
@@ -213,7 +215,8 @@ let mk_abbrev ?(ponly = false) tparams xs (codom, body) lc =
     ont_ponly = ponly;
   } in
 
-  gen_op tparams (EcTypes.toarrow (List.map snd xs) codom) (OB_nott kind) lc
+  gen_op ~opaque:false tparams
+    (EcTypes.toarrow (List.map snd xs) codom) (OB_nott kind) lc
 
 let operator_as_ctor (op : operator) =
   match op.op_kind with

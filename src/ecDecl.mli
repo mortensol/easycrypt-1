@@ -108,6 +108,7 @@ type operator = {
   op_ty      : EcTypes.ty;
   op_kind    : operator_kind;
   op_loca    : locality;
+  op_opaque  : bool;
 }
 
 val op_ty     : operator -> ty
@@ -120,8 +121,8 @@ val is_fix    : operator -> bool
 val is_abbrev : operator -> bool
 val is_prind  : operator -> bool
 
-val mk_op   : ty_params -> ty -> opbody option -> locality -> operator
-val mk_pred : ty_params -> ty list -> prbody option -> locality -> operator
+val mk_op   : opaque:bool -> ty_params -> ty -> opbody option -> locality -> operator
+val mk_pred : opaque:bool -> ty_params -> ty list -> prbody option -> locality -> operator
 
 val mk_abbrev :
      ?ponly:bool -> ty_params -> (EcIdent.ident * ty) list

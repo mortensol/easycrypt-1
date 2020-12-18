@@ -232,7 +232,8 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
         let body    = body |> EcTypes.e_mapty uni in
         let ty      = uni ty in
         let tparams = EcUnify.UniEnv.tparams ue in
-        let newop   = mk_op tparams ty (Some (OP_Plain (body, nosmt))) oopd.op_loca in
+        let newop   = mk_op ~opaque:false tparams ty
+                        (Some (OP_Plain (body, nosmt))) oopd.op_loca in
           match opmode with
           | `Alias ->
               let subst, x = rename ove subst (`Op, x) in
@@ -301,7 +302,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
              op_ty      = body.EcFol.f_ty;
              op_kind    = OB_pred (Some (PR_Plain body));
              op_loca    = oopr.op_loca;
-           } in
+             op_opaque  = oopr.op_opaque; } in
 
           match prmode with
           | `Alias ->

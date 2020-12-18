@@ -723,35 +723,35 @@ let generalize_opdecl to_gen prefix (name, operator) =
       | OB_oper None ->
         let fv = operator.op_ty.ty_fv in
         let extra = generalize_extra_ty to_gen fv in
-        let op_tparams = extra @ operator.op_tparams in
-        let op_ty = operator.op_ty in
-        let args = List.map (fun (id, _) -> tvar id) op_tparams in
+        let tparams = extra @ operator.op_tparams in
+        let opty = operator.op_ty in
+        let args = List.map (fun (id, _) -> tvar id) tparams in
         let tosubst = (List.map fst operator.op_tparams,
-                       e_op path args op_ty) in
+                       e_op path args opty) in
         let tg_subst =
           EcSubst.add_opdef to_gen.tg_subst path tosubst in
-        tg_subst, {op_tparams; op_ty; op_kind = OB_oper None; op_loca = `Global}
+        tg_subst, mk_op ~opaque:false tparams opty None `Global
 
       | OB_pred None ->
         let fv = operator.op_ty.ty_fv in
         let extra = generalize_extra_ty to_gen fv in
-        let op_tparams = extra @ operator.op_tparams in
-        let op_ty = operator.op_ty in
-        let args = List.map (fun (id, _) -> tvar id) op_tparams in
+        let tparams = extra @ operator.op_tparams in
+        let opty = operator.op_ty in
+        let args = List.map (fun (id, _) -> tvar id) tparams in
         let tosubst = (List.map fst operator.op_tparams,
-                       f_op path args op_ty) in
+                       f_op path args opty) in
         let tg_subst =
           EcSubst.add_pddef to_gen.tg_subst path tosubst in
-        tg_subst, {op_tparams; op_ty; op_kind = OB_pred None; op_loca = `Global }
+        tg_subst, mk_op ~opaque:false tparams opty None `Global
 
       | OB_oper (Some body) ->
         let fv = op_body_fv body operator.op_ty in
         let extra_t = generalize_extra_ty to_gen fv in
-        let op_tparams = extra_t @ operator.op_tparams in
+        let tparams = extra_t @ operator.op_tparams in
         let extra_a = generalize_extra_args to_gen.tg_binds fv in
-        let op_ty = toarrow (List.map snd extra_a) operator.op_ty in
-        let t_args = List.map (fun (id, _) -> tvar id) op_tparams in
-        let eop = e_op path t_args op_ty in
+        let opty = toarrow (List.map snd extra_a) operator.op_ty in
+        let t_args = List.map (fun (id, _) -> tvar id) tparams in
+        let eop = e_op path t_args opty in
         let e   =
           e_app eop (List.map (fun (id,ty) -> e_local id ty) extra_a)
             operator.op_ty in
@@ -779,9 +779,7 @@ let generalize_opdecl to_gen prefix (name, operator) =
                 opf_nosmt    = opfix.opf_nosmt;
               }
         in
-        let operator =
-          {op_tparams; op_ty;
-           op_kind = OB_oper (Some body); op_loca = `Global } in
+        let operator = mk_op ~opaque:false tparams opty (Some body) `Global in
         tg_subst, operator
 
       | OB_pred (Some body) ->
@@ -808,8 +806,8 @@ let generalize_opdecl to_gen prefix (name, operator) =
             PR_Ind { pri with pri_args }
         in
         let operator =
-          {op_tparams; op_ty;
-           op_kind = OB_pred (Some body); op_loca = `Global } in
+          { op_tparams; op_ty; op_kind = OB_pred (Some body);
+            op_loca = `Global; op_opaque = false; } in
         tg_subst, operator
 
 
@@ -821,7 +819,8 @@ let generalize_opdecl to_gen prefix (name, operator) =
         let op_ty   = toarrow (List.map snd extra_a) operator.op_ty in
         let nott = { nott with ont_args = extra_a @ nott.ont_args; } in
         to_gen.tg_subst,
-          { op_tparams; op_ty; op_kind = OB_nott nott; op_loca = `Global }
+          { op_tparams; op_ty; op_kind = OB_nott nott;
+            op_loca = `Global; op_opaque = false; }
     in
     let to_gen = {to_gen with tg_subst} in
     to_gen, Some (Th_operator (name, operator))
