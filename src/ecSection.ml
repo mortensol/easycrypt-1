@@ -21,6 +21,46 @@ module Mid  = EcIdent.Mid
 module MSym = EcSymbols.Msym
 
 (* -------------------------------------------------------------------- *)
+type cbarg = [
+  | `Type       of path
+  | `Op         of path
+  | `Ax         of path
+  | `Module     of mpath
+  | `ModuleType of path
+  | `Typeclass  of path
+
+]
+
+type cb = cbarg -> unit
+
+(* -------------------------------------------------------------------- *)
+type dep_error =
+  { e_env : EcEnv.env;
+    e_who : cbarg * locality;
+    e_dep : cbarg * locality;
+  }
+
+let pp_error fmt err =
+  let ppe = EcPrinting.PPEnv.ofenv err.e_env in
+  let pp_cbarg fmt = function
+    | `Type p -> Format.fprintf fmt "type %a" (EcPrinting.pp_tyname ppe) p
+    | `Op   p -> Format.fprintf fmt "operator %a" (EcPrinting.pp_opname ppe) p
+    | `Ax   p -> Format.fprintf fmt "lemma/axiom %a" (EcPrinting.pp_axname ppe) p
+    | `Module mp -> Format.fprintf fmt "module %a" (EcPrinting.pp_topmod ppe) mp
+    | `ModuleType p ->
+      let mty = EcEnv.ModTy.modtype p err.e_env in
+      Format.fprintf fmt "module type %a" (EcPrinting.pp_modtype1 ppe) mty
+    | `Typeclass p ->
+      Format.fprintf fmt "typeclass %a" (EcPrinting.pp_tcname ppe) p in
+  let pp_locality fmt = function
+    | `Local -> Format.fprintf fmt "local"
+    | `Global -> ()
+    | `Declare -> Format.fprintf fmt "declared" in
+  let pp fmt (who, lc) =
+    Format.fprintf fmt "%a %a" pp_locality lc pp_cbarg who in
+  Format.fprintf fmt "%a cannot depend on %a" pp err.e_who pp err.e_dep
+
+(* -------------------------------------------------------------------- *)
 exception SectionError of string
 
 let pp_section_error fmt exn =
@@ -41,18 +81,6 @@ let hierror fmt =
       Format.pp_print_flush bfmt ();
       raise (SectionError (Buffer.contents buf)))
     bfmt fmt
-
-(* -------------------------------------------------------------------- *)
-type cbarg = [
-  | `Type       of path
-  | `Op         of path
-  | `Ax         of path
-  | `Module     of mpath
-  | `ModuleType of path
-
-]
-
-type cb = cbarg -> unit
 
 (* -------------------------------------------------------------------- *)
 let rec on_ty (cb : cb) (ty : ty) =
@@ -290,11 +318,18 @@ and on_fun_oi (cb : cb) (oi : oracle_info) =
   List.iter (fun x -> cb (`Module x.x_top)) oi.oi_calls
 
 (* -------------------------------------------------------------------- *)
+let on_typeclasses cb s =
+  Sp.iter (fun p -> cb (`Typeclass p)) s
+
+let on_typarams cb typarams =
+    List.iter (fun (_,s) -> on_typeclasses cb s) typarams
+
+(* -------------------------------------------------------------------- *)
 let on_tydecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (tyd : tydecl) =
+  on_typarams (cb env) tyd.tyd_params;
   match tyd.tyd_type with
   | `Concrete ty -> on_ty (cb env) ty
-  | `Abstract _  -> ()
-
+  | `Abstract s  -> on_typeclasses (cb env) s
   | `Record (f, fds) ->
       let env = EcEnv.Ty.bind name tyd env in
       let cb = cb env in
@@ -307,8 +342,14 @@ let on_tydecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (tyd : tydecl) =
      List.iter (List.iter (on_ty cb) |- snd) dt.tydt_ctors;
      List.iter (on_form cb) [dt.tydt_schelim; dt.tydt_schcase]
 
+let on_typeclass cb tc =
+  oiter (fun p -> cb (`Typeclass p)) tc.tc_prt;
+  List.iter (fun (_,ty) -> on_ty cb ty) tc.tc_ops;
+  List.iter (fun (_,f)  -> on_form cb f) tc.tc_axs
+
 (* -------------------------------------------------------------------- *)
 let on_opdecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (opdecl : operator) =
+  on_typarams (cb env) opdecl.op_tparams;
   let for_kind () =
     match opdecl.op_kind with
    | OB_pred None -> ()
@@ -357,6 +398,7 @@ let on_opdecl (env:EcEnv.env) (cb : EcEnv.env -> cb) name (opdecl : operator) =
 
 (* -------------------------------------------------------------------- *)
 let on_axiom (cb : cb) (ax : axiom) =
+  on_typarams cb ax.ax_tparams;
   on_form cb ax.ax_spec
 
 (* -------------------------------------------------------------------- *)
@@ -410,6 +452,7 @@ let is_declared (env : EcEnv.env) (who : cbarg) =
   | `Type p -> (EcEnv.Ty.by_path p env).tyd_loca = `Declare
   | `Op   p -> (EcEnv.Op.by_path p env).op_loca  = `Declare
   | `Ax p   -> (EcEnv.Ax.by_path p env).ax_loca  = `Declare
+  | `Typeclass _ -> false
   | `ModuleType _ -> false
   | `Module    mp ->
     begin match mp.m_top with
@@ -423,6 +466,7 @@ let is_local (env : EcEnv.env) (who : cbarg) =
   | `Type       p -> (EcEnv.Ty.by_path p env).tyd_loca = `Local
   | `Op         p -> (EcEnv.Op.by_path p env).op_loca  = `Local
   | `Ax         p -> (EcEnv.Ax.by_path p env).ax_loca  = `Local
+  | `Typeclass  p -> (EcEnv.TypeClass.by_path p env).tc_loca  = `Local
   | `Module mp    ->
     begin match EcEnv.Mod.by_mpath_opt mp env with
     | Some (_, lc) -> lc = Some `Local
@@ -487,16 +531,16 @@ let add_declared_mod to_gen id modty restr =
   }
 
 let add_declared_ty to_gen path tydecl =
-  assert (
-      tydecl.tyd_params = [] &&
-      match tydecl.tyd_type with
-      | `Abstract _ -> true
-      | _ -> false );
+  assert (tydecl.tyd_params = []);
+  let s =
+    match tydecl.tyd_type with
+    | `Abstract s -> s
+    | _ -> assert false in
 
   let name = "'" ^ basename path in
   let id = EcIdent.create name in
   { to_gen with
-    tg_params = to_gen.tg_params @ [id, Sp.empty];
+    tg_params = to_gen.tg_params @ [id, s];
     tg_subst  = EcSubst.add_tydef to_gen.tg_subst path ([], tvar id);
   }
 
@@ -782,7 +826,6 @@ let generalize_opdecl to_gen prefix (name, operator) =
     let to_gen = {to_gen with tg_subst} in
     to_gen, Some (Th_operator (name, operator))
 
-
   | `Declare ->
     let to_gen = add_declared_op to_gen path operator in
     to_gen, None
@@ -792,11 +835,8 @@ let rec generalize_axiom to_gen prefix (name, ax) =
   let path = pqname prefix name in
   match ax.ax_loca with
   | `Local ->
-    if is_axiom ax.ax_kind then
-      generalize_axiom to_gen prefix (name, { ax with ax_loca = `Global })
-    else
-(*    assert (not (is_axiom ax.ax_kind)); *)
-      add_clear to_gen (`Ax path), None
+    assert (not (is_axiom ax.ax_kind));
+    add_clear to_gen (`Ax path), None
   | `Global ->
     let ax_spec =
       match ax.ax_kind with
@@ -997,6 +1037,27 @@ let check_declare scenv =
   if not (scenv.sc_insec) then
     hierror "declare are only allowed in section"
 
+(*
+type notdepend = {
+    d_ty    : locality list;
+    d_op    : locality list;
+    d_ax    : locality list;
+    d_mod   : locality list;
+    d_modty : locality list;
+    d_tc    : locality list;
+  }
+
+let cb_lc env from lc who =
+  match lc with
+  |
+  if is_declared
+let cb env from nd who =
+
+ *)
+
+
+
+
 let check_tyd scenv name tyd =
   match tyd.tyd_loca with
   | `Local ->
@@ -1019,7 +1080,7 @@ let check_tyd scenv name tyd =
       | `Op _ ->
         (* This case can occur because of elim/case scheme *)
         assert (not (is_local env who || is_declared env who))
-      | `Ax _  | `ModuleType _ -> assert false in
+      | `Ax _  | `ModuleType _ | `Typeclass _ -> assert false in
     on_tydecl scenv.sc_env cb name tyd
 
 let cb_glob scenv (who:cbarg) =
@@ -1038,7 +1099,7 @@ let cb_glob scenv (who:cbarg) =
     if is_local scenv who then
       hierror "global definition can't depend of local module type %s"
         (EcPath.tostring p)
-  | `Ax _ -> assert false
+  | `Ax _ | `Typeclass _ -> assert false
 
 let check_op scenv name op =
   match op.op_loca with
@@ -1068,8 +1129,8 @@ let check_ax scenv name ax =
   match ax.ax_loca with
   | `Local ->
     check_local scenv;
-(*    if is_axiom ax.ax_kind && not scenv.sc_abstr then
-      hierror "axiom %s can't be local" name *)
+    if is_axiom ax.ax_kind && not scenv.sc_abstr then
+      hierror "axiom %s can't be local" name
   | `Declare ->
     check_declare scenv;
     if ax.ax_tparams <> [] then
@@ -1104,7 +1165,7 @@ let cb_mod scenv s (who : cbarg) =
        s (EcPath.tostring p);
 
   | `Module mp -> check_glob_mp_ty s scenv mp
-  | `Ax _      -> assert false
+  | `Ax _ | `Typeclass _ -> assert false
 
 
 let check_modtype scenv ms =
@@ -1122,8 +1183,60 @@ let check_module scenv me =
     assert false
 
 let check_typeclass scenv tc =
-  (* FIXME section *)
-  assert false
+  if tc.tc_loca <> `Local then
+    let cb who =
+      if is_declared scenv.sc_env who then hierror "typeclasses cannot depend of declared";
+      if is_local scenv.sc_env who then hierror "non-local typeclasses cannot depend of locals" in
+  on_typeclass cb tc
+
+let check_ring env cb r =
+  on_ty cb r.r_type;
+  let on_p p =
+    if is_declared env (`Op p) then
+      hierror "ring instances cannot depend on declared operators";
+    if is_local env (`Op p) then
+      hierror "ring instances cannot depend on local operators" in
+  List.iter on_p [r.r_zero; r.r_one; r.r_add; r.r_mul];
+  List.iter (oiter on_p) [r.r_opp; r.r_exp; r.r_sub];
+  match r.r_embed with
+  | `Direct | `Default -> ()
+  | `Embed p -> on_p p
+
+let check_field env cb f =
+  check_ring env cb f.f_ring;
+  let on_p p =
+    if is_declared env (`Op p) then
+      hierror "field instances cannot depend on declared operators";
+    if is_local env (`Op p) then
+      hierror "field instances cannot depend on local operators" in
+  on_p f.f_inv; oiter on_p f.f_div
+
+let check_instance scenv ty tci lc =
+  if lc = `Local then ()
+  else
+    let cb nodeclared who =
+      match who with
+      | `Type p ->
+        if nodeclared && is_declared scenv.sc_env who then
+          hierror "this kind of global instances cannot depend on declared types %s"
+            (EcPath.tostring p);
+        if is_local scenv.sc_env who then
+          hierror "global instances can't depend on local types %s"
+            (EcPath.tostring p)
+      | `Module _ -> hierror "instances cannot depend on modules"
+      | `Op _  | `Ax _  | `ModuleType _ | `Typeclass _ -> assert false in
+
+    let check nodeclared =
+      on_typarams (cb nodeclared) (fst ty);
+      on_ty (cb nodeclared) (snd ty) in
+
+    match tci with
+    | `Ring r    -> check true; check_ring  scenv.sc_env (cb true) r
+    | `Field f   -> check true; check_field scenv.sc_env (cb true) f
+    | `General p ->
+      check false;
+      if is_local scenv.sc_env (`Typeclass p) then hierror "general instance is local"
+
 
 let rec check_item item scenv =
   match item with
@@ -1135,7 +1248,7 @@ let rec check_item item scenv =
   | Th_typeclass (_,tc) -> check_typeclass scenv tc
   | Th_theory  (_, cth) -> check_ctheory scenv cth
   | Th_export   (_, lc) -> assert (lc = `Global || scenv.sc_insec);
-  | Th_instance       _ -> () (* FIXME section: what to check *)
+  | Th_instance  (ty,tci,lc) -> check_instance scenv ty tci lc
   | Th_baserw (_,lc) ->
     if (lc = `Local && not scenv.sc_insec) then
       hierror "local base rewrite can only be declared inside section";
@@ -1235,7 +1348,7 @@ let enter_theory (name:symbol) (lc:is_local) (mode:thmode) scenv : scenv =
   { sc_env   = EcEnv.Theory.enter name scenv.sc_env;
     sc_top   = Some scenv;
     sc_loca  = if lc = `Local then lc else scenv.sc_loca;
-    sc_abstr = mode = `Abstract;
+    sc_abstr = scenv.sc_abstr || mode = `Abstract;
     sc_insec = scenv.sc_insec;
     sc_name  = Th (name, lc, mode);
     sc_items = []; }

@@ -152,7 +152,7 @@ let rec replay_tyd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, otyd) =
           let binding =
             { tyd_params = nargs;
               tyd_type   = `Concrete ntyd;
-              tyd_loca   = `Global; (* FIXME section *)
+              tyd_loca   = otyd.tyd_loca;
             } in
           let subst, x = rename ove subst (`Type, x) in
           (subst, ops, proofs, ove.ovre_hooks.hadd_item scope (Th_type (x, binding)))
@@ -232,7 +232,7 @@ and replay_opd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopd) =
         let body    = body |> EcTypes.e_mapty uni in
         let ty      = uni ty in
         let tparams = EcUnify.UniEnv.tparams ue in
-        let newop   = mk_op tparams ty (Some (OP_Plain (body, nosmt))) `Global (* FIXME section *) in
+        let newop   = mk_op tparams ty (Some (OP_Plain (body, nosmt))) oopd.op_loca in
           match opmode with
           | `Alias ->
               let subst, x = rename ove subst (`Op, x) in
@@ -300,7 +300,7 @@ and replay_prd (ove : _ ovrenv) (subst, ops, proofs, scope) (x, oopr) =
            { op_tparams = tparams;
              op_ty      = body.EcFol.f_ty;
              op_kind    = OB_pred (Some (PR_Plain body));
-             op_loca    = `Global; (* FIXME: section*)
+             op_loca    = oopr.op_loca;
            } in
 
           match prmode with

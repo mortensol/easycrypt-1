@@ -112,7 +112,8 @@ let rec toperror_of_exn_r ?gloc exn =
   | TopError (loc, e) ->
       let gloc = if EcLocation.isdummy loc then gloc else Some loc in
       toperror_of_exn_r ?gloc e
-
+  | EcSection.SectionError _ ->
+    Some (odfl _dummy gloc, exn)
   | HiScopeError (loc, msg) ->
       let gloc =
         match loc with
@@ -1425,37 +1426,42 @@ module Ty = struct
         sc_env = EcSection.add_item (Th_type (x, tydecl)) scope.sc_env }
 
   (* ------------------------------------------------------------------ *)
-  let add (scope : scope) (lc:locality) info tcs =
-    assert (scope.sc_pr_uc = None);
-
-    let (args, name) = info.pl_desc and loc = info.pl_loc in
+  let add scope (tyd : ptydecl located) =
+    let loc = loc tyd in
+    let { pty_name = name; pty_tyvars = args;
+          pty_body = body; pty_locality = tyd_loca } = unloc tyd in
+    check_name_available scope name;
     let env = env scope in
-    let tcs =
-      List.map
-        (fun tc -> fst (EcEnv.TypeClass.lookup (unloc tc) env))
-        tcs
+    let tyd_params, tyd_type =
+      match body with
+      | PTYD_Abstract tcs ->
+        let tcs =
+          List.map
+            (fun tc -> fst (EcEnv.TypeClass.lookup (unloc tc) env))
+            tcs  in
+        let ue = TT.transtyvars env (loc, Some args) in
+        EcUnify.UniEnv.tparams ue, `Abstract (Sp.of_list tcs)
+
+      | PTYD_Alias    bd ->
+        let ue     = TT.transtyvars env (loc, Some args) in
+        let body   = transty tp_tydecl env ue bd in
+        EcUnify.UniEnv.tparams ue, `Concrete body
+
+      | PTYD_Datatype dt ->
+        let datatype = EHI.trans_datatype env (mk_loc loc (args,name)) dt in
+        let tparams, tydt =
+          try ELI.datatype_as_ty_dtype datatype
+          with ELI.NonPositive -> EHI.dterror loc env EHI.DTE_NonPositive
+        in
+        tparams, `Datatype tydt
+
+      | PTYD_Record rt ->
+        let record  = EHI.trans_record env (mk_loc loc (args,name)) rt in
+        let scheme  = ELI.indsc_of_record record in
+        record.ELI.rc_tparams, `Record (scheme, record.ELI.rc_fields)
     in
-    let ue = TT.transtyvars env (loc, Some args) in
-    let tydecl = {
-      tyd_params = EcUnify.UniEnv.tparams ue;
-      tyd_type   = `Abstract (Sp.of_list tcs);
-      tyd_loca   = lc;
-    } in
-      bind scope (unloc name, tydecl)
 
-  (* ------------------------------------------------------------------ *)
-  let define (scope : scope) (lc : locality) info body =
-    assert (scope.sc_pr_uc = None);
-    let env = env scope in
-    let (args, name) = info.pl_desc and loc = info.pl_loc in
-    let ue     = TT.transtyvars env (loc, Some args) in
-    let body   = transty tp_tydecl env ue body in
-    let tydecl = {
-      tyd_params = EcUnify.UniEnv.tparams ue;
-      tyd_type   = `Concrete body;
-      tyd_loca   = lc;
-    } in
-      bind scope (unloc name, tydecl)
+    bind scope (unloc name, { tyd_params; tyd_type; tyd_loca })
 
   (* ------------------------------------------------------------------ *)
   let bindclass (scope : scope) (x, tc) =
@@ -1662,6 +1668,8 @@ module Ty = struct
         assert (EcUnify.UniEnv.closed ue);
         (EcUnify.UniEnv.tparams ue, Tuni.offun (EcUnify.UniEnv.close ue) ty)
     in
+    if not (List.is_empty (fst ty)) then
+      hierror "ring instances cannot be polymorphic";
     let symbols = EcAlgTactic.ring_symbols env kind (snd ty) in
     let symbols = check_tci_operators env ty tci.pti_ops symbols in
     let cr      = ring_of_symmap env (snd ty) kind symbols in
@@ -1670,8 +1678,8 @@ module Ty = struct
     let inter   = check_tci_axioms scope mode tci.pti_axs axioms lc in
     let add env p =
       EcSection.add_item (Th_instance(ty,`General p, tci.pti_loca)) env in
+
     let scope   =
-      (* FIXME section : why we erase fst ty ? *)
       { scope with sc_env =
           List.fold_left add
             (EcSection.add_item
@@ -1679,7 +1687,6 @@ module Ty = struct
                scope.sc_env)
             [p_zmod; p_ring; p_idomain] }
 
-    (* FIXME section strange to defer inter after adding the ring *)
     in Ax.add_defer scope inter
 
   (* ------------------------------------------------------------------ *)
@@ -1699,6 +1706,8 @@ module Ty = struct
         assert (EcUnify.UniEnv.closed ue);
         (EcUnify.UniEnv.tparams ue, Tuni.offun (EcUnify.UniEnv.close ue) ty)
     in
+    if not (List.is_empty (fst ty)) then
+      hierror "field instances cannot be polymorphic";
     let symbols = EcAlgTactic.field_symbols env (snd ty) in
     let symbols = check_tci_operators env ty tci.pti_ops symbols in
     let cr      = field_of_symmap env (snd ty) symbols in
@@ -1710,7 +1719,6 @@ module Ty = struct
     let scope   =
       { scope with
         sc_env =
-          (* FIXME section : why we erase fst ty ? *)
           List.fold_left add
             (EcSection.add_item
                (Th_instance (([], snd ty), `Field cr, tci.pti_loca))
@@ -1791,51 +1799,7 @@ module Ty = struct
           hierror "unsupported-option";
         failwith "unsupported"          (* FIXME *)
 
-  (* ------------------------------------------------------------------ *)
-  let add_datatype (scope : scope) (lc : locality) (tydname : ptydname) dt =
-    let name = snd (unloc tydname) in
 
-    check_name_available scope name;
-
-    let datatype = EHI.trans_datatype (env scope) tydname dt in
-    let ctors    = datatype.ELI.dt_ctors in
-
-    (* Generate schemes *)
-    let (indsc, casesc) =
-      try
-        let indsc    = ELI.indsc_of_datatype `Elim datatype in
-        let casesc   = ELI.indsc_of_datatype `Case datatype in
-        (indsc, casesc)
-      with ELI.NonPositive ->
-        EHI.dterror tydname.pl_loc (env scope) EHI.DTE_NonPositive
-    in
-
-    (* Add final datatype to environment *)
-    let tydecl = {
-      tyd_params = datatype.ELI.dt_tparams;
-      tyd_type   = `Datatype { tydt_ctors   = ctors ;
-                               tydt_schcase = casesc;
-                               tydt_schelim = indsc ; };
-      tyd_loca   = lc }
-
-    in bind scope (unloc name, tydecl)
-
-  (* ------------------------------------------------------------------ *)
-  let add_record (scope : scope) (lc : locality) (tydname : ptydname) rt =
-    let name = snd (unloc tydname) in
-
-    check_name_available scope name;
-
-    let record  = EHI.trans_record (env scope) tydname rt in
-    let scheme  = ELI.indsc_of_record record in
-
-    (* Add final record to environment *)
-    let tydecl  = {
-      tyd_params = record.ELI.rc_tparams;
-      tyd_type   = `Record (scheme, record.ELI.rc_fields);
-      tyd_loca   = lc }
-
-    in bind scope (unloc name, tydecl)
 end
 
 (* -------------------------------------------------------------------- *)

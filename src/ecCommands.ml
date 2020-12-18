@@ -299,18 +299,9 @@ exception Pragma of [`Reset | `Restart]
 (* -------------------------------------------------------------------- *)
 let rec process_type (scope : EcScope.scope) (tyd : ptydecl located) =
   EcScope.check_state `InTop "type" scope;
-
-  let tyname = (tyd.pl_desc.pty_tyvars, tyd.pl_desc.pty_name) in
-  let lc     = tyd.pl_desc.pty_locality in
-  let scope =
-    match tyd.pl_desc.pty_body with
-    | PTYD_Abstract bd -> EcScope.Ty.add          scope lc (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Alias    bd -> EcScope.Ty.define       scope lc (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Datatype bd -> EcScope.Ty.add_datatype scope lc (mk_loc tyd.pl_loc tyname) bd
-    | PTYD_Record   bd -> EcScope.Ty.add_record   scope lc (mk_loc tyd.pl_loc tyname) bd
-  in
-    EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
-    scope
+  let scope  =  EcScope.Ty.add scope tyd in
+  EcScope.notify scope `Info "added type: `%s'" (unloc tyd.pl_desc.pty_name);
+  scope
 
 (* -------------------------------------------------------------------- *)
 and process_types (scope : EcScope.scope) tyds =
@@ -396,7 +387,6 @@ and process_th_open (scope : EcScope.scope) (loca, abs, name) =
 (* -------------------------------------------------------------------- *)
 and process_th_close (scope : EcScope.scope) (clears, name) =
   let name = unloc name in
-  (* FIXME section: why this is done here ? *)
   EcScope.check_state `InTop "theory closing" scope;
   if (fst (EcScope.name scope)) <> name then
     EcScope.hierror

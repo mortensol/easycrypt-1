@@ -887,7 +887,6 @@ module MC = struct
                     ax_spec    = ax;
                     ax_kind    = `Axiom (Ssym.empty, false);
                     ax_nosmt   = true;
-                    (* FIXME section : why should I do the identity here ? *)
                     ax_loca    = loca;
           }))
           tc.tc_axs
@@ -2535,6 +2534,14 @@ module ModTy = struct
   let lookup_path name env =
     fst (lookup name env)
 
+  let modtype p env =
+    let { tms_sig = sig_ } = by_path p env in
+    (* eta-normal form *)
+    { mt_params = sig_.mis_params;
+      mt_name   = p;
+      mt_args   = List.map (EcPath.mident -| fst) sig_.mis_params;
+    }
+
   let bind name modty env =
     let env = MC.bind_modty name modty env in
       { env with
@@ -3080,8 +3087,6 @@ module Theory = struct
 
       | (Th_export (p, _)) as item ->
           if Sp.mem p cleared then None else Some item
-      (* FIXME section *)
-      (* why reduction are not cleared *)
       | _ as item -> Some item
 
       in (cleared, item)

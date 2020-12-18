@@ -214,6 +214,8 @@ module ModTy : sig
   val lookup_opt  : qsymbol -> env -> (path * top_module_sig) option
   val lookup_path : qsymbol -> env -> path
 
+  val modtype : path -> env -> module_type
+
   val add  : path -> env -> env
   val bind : symbol -> t -> env -> env
 

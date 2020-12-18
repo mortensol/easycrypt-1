@@ -1295,12 +1295,7 @@ let lookup_fun env name =
 (* -------------------------------------------------------------------- *)
 let transmodtype (env : EcEnv.env) (modty : pmodule_type) =
   let (p, { tms_sig = sig_ }) = lookup_module_type env modty in
-  let modty = {                         (* eta-normal form *)
-    mt_params = sig_.mis_params;
-    mt_name   = p;
-    mt_args   = List.map (EcPath.mident -| fst) sig_.mis_params;
-  } in
-    (modty, sig_)
+  EcEnv.ModTy.modtype p env, sig_
 
 let transcall transexp env ue loc fsig args =
   let targ = fsig.fs_arg in
@@ -1571,7 +1566,7 @@ and transmod_body ~attop (env : EcEnv.env) x params (me:pmodule_expr) =
         (InvalidModAppl (MAE_WrongArgCount(0,List.length allparams)));
     let me, _ = EcEnv.Mod.by_mpath mp env in
     let arity = List.length stparams in
-    let me =                    (* FIXME: section *)
+    let me =
       { me with
         me_name  = x.pl_desc;
         me_body  = ME_Alias (arity,mp);
