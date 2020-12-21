@@ -9,8 +9,11 @@
 (* This API has been mostly inspired from the [seq] library of the
  * ssreflect Coq extension. *)
 
+
 (* -------------------------------------------------------------------- *)
 require import AllCore.
+
+section.
 (* -------------------------------------------------------------------- *)
 type 'a list = [
   | "[]"
@@ -2831,3 +2834,4 @@ lemma lex_total (e : 'a -> 'a -> bool):
   => (forall s1 s2, lex e s1 s2 \/ lex e s2 s1).
 proof. by move=> h; elim=> [|x1 s1 IHs1] [|x2 s2] //=; smt. qed.
 
+end section.

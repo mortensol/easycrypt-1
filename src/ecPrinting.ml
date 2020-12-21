@@ -445,6 +445,10 @@ let pp_axname ppe fmt p =
   Format.fprintf fmt "%a" EcSymbols.pp_qsymbol (PPEnv.ax_symb ppe p)
 
 (* -------------------------------------------------------------------- *)
+let pp_thname ppe fmt p =
+  EcSymbols.pp_qsymbol fmt (PPEnv.th_symb ppe p)
+
+(* -------------------------------------------------------------------- *)
 let pp_funname (ppe : PPEnv.t) fmt p =
   Format.fprintf fmt "%a.%a"
     (pp_topmod ppe) p.P.x_top pp_path p.P.x_sub
@@ -2859,7 +2863,7 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, cth) =
   let pp_clone fmt thsrc =
     thsrc |> oiter (fun EcTheory.{ ths_base } ->
       Format.fprintf fmt "(* clone %a as %s *)@,"
-        EcSymbols.pp_qsymbol (PPEnv.th_symb ppe ths_base) basename) in
+        (pp_thname ppe) ths_base basename) in
 
   let thkw =
     match cth.EcTheory.cth_mode with

@@ -328,7 +328,7 @@ type prelude = {
   pr_required : required;
 }
 
-type thloaded = EcTheory.ctheory
+type thloaded = EcSection.checked_ctheory
 
 type scope = {
   sc_name     : (symbol * EcTheory.thmode);
@@ -1636,6 +1636,8 @@ module Ty = struct
       interactive
 
   (* ------------------------------------------------------------------ *)
+  (* FIXME section: those path does not exists ...
+     futhermode Ring.ZModule is an abstract theory *)
   let p_zmod    = EcPath.fromqsymbol ([EcCoreLib.i_top; "Ring"; "ZModule"], "zmodule")
   let p_ring    = EcPath.fromqsymbol ([EcCoreLib.i_top; "Ring"; "ComRing"], "ring"   )
   let p_idomain = EcPath.fromqsymbol ([EcCoreLib.i_top; "Ring"; "IDomain"], "idomain")
@@ -1812,7 +1814,7 @@ module Theory = struct
   let bind (scope : scope) (x, cth) =
     assert (scope.sc_pr_uc = None);
     { scope with
-      sc_env = EcSection.add_item (Th_theory (x, cth)) scope.sc_env }
+      sc_env = EcSection.add_th x cth scope.sc_env }
 
 
   (* ------------------------------------------------------------------ *)
