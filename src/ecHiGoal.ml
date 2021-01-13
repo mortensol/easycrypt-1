@@ -612,11 +612,7 @@ let process_delta ?target (s, o, p) tc =
             | _ -> assert false)
           target
       in
-<<<<<<< HEAD
-        FApi.tcenv_of_tcenv1 (t_change ~ri ?target:idtg target tc)
-=======
-        t_change ?target:idtg target tc
->>>>>>> 1.0
+        t_change ~ri ?target:idtg target tc
     end else t_id tc
   end
 
@@ -645,11 +641,7 @@ let process_delta ?target (s, o, p) tc =
       in
 
       let target = FPosition.map cpos (fun _ -> p) target in
-<<<<<<< HEAD
-        FApi.tcenv_of_tcenv1 (t_change ~ri ?target:idtg target tc)
-=======
-      t_change ?target:idtg target tc
->>>>>>> 1.0
+      t_change ~ri ?target:idtg target tc
     end else t_id tc
 
 (* -------------------------------------------------------------------- *)
