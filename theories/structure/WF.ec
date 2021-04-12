@@ -89,7 +89,7 @@ qed.
 
 (* restriction of Int.(<) to natural numbers *)
 
-pred lt_nat (x y : int) = 0 <= x < y.
+op lt_nat (x y : int) = 0 <= x < y.
 
 lemma wf_lt_nat : wf lt_nat.
 proof.  
