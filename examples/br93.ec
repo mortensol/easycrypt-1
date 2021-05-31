@@ -4,7 +4,6 @@ require import Distr DBool.
 require (*--*) BitWord OW ROM.
 
 (* ---------------- Sane Default Behaviours --------------------------- *)
-pragma -oldip.
 pragma +implicits.
 
 (* -------------------------------------------------------------------- *)
@@ -674,5 +673,6 @@ apply/(Reduction (A_CPA(A)) _ _ &m).
 + by move=> O O_o_ll; exact/(A_a1_ll O O_o_ll).
 by move=> O O_o_ll; proc; call (A_a2_ll O O_o_ll).
 qed.
+
 end section.
 

@@ -7,7 +7,8 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-lemma nosmt unitW (P : unit -> bool): P tt => forall x, P x by [].
+lemma nosmt unitW (P : unit -> bool): P 
+tt => forall x, P x by [].
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt trueI : true by [].
@@ -84,6 +85,7 @@ lemma nosmt eq_trans : forall (x y z : 'a), x = y => y = z => x = z by [].
 lemma nosmt eq_iff   : forall a b, (a = b) <=> (a <=> b) by [].
 
 lemma nosmt eq_sym_imp : forall (x y : 'a), x = y => y = x by [].
+lemma nosmt eq_iff_imp : forall (x y : bool), (x <=> y) => (x = y) by [].
 
 (* -------------------------------------------------------------------- *)
 lemma nosmt congr1 ['b 'a] :

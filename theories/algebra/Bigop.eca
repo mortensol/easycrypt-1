@@ -68,7 +68,7 @@ lemma nosmt big_rec2:
     => K (big P F1 r) (big P F2 r).
 proof.
   move=> K r P F1 F2 KI KF; elim: r => //= i r IHr.
-  by rewrite !big_cons; case (P i) => _ //=; apply/KF.
+  by rewrite !big_cons; case (P i) => ? //=; apply/KF.
 qed.
 
 lemma nosmt big_ind2:
@@ -266,8 +266,8 @@ lemma nosmt eq_big_perm (P : 'a -> bool) (F : 'a -> t) s1 s2:
 proof.
   move=> /perm_eqP; rewrite !(@big_mkcond P).
   elim s1 s2 => [|i s1 ih1] s2 eq_s12.
-    by case s2 eq_s12 => // i s2 h; cut := h (pred1 i); smt.
-  cut r2i: mem s2 i by rewrite -has_pred1 has_count -eq_s12 smt.
+    by case s2 eq_s12 => // i s2 h; have := h (pred1 i); smt.
+  have r2i: mem s2 i by rewrite -has_pred1 has_count -eq_s12 smt.
   have/splitPr [s3 s4] ->> := r2i.
   rewrite big_cat !big_cons /(predT i) /=.
   rewrite addmCA; congr; rewrite -big_cat; apply/ih1=> a.

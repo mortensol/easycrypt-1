@@ -16,9 +16,7 @@ import Ring.IntID.
 
 (* -------------------------------------------------------------------- *)
 abstract theory BigZModule.
-type t.
-
-clone import Ring.ZModule as ZM with type t <- t.
+clone import Ring.ZModule as ZM.
 clear [ZM.* ZM.AddMonoid.*].
 
 clone include Bigop with
@@ -66,15 +64,13 @@ end BigZModule.
 
 (* -------------------------------------------------------------------- *)
 abstract theory BigComRing.
-type t.
-
-clone import Ring.ComRing as CR with type t <- t.
+clone import Ring.ComRing as CR.
 clear [CR.* CR.AddMonoid.* CR.MulMonoid.*].
 
 (* -------------------------------------------------------------------- *)
 theory BAdd.
 clone include BigZModule with
-  type t <- t,
+  type ZM.t <- t,
     op ZM.zeror  <- CR.zeror,
     op ZM.( + )  <- CR.( + ),
     op ZM.([-])  <- CR.([-]),
@@ -166,15 +162,13 @@ end BigComRing.
 
 (* -------------------------------------------------------------------- *)
 abstract theory BigOrder.
-type t.
-
-clone import Number.RealDomain as Num with type t <- t.
+clone import Number.RealDomain as Num.
 clear [Num.*].
 
 import Num.Domain.
 
 clone include BigComRing with
-  type t <- t,
+  type CR.t      <- Num.t,
   pred CR.unit   <- Num.Domain.unit,
     op CR.zeror  <- Num.Domain.zeror,
     op CR.oner   <- Num.Domain.oner,
@@ -184,7 +178,8 @@ clone include BigComRing with
     op CR.invr   <- Num.Domain.invr,
     op CR.intmul <- Num.Domain.intmul,
     op CR.ofint  <- Num.Domain.ofint,
-    op CR.exp    <- Num.Domain.exp
+    op CR.exp    <- Num.Domain.exp,
+    op CR.lreg   <- Num.Domain.lreg
 
     proof * remove abbrev CR.(-) remove abbrev CR.(/).
 
@@ -302,12 +297,16 @@ proof. split.
   by move/ih; case=> y [# Py ys z_Fy]; exists y; rewrite Py ys z_Fy.
 qed.
 
-lemma nosmt mulr_const s c:
-  BMul.big<:'a> predT (fun _ => c) s = exp c (size s).
+lemma nosmt mulr_const_cond p s c:
+  BMul.big<:'a> p (fun _ => c) s = exp c (count p s).
 proof.
 rewrite BMul.big_const -MulMonoid.iteropE /exp.
-by rewrite IntOrder.ltrNge size_ge0 /= count_predT.
+by rewrite IntOrder.ltrNge count_ge0.
 qed.
+
+lemma nosmt mulr_const s c:
+  BMul.big<:'a> predT (fun _ => c) s = exp c (size s).
+proof. by rewrite mulr_const_cond count_predT. qed.
 
 lemma ler_pexpn2r n x y :
   0 < n => zeror <= x => zeror <= y => (exp x n <= exp y n) <=> (x <= y).

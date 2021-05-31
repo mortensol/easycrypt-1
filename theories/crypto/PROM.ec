@@ -7,10 +7,10 @@
  * -------------------------------------------------------------------- *)
 
 pragma +implicits.
-pragma -oldip.
 
 (* -------------------------------------------------------------------- *)
 require import AllCore SmtMap Distr.
+require import FinType.
 
 (* -------------------------------------------------------------------- *)
 type flag = [ Unknown | Known ].
@@ -36,6 +36,16 @@ module type RO_Distinguisher (G : RO) = {
   proc distinguish(_ : d_in_t): d_out_t
 }.
 
+module MainD (D : RO_Distinguisher) (RO : RO) = {
+  proc distinguish(x) = {
+    var r;
+
+    RO.init();
+    r <@ D(RO).distinguish(x);
+    return r;
+  }
+}.
+
 (* -------------------------------------------------------------------- *)
 module type FRO = {
   proc init    ()                    : unit
@@ -53,6 +63,7 @@ module type FRO_Distinguisher (G : FRO) = {
 }.
 
 (* -------------------------------------------------------------------- *)
+abstract theory MkRO.
 module RO : RO = {
   var m : (in_t, out_t) fmap
 
@@ -86,6 +97,9 @@ module RO : RO = {
     return m;
   }
 }.
+end MkRO.
+
+clone include MkRO.
 
 (* -------------------------------------------------------------------- *)
 module FRO : FRO = {
@@ -333,7 +347,7 @@ lemma eager_get :
 proof.
 eager proc.
 wp; case ((x \in FRO.m /\ FRO.m.[x] \is Known){1}).
-+ rnd{1}; rcondf{2} 2; first by auto=> /> &m' _ @/(\is) -> _ _ /#.
++ rnd{1}; rcondf{2} 2; first by auto=> /> _ @/(\is) -> _ _ /#.
   exists* x{1}, ((oget FRO.m.[x{2}]){1}); elim * => x1 mx; inline RRO.resample.
   call (iter_inv RRO.I (fun z=> x1<>z)
                        (fun o1 o2 => o1 = o2 /\ o1.[x1]= Some mx) _)=> /=.
@@ -345,7 +359,7 @@ wp; case ((x \in FRO.m /\ FRO.m.[x] \is Known){1}).
       by rewrite mx_Known.
     by rewrite get_some.
   rewrite domE mx' //=.
-  move: mx'; rewrite -mx_Known; case: (oget FRO.m.[x]{m'})=> //= y1 y2.
+  move: mx'; rewrite -mx_Known; case: (oget FRO.m.[x1]{m'})=> //= y1 y2.
   exact/get_set_id.
 case ((x \in FRO.m){1}).
 + inline{1} RRO.resample=> /=; rnd{1}.
@@ -386,7 +400,7 @@ case ((x \in FRO.m){1}).
          (I_f_eqex x1 mx1 mx2)); auto=> /> &1 &2 eq_exc get1_x2 get2_x2.
   + split. split=> [| x2].
     + congr; rewrite fsetP=> y; rewrite in_fsetD1 2!mem_fdom.
-      case (y = x{2})=> [->/= | ne_y_x2 /=].
+      case (y = x1)=> [->/= | ne_y_x2 /=].
       by rewrite dom_restr /in_dom_with get2_x2.
     + rewrite !dom_restr /in_dom_with !domE.
       by move/eq_exceptP/(_ y ne_y_x2): eq_exc=> ->.
@@ -446,27 +460,23 @@ case ((x \in FRO.m /\ FRO.m.[x] \is Unknown){1}).
   call (iter_inv RRO.I (fun z=> x1<>z) 
          (fun o1 o2 => eq_except (pred1 x1) o1 o2 /\ o1.[x1] = mx1 /\
                        o2.[x1] = mx2) 
-         (I_f_eqex x1 mx1 mx2));
-      auto=> &1 &2 /> eq_exc not_x2_in_unkn_m2 get_m2_x2_eq.
-  split=> [x0 |].
-  + rewrite -memE mem_fdom dom_restr /in_dom_with; apply/contraLR=> />.
-    by rewrite get_m2_x2_eq.
-  by rewrite get_m2_x2_eq.
+         (I_f_eqex x1 mx1 mx2)); auto => /> /#.
 exists* x{1}, y{1}, (FRO.m.[x]{1}); elim*=> x1 y1 mx1.
 pose mx2 := Some (y1, Known).
 call (iter_inv RRO.I (fun z=> x1<>z) 
        (fun o1 o2 => eq_except (pred1 x1) o1 o2 /\ o1.[x1] = mx1 /\
                      o2.[x1] = mx2) 
-       (I_f_eqex x1 mx1 mx2))=> /=; auto=> &1 &2 /> /negb_and x2_disj.
-  split=> [| _ _ _ m_L m_R eq_exc m_L_x2_eq m_R_x2_eq];1: split.
+       (I_f_eqex x1 mx1 mx2))=> /=; auto=> /> &2 /negb_and x2_disj.
+  split; 1: split.
   + congr; rewrite fsetP=> z; rewrite !mem_fdom restr_set /= mem_rem dom_restr /in_dom_with.
-    by case: (z = x{2})=> />; rewrite negb_and.
+    by case: (z = x1)=> />; rewrite negb_and.
   split=> [x0 |].
   + rewrite -memE mem_fdom dom_restr /in_dom_with; apply/contraLR=> />.
     by rewrite negb_and.
   by rewrite get_set_sameE /mx2 /= eq_except_setr.
+move=> _ _ _ <- m_L m_R eq_exc m_L_x2_eq m_R_x2_eq. 
 rewrite get_set_sameE in m_R_x2_eq.
-rewrite -fmap_eqP=> z; rewrite get_setE; case (z = x{2})=> [-> |].
+rewrite -fmap_eqP=> z; rewrite get_setE; case (z = x1)=> [-> |].
 + by rewrite -m_R_x2_eq.
 by move=> ne_z_x2; rewrite eq_exceptP in eq_exc; rewrite eq_exc /pred1.
 qed.
@@ -502,9 +512,9 @@ eager proc; case ((x \in FRO.m /\ FRO.m.[x] \is Unknown){1}).
                      o2.[x1] = None) _).
   + by conseq (I_f_eqex x1 mx1 None).
   auto=> /> &1 &2 m1_eqe_m2 _ x_notin_m2; split=> [z|/> _ mL mR mL_eqe_mR mL_x mR_x].
-  + rewrite -memE mem_fdom dom_restr /in_dom_with; apply/contraLR=> />.
+  + rewrite -memE mem_fdom dom_restr /in_dom_with; apply/contraLR=> />. 
     by rewrite domE x_notin_m2.
-  apply/fmap_eqP=> z; rewrite remE. case: (z = x{2})=> /> => [|z_neq_x].
+  apply/fmap_eqP=> z; rewrite remE. case: (z = x1)=> /> => [|z_neq_x].
   + by rewrite mR_x.
   by move/eq_exceptP/(_ _ z_neq_x): mL_eqe_mR.
 inline RRO.resample; wp.
@@ -557,10 +567,10 @@ case: ((x \notin FRO.m){2}).
        (fun o1 o2 => eq_except (pred1 x1) o1 o2 /\ o1.[x1]= None /\
                      o2.[x1]=mx2) _).
   + by conseq (I_f_eqex x1 None mx2).
-  auto=> &1 &2 /> m1_eqe_m2 m2_x m1_x; split=> [z|_ mL mR /eq_exceptP mL_eqe_mR mL_x mR_x].
-  + rewrite -memE mem_fdom dom_restr /in_dom_with domE; apply/contraLR=> />.
+  auto=> /> &1 &2 m1_eqe_m2 m2_x m1_x; split => [z |_ <- mL mR /eq_exceptP mL_eqe_mR mL_x mR_x].
+  + rewrite -memE mem_fdom dom_restr /in_dom_with domE; apply/contraLR => /= <<-. 
     by rewrite m1_x.
-  rewrite domE mL_x /=; apply/fmap_eqP=> z; rewrite get_setE; case: (z = x{2})=> />.
+  rewrite domE mL_x /=; apply/fmap_eqP=> z; rewrite get_setE; case: (z = x1)=> />.
   + by rewrite mR_x m2_x.
   by move=> /mL_eqe_mR.
 rcondf{2} 2; first by auto. 
@@ -770,5 +780,105 @@ qed.
 
 end section.
 end FullEager.
+
+abstract theory FinEager.
+require import List.
+
+clone include FullEager.
+
+clone FinType as FinFrom with
+  type t = in_t.
+
+module FinRO : RO = {
+  include RO [set, rem]
+
+  proc init () = {
+    var l;
+    l <- FinFrom.enum;
+    RO.init();
+    while (l <> []) {
+      RO.sample(head witness l);
+      l <- behead l;
+    } 
+  }
+
+  proc get (x) = {
+    return oget RO.m.[x];
+  }
+  
+  proc sample(x : in_t) = { 
+  }
+}.
+
+module type FinRO_Distinguisher(G : RO) = {
+  proc distinguish(_ : d_in_t): d_out_t { G.init G.get G.set G.sample }
+}.
+
+section PROOFS.
+axiom dout_ll x: is_lossless (dout x).
+
+declare module D : FinRO_Distinguisher{RO, FRO}.
+
+local module GenFinRO (RO:RO) = {
+  include RO [set, rem, get]
+
+  proc init () = {
+    var l;
+    l <- FinFrom.enum;
+    RO.init();
+    while (l <> []) {
+      RO.sample(head witness l);
+      l <- behead l;
+    } 
+  }
+
+  proc sample (x:in_t) = {
+    RO.get(x);
+  }
+}.
+
+local module D' (RO:RO) = MainD (D, GenFinRO(RO)).
+
+local equiv RO_LFinRO_init : RO.init ~ GenFinRO(LRO).init : ={glob RO} ==> ={res, glob RO}.
+proof.
+  proc; inline *.
+  while{2} true (size l{2}); auto; smt (head_behead size_eq0 size_ge0).
+qed.
+
+local equiv GFinRO_RO_init : 
+   GenFinRO(RO).init ~ FinRO.init : 
+     ={RO.m} ==>
+     ={RO.m} /\ forall (x : in_t), x \in RO.m{1}.
+proof.
+  proc; inline *.
+  while ( ={l, RO.m} /\ (forall x, x \in RO.m \/ x \in l){1}); auto => />;1: smt (head_behead mem_set).
+  by move=> ?; rewrite FinFrom.enumP.
+qed.
+
+equiv RO_FinRO_D : MainD(D,RO).distinguish ~ MainD(D,FinRO).distinguish :
+  ={glob D, RO.m, arg} ==> ={res, glob D}.
+proof.
+  proc *.
+  transitivity*{1} {r <@ MainD(D, GenFinRO(LRO)).distinguish(x); } => //;1:smt().
+  + inline MainD(D, RO).distinguish MainD(D, GenFinRO(LRO)).distinguish; wp.
+    call (_: ={glob RO});2..4: by sim.
+    + by apply RO_LFinRO_init.
+    by call RO_LFinRO_init;wp.
+  transitivity*{1} {r <@ MainD(D,GenFinRO(RO)).distinguish(x); } => //;1:smt().
+  + by symmetry; call (RO_LRO_D D')=> //; exact:dout_ll.
+  inline MainD(D, GenFinRO(RO)).distinguish MainD(D, FinRO).distinguish; wp.
+  call (_: ={RO.m} /\ (forall x, x \in RO.m){1}).
+  + by conseq GFinRO_RO_init.
+  + by proc; rcondf{1} ^if; auto => />; 1: smt(); move=> ??; apply dout_ll.
+  + by proc; auto; smt(mem_set).
+  + by proc;inline *;rcondf{1} ^if; auto => />; 1: smt(); move=> ??; apply dout_ll.
+  by call GFinRO_RO_init; wp.
+qed.
+
+lemma pr_RO_FinRO_D &m x (p : d_out_t -> bool): 
+  Pr[MainD(D,RO).distinguish(x) @ &m : p res] = Pr[MainD(D,FinRO).distinguish(x) @ &m : p res].
+proof. by byequiv RO_FinRO_D. qed. 
+end section PROOFS.
+end FinEager.
 
 end FullRO.

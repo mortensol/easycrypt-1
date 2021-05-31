@@ -9,10 +9,9 @@
 (* -------------------------------------------------------------------- *)
 require import AllCore List StdOrder StdBigop.
 (*---*) import StdOrder.IntOrder StdBigop.Bigint.BIA.
-require (*--*) FinType.
+require import FinType.
 
 pragma +implicits.
-pragma -oldip.
 
 (* -------------------------------------------------------------------- *)
 type t.
