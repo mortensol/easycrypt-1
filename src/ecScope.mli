@@ -57,8 +57,8 @@ and proof_state =
   PSNoCheck | PSCheck of EcCoreGoal.proof
 
 and pucflags = {
-  puc_nosmt : bool;
-  puc_local : bool;
+  puc_visibility : EcDecl.ax_visibility;
+  puc_local      : bool;
 }
 
 (* -------------------------------------------------------------------- *)
@@ -95,7 +95,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module Op : sig
-  val add : scope -> poperator located -> EcDecl.operator * scope
+  val add : scope -> poperator located -> EcDecl.operator * string list * scope
 end
 
 (* -------------------------------------------------------------------- *)
@@ -119,11 +119,7 @@ module Ty : sig
   val add : scope -> ptydecl located -> scope
 
   val add_class    : scope -> ptypeclass located -> scope
-  val add_instance : scope -> Ax.mode -> ptycinstance located -> scope
-(*  val add_datatype : scope -> locality -> ptydname -> pdatatype -> scope
-  val add_record   : scope -> locality -> ptydname -> precord -> scope
-
-  val define : scope -> locality -> ptydname -> pty -> scope *)
+  val add_instance : ?import:EcTheory.import -> scope -> Ax.mode -> ptycinstance located -> scope
 end
 
 (* -------------------------------------------------------------------- *)

@@ -44,6 +44,10 @@ module CI_Unit : sig
   val p_unit : path
   val p_tt   : path
 end
+(*-------------------------------------------------------------------- *)
+module CI_Witness : sig
+  val p_witness : path
+end
 
 (*-------------------------------------------------------------------- *)
 module CI_Bool : sig
@@ -141,6 +145,7 @@ end
 
 (* -------------------------------------------------------------------- *)
 module CI_Logic : sig
+
   val i_Logic  : symbol
   val p_Logic  : path
   val mk_logic : symbol -> path
@@ -176,6 +181,7 @@ module CI_Logic : sig
   val p_fcongr        : path
   val p_eq_sym        : path
   val p_eq_sym_imp    : path
+  val p_eq_iff_imp    : path
   val p_negeqF        : path
 
   val p_iff_lr        : path

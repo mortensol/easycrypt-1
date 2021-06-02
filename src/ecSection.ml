@@ -93,7 +93,6 @@ let hierror fmt =
     bfmt fmt
 
 (* -------------------------------------------------------------------- *)
-
 let rec on_mp (cb : cb) (mp : mpath) =
   let f = m_functor mp in
   cb (`Module f);
@@ -477,7 +476,6 @@ let initial env =
 let env scenv = scenv.sc_env
 
 (* -------------------------------------------------------------------- *)
-
 let pp_axname scenv =
   EcPrinting.pp_axname (EcPrinting.PPEnv.ofenv scenv.sc_env)
 
@@ -485,7 +483,6 @@ let pp_thname scenv =
   EcPrinting.pp_thname (EcPrinting.PPEnv.ofenv scenv.sc_env)
 
 (* -------------------------------------------------------------------- *)
-
 let locality (env : EcEnv.env) (who : cbarg) =
   match who with
   | `Type       p -> (EcEnv.Ty.by_path p env).tyd_loca
@@ -731,7 +728,10 @@ let generalize_tydecl to_gen prefix (name, tydecl) =
     in
 
     let to_gen = { to_gen with tg_subst} in
-    let tydecl = { tyd_params; tyd_type; tyd_loca = `Global } in
+    let tydecl = {
+        tyd_params; tyd_type;
+        tyd_loca = `Global;
+        tyd_resolve = tydecl.tyd_resolve } in
     to_gen, Some (Th_type (name, tydecl))
 
   | `Declare ->
@@ -832,10 +832,12 @@ let generalize_opdecl to_gen prefix (name, operator) =
             PR_Ind { pri with pri_args }
         in
         let operator =
-          { op_tparams; op_ty; op_kind = OB_pred (Some body);
-            op_loca = `Global; op_opaque = false; } in
+          { op_tparams; op_ty;
+            op_kind     = OB_pred (Some body);
+            op_loca     = `Global;
+            op_opaque   = false;
+            op_clinline = operator.op_clinline; } in
         tg_subst, operator
-
 
       | OB_nott nott ->
         let fv = notation_fv nott in
@@ -845,8 +847,11 @@ let generalize_opdecl to_gen prefix (name, operator) =
         let op_ty   = toarrow (List.map snd extra_a) operator.op_ty in
         let nott = { nott with ont_args = extra_a @ nott.ont_args; } in
         to_gen.tg_subst,
-          { op_tparams; op_ty; op_kind = OB_nott nott;
-            op_loca = `Global; op_opaque = false; }
+          { op_tparams; op_ty;
+            op_kind     = OB_nott nott;
+            op_loca     = `Global;
+            op_opaque   = false;
+            op_clinline = operator.op_clinline; }
     in
     let to_gen = {to_gen with tg_subst} in
     to_gen, Some (Th_operator (name, operator))
@@ -929,20 +934,30 @@ let generalize_auto to_gen (n,s,ps,lc) =
     else to_gen, Some (Th_auto (n,s,ps,lc))
 
 let rec generalize_th_item to_gen prefix th_item =
-  match th_item with
-  | Th_type tydecl     -> generalize_tydecl to_gen prefix tydecl
-  | Th_operator opdecl -> generalize_opdecl to_gen prefix opdecl
-  | Th_axiom  ax       -> generalize_axiom  to_gen prefix ax
-  | Th_modtype ms      -> generalize_modtype to_gen ms
-  | Th_module me       -> generalize_module  to_gen me
-  | Th_theory cth      -> generalize_ctheory to_gen prefix cth
-  | Th_export (p,lc)   -> generalize_export to_gen (p,lc)
-  | Th_instance (ty,i,lc) -> generalize_instance to_gen (ty,i,lc)
-  | Th_typeclass _     -> assert false
-  | Th_baserw (s,lc)   -> generalize_baserw to_gen prefix (s,lc)
-  | Th_addrw (p,ps,lc) -> generalize_addrw to_gen (p, ps, lc)
-  | Th_reduction rl    -> generalize_reduction to_gen rl
-  | Th_auto hints      -> generalize_auto to_gen hints
+  let togen, item =
+    match th_item.ti_item with
+    | Th_type tydecl     -> generalize_tydecl to_gen prefix tydecl
+    | Th_operator opdecl -> generalize_opdecl to_gen prefix opdecl
+    | Th_axiom  ax       -> generalize_axiom  to_gen prefix ax
+    | Th_modtype ms      -> generalize_modtype to_gen ms
+    | Th_module me       -> generalize_module  to_gen me
+    | Th_theory cth      -> generalize_ctheory to_gen prefix cth
+    | Th_export (p,lc)   -> generalize_export to_gen (p,lc)
+    | Th_instance (ty,i,lc) -> generalize_instance to_gen (ty,i,lc)
+    | Th_typeclass _     -> assert false
+    | Th_baserw (s,lc)   -> generalize_baserw to_gen prefix (s,lc)
+    | Th_addrw (p,ps,lc) -> generalize_addrw to_gen (p, ps, lc)
+    | Th_reduction rl    -> generalize_reduction to_gen rl
+    | Th_auto hints      -> generalize_auto to_gen hints
+
+  in
+
+  let item =
+    Option.map
+      (fun item -> { ti_import = th_item.ti_import; ti_item = item; })
+      item
+
+  in togen, item
 
 and generalize_ctheory to_gen prefix (name, cth) =
   let path = pqname prefix name in
@@ -1009,25 +1024,28 @@ let set_local l =
   | `Global -> `Local
   | _ -> l
 
-let rec set_local_item  = function
-  | Th_type         (s,ty) -> Th_type      (s, { ty with tyd_loca = set_local ty.tyd_loca })
-  | Th_operator     (s,op) -> Th_operator  (s, { op with op_loca  = set_local op.op_loca   })
-  | Th_axiom        (s,ax) -> Th_axiom     (s, { ax with ax_loca  = set_local ax.ax_loca   })
-  | Th_modtype      (s,ms) -> Th_modtype   (s, { ms with tms_loca = set_local ms.tms_loca  })
-  | Th_module          me  -> Th_module        { me with tme_loca = set_local me.tme_loca  }
-  | Th_typeclass    (s,tc) -> Th_typeclass (s, { tc with tc_loca  = set_local tc.tc_loca   })
-  | Th_theory      (s, th) -> Th_theory    (s, set_local_th th)
-  | Th_export       (p,lc) -> Th_export    (p, set_local lc)
-  | Th_instance (ty,ti,lc) -> Th_instance  (ty,ti, set_local lc)
-  | Th_baserw       (s,lc) -> Th_baserw    (s, set_local lc)
-  | Th_addrw     (p,ps,lc) -> Th_addrw     (p, ps, set_local lc)
-  | Th_reduction       r   -> Th_reduction r
-  | Th_auto     (i,s,p,lc) -> Th_auto      (i, s, p, set_local lc)
+let rec set_local_item item =
+  let lcitem =
+    match item.ti_item with
+    | Th_type         (s,ty) -> Th_type      (s, { ty with tyd_loca = set_local ty.tyd_loca })
+    | Th_operator     (s,op) -> Th_operator  (s, { op with op_loca  = set_local op.op_loca   })
+    | Th_axiom        (s,ax) -> Th_axiom     (s, { ax with ax_loca  = set_local ax.ax_loca   })
+    | Th_modtype      (s,ms) -> Th_modtype   (s, { ms with tms_loca = set_local ms.tms_loca  })
+    | Th_module          me  -> Th_module        { me with tme_loca = set_local me.tme_loca  }
+    | Th_typeclass    (s,tc) -> Th_typeclass (s, { tc with tc_loca  = set_local tc.tc_loca   })
+    | Th_theory      (s, th) -> Th_theory    (s, set_local_th th)
+    | Th_export       (p,lc) -> Th_export    (p, set_local lc)
+    | Th_instance (ty,ti,lc) -> Th_instance  (ty,ti, set_local lc)
+    | Th_baserw       (s,lc) -> Th_baserw    (s, set_local lc)
+    | Th_addrw     (p,ps,lc) -> Th_addrw     (p, ps, set_local lc)
+    | Th_reduction       r   -> Th_reduction r
+    | Th_auto     (i,s,p,lc) -> Th_auto      (i, s, p, set_local lc)
+
+  in { item with ti_item = lcitem }
 
 and set_local_th th =
   { th with cth_items = List.map set_local_item th.cth_items;
-            cth_loca  = set_local th.cth_loca
-  }
+            cth_loca  = set_local th.cth_loca; }
 
 let sc_th_item t item =
   let item =
@@ -1277,14 +1295,10 @@ let check_instance scenv ty tci lc =
         let cd = { cd_glob with d_ty = [`Declare; `Global]; } in
         on_instance (cb scenv from cd) ty tci
 
-
-
 (* -----------------------------------------------------------*)
-
 type checked_ctheory = ctheory
 
 (* -----------------------------------------------------------*)
-
 let enter_theory (name:symbol) (lc:is_local) (mode:thmode) scenv : scenv =
   if not scenv.sc_insec && lc = `Local then
      hierror "can not start a local theory outside of a section";
@@ -1310,7 +1324,7 @@ let add_item_ (item : theory_item) (scenv:scenv) =
   let item = if scenv.sc_loca = `Local then set_local_item item else item in
   let env = scenv.sc_env in
   let env =
-    match item with
+    match item.ti_item with
     | Th_type    (s,tyd) -> EcEnv.Ty.bind s tyd env
     | Th_operator (s,op) -> EcEnv.Op.bind s op env
     | Th_axiom   (s, ax) -> EcEnv.Ax.bind s ax env
@@ -1329,8 +1343,9 @@ let add_item_ (item : theory_item) (scenv:scenv) =
     sc_env = env;
     sc_items = SC_th_item item :: scenv.sc_items}
 
-let add_th (name:symbol) (cth:checked_ctheory) scenv =
-  add_item_ (Th_theory(name, cth)) scenv
+let add_th ~import (name : symbol) (cth : checked_ctheory) scenv =
+  let item = mkitem import (EcTheory.Th_theory (name, cth)) in
+  add_item_ item scenv
 
 (* -----------------------------------------------------------*)
 let import p scenv =
@@ -1342,7 +1357,7 @@ let import_vars m scenv =
 
 let require x cth scenv =
   (* FIXME section *)
-  if scenv.sc_insec then hierror "cannot \"require\" inside section";
+  if scenv.sc_insec then hierror "cannot use `require' in sections";
   { scenv with sc_env = EcEnv.Theory.require x cth scenv.sc_env }
 
 let astop scenv =
@@ -1350,10 +1365,9 @@ let astop scenv =
   { scenv with sc_env = EcEnv.astop scenv.sc_env }
 
 (* -----------------------------------------------------------*)
-
 let check_item scenv item =
   let prefix = EcEnv.root scenv.sc_env in
-  match item with
+  match item.ti_item with
   | Th_type     (s,tyd) -> check_tyd     scenv prefix s tyd
   | Th_operator  (s,op) -> check_op      scenv prefix s op
   | Th_axiom    (s, ax) -> check_ax      scenv prefix s ax
@@ -1377,7 +1391,7 @@ let check_item scenv item =
 let rec add_item (item : theory_item) (scenv : scenv) =
   let item = if scenv.sc_loca = `Local then set_local_item item else item in
   let scenv1 = add_item_ item scenv in
-  begin match item with
+  begin match item.ti_item with
   | Th_theory (s,cth) ->
     if cth.cth_loca = `Local && not scenv.sc_insec then
       hierror "local theory %a can only be used inside section"

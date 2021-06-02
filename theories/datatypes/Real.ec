@@ -27,7 +27,6 @@ op "`|_|" x = if from_int 0 <= x then x else -x.
 abbrev b2r (b:bool) = if b then from_int 1 else from_int 0.
 
 (* -------------------------------------------------------------------- *)
-
 lemma nosmt fromint0 : 0%r = CoreReal.zero by [].
 lemma nosmt fromint1 : 1%r = CoreReal.one  by [].
 
@@ -53,7 +52,6 @@ lemma nosmt fromint_abs  (z : int) : `|z|%r = `|z%r| by smt ml=0.
 hint rewrite lte_fromint : le_fromint lt_fromint.
 
 (* -------------------------------------------------------------------- *)
-
 theory RField.
   clone include Ring.Field with
     type t <- real,
@@ -102,6 +100,12 @@ theory RField.
   lemma nosmt double_half (x : real) : x / 2%r + x / 2%r = x.
   proof. by rewrite -ofintR -mulrDl -mul1r2z -mulrA divff // ofintR. qed.
 
+  lemma fromintXn (n k : int) :
+    0 <= k => exp (n%r) k = (IntID.exp n k)%r.
+  proof.
+  elim: k => [|k ge0_k ih]; 1: by rewrite !(expr0, IntID.expr0).
+  by rewrite !(exprS, IntID.exprS) // fromintM ih.
+  qed.
 end RField.
 import RField.
 
@@ -216,10 +220,22 @@ instance field with real
 op floor : real -> int.
 op ceil  : real -> int.
 
-axiom floor_bound (x:real) : x - 1%r <= (floor x)%r <= x.
-axiom  ceil_bound (x:real) : x <= (ceil x)%r <= x + 1%r.
+axiom floor_bound (x:real) : x - 1%r < (floor x)%r <= x.
+axiom  ceil_bound (x:real) : x <= (ceil x)%r < x + 1%r.
 axiom from_int_floor n : floor n%r = n.
 axiom from_int_ceil  n : ceil  n%r = n.
+
+lemma floor_gt x : x - 1%r < (floor x)%r.
+proof. by case: (floor_bound x). qed.
+
+lemma floor_le x : (floor x)%r <= x.
+proof. by case: (floor_bound x). qed.
+
+lemma ceil_ge x : x <= (ceil x)%r.
+proof. by case: (ceil_bound x). qed.
+
+lemma ceil_lt x : (ceil x)%r < x + 1%r.
+proof. by case: (ceil_bound x). qed.
 
 (* -------------------------------------------------------------------- *)
 (* WARNING Lemmas used by tactics: *)
@@ -248,4 +264,3 @@ lemma nosmt upto_bad_or (ev1 ev2 bad2:bool) :
 
 lemma nosmt upto_bad_sub (ev bad:bool) :
   ev /\ ! bad => ev by [].
-

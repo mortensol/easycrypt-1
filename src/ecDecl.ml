@@ -22,9 +22,10 @@ type ty_params = ty_param list
 type ty_pctor  = [ `Int of int | `Named of ty_params ]
 
 type tydecl = {
-  tyd_params : ty_params;
-  tyd_type   : ty_body;
-  tyd_loca   : locality;
+  tyd_params  : ty_params;
+  tyd_type    : ty_body;
+  tyd_loca    : locality;
+  tyd_resolve : bool;
 }
 
 and ty_body = [
@@ -53,7 +54,7 @@ let tydecl_as_record (td : tydecl) =
   match td.tyd_type with `Record x -> x | _ -> assert false
 
 (* -------------------------------------------------------------------- *)
-let abs_tydecl ?(tc = Sp.empty) ?(params = `Int 0) lc =
+let abs_tydecl ?(resolve = true) ?(tc = Sp.empty) ?(params = `Int 0) lc =
   let params =
     match params with
     | `Named params ->
@@ -65,7 +66,7 @@ let abs_tydecl ?(tc = Sp.empty) ?(params = `Int 0) lc =
           (EcUid.NameGen.bulk ~fmt n)
   in
 
-  { tyd_params = params; tyd_type = `Abstract tc; tyd_loca = lc}
+  { tyd_params = params; tyd_type = `Abstract tc; tyd_resolve = resolve; tyd_loca = lc; }
 
 (* -------------------------------------------------------------------- *)
 let ty_instanciate (params : ty_params) (args : ty list) (ty : ty) =
@@ -128,22 +129,25 @@ and prctor = {
 }
 
 type operator = {
-  op_tparams : ty_params;
-  op_ty      : EcTypes.ty;
-  op_kind    : operator_kind;
-  op_loca    : locality;
-  op_opaque  : bool;
+  op_tparams  : ty_params;
+  op_ty       : EcTypes.ty;
+  op_kind     : operator_kind;
+  op_loca     : locality;
+  op_opaque   : bool;
+  op_clinline : bool;
 }
 
 (* -------------------------------------------------------------------- *)
 type axiom_kind = [`Axiom of (Ssym.t * bool) | `Lemma]
 
 type axiom = {
-  ax_tparams : ty_params;
-  ax_spec    : EcCoreFol.form;
-  ax_kind    : axiom_kind;
-  ax_nosmt   : bool;
-  ax_loca    : locality; }
+  ax_tparams    : ty_params;
+  ax_spec       : EcCoreFol.form;
+  ax_kind       : axiom_kind;
+  ax_loca       : locality;
+  ax_visibility : ax_visibility; }
+
+and ax_visibility = [`Visible | `NoSmt | `Hidden]
 
 let is_axiom (x : axiom_kind) = match x with `Axiom _ -> true | _ -> false
 let is_lemma (x : axiom_kind) = match x with `Lemma   -> true | _ -> false
@@ -191,21 +195,23 @@ let is_prind op =
   | OB_pred (Some (PR_Ind _)) -> true
   | _ -> false
 
-let gen_op ~opaque tparams ty kind lc = {
-  op_tparams = tparams;
-  op_ty      = ty;
-  op_kind    = kind;
-  op_loca    = lc;
-  op_opaque  = opaque;
+let gen_op ?(clinline = false) ~opaque tparams ty kind lc = {
+  op_tparams  = tparams;
+  op_ty       = ty;
+  op_kind     = kind;
+  op_loca     = lc;
+  op_opaque   = opaque;
+  op_clinline = clinline;
 }
 
-let mk_pred ~opaque tparams dom body lc =
+let mk_pred ?clinline ~opaque tparams dom body lc =
   let kind = OB_pred body in
-    gen_op ~opaque tparams (EcTypes.toarrow dom EcTypes.tbool) kind lc
+  let ty   =  (EcTypes.toarrow dom EcTypes.tbool) in
+  gen_op ?clinline ~opaque tparams ty kind lc
 
-let mk_op ~opaque tparams ty body lc =
+let mk_op ?clinline ~opaque tparams ty body lc =
   let kind = OB_oper body in
-    gen_op ~opaque tparams ty kind lc
+  gen_op ?clinline ~opaque tparams ty kind lc
 
 let mk_abbrev ?(ponly = false) tparams xs (codom, body) lc =
   let kind = {
@@ -269,12 +275,11 @@ let axiomatized_op ?(nargs = 0) ?(nosmt = false) path (tparams, bd) lc =
   let op     = f_app op opargs axbd.f_ty in
   let axspec = f_forall args (f_eq op axbd) in
 
-  { ax_tparams = axpm;
-    ax_spec    = axspec;
-    ax_kind    = `Axiom (Ssym.empty, false);
-    ax_nosmt   = nosmt;
-    ax_loca    = lc;
-  }
+  { ax_tparams    = axpm;
+    ax_spec       = axspec;
+    ax_kind       = `Axiom (Ssym.empty, false);
+    ax_loca       = lc;
+    ax_visibility = if nosmt then `NoSmt else `Visible; }
 
 (* -------------------------------------------------------------------- *)
 type typeclass = {

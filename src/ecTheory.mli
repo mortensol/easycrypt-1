@@ -14,9 +14,20 @@ open EcDecl
 open EcModules
 
 (* -------------------------------------------------------------------- *)
+type import = { im_immediate : bool; im_atimport : bool; }
+
+val import0  : import
+val noimport : import
+
+(* -------------------------------------------------------------------- *)
 type theory = theory_item list
 
-and theory_item =
+and theory_item = {
+  ti_item   : theory_item_r;
+  ti_import : import;
+}
+
+and theory_item_r =
   | Th_type      of (symbol * tydecl)
   | Th_operator  of (symbol * operator)
   | Th_axiom     of (symbol * axiom)
@@ -67,6 +78,8 @@ and rule_option = {
   ur_delta  : bool;
   ur_eqtrue : bool;
 }
+
+val mkitem : import -> theory_item_r -> theory_item
 
 (* -------------------------------------------------------------------- *)
 val module_comps_of_module_sig_comps:

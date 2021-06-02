@@ -35,12 +35,12 @@ type 'a pp = Format.formatter -> 'a -> unit
 (* -------------------------------------------------------------------- *)
 module PPEnv = struct
   type t = {
-    ppe_env    : EcEnv.env;
-    ppe_locals : symbol Mid.t;
-    ppe_inuse  : Ssym.t;
-    ppe_univar : (symbol Mint.t * Ssym.t) ref;
-    ppe_fb     : Sp.t;
-    ppe_width  : int;
+    ppe_env     : EcEnv.env;
+    ppe_locals  : symbol Mid.t;
+    ppe_inuse   : Ssym.t;
+    ppe_univar  : (symbol Mint.t * Ssym.t) ref;
+    ppe_fb      : Sp.t;
+    ppe_width   : int;
   }
 
   let ofenv (env : EcEnv.env) =
@@ -161,8 +161,7 @@ module PPEnv = struct
     in
 
     let (nm, x) = P.toqsymbol p in
-    let (nm, x) = shorten (List.rev nm) ([], x) in
-      (nm, x)
+    shorten (List.rev nm) ([], x)
 
   let ty_symb (ppe : t) p =
       let exists sm =
@@ -217,7 +216,7 @@ module PPEnv = struct
         fun sm ->
           check_for_local sm;
           let ue = EcUnify.UniEnv.create None in
-          match  EcUnify.select_op ~filter tvi ppe.ppe_env sm ue dom with
+          match  EcUnify.select_op ~hidden:true ~filter tvi ppe.ppe_env sm ue dom with
           | [(p1, _), _, _, _] -> p1
           | _ -> raise (EcEnv.LookupFailure (`QSymbol sm)) in
 
@@ -422,7 +421,7 @@ let pp_topmod ppe fmt p =
 
 (* -------------------------------------------------------------------- *)
 let pp_tyvar ppe fmt x =
-  Format.fprintf fmt "%s" (PPEnv.tyvar ppe x)
+  Format.fprintf fmt "%s" (EcIdent.tostring x) (* (PPEnv.tyvar ppe x) *)
 
 (* -------------------------------------------------------------------- *)
 let pp_tyunivar ppe fmt x =
@@ -1266,6 +1265,15 @@ let string_of_hcmp = function
   | FHge -> ">="
 
 (* -------------------------------------------------------------------- *)
+let string_of_locality = function
+  | `Global  -> None
+  | `Local   -> Some "local "
+  | `Declare -> Some "declare "
+
+let pp_locality fmt lc =
+  Format.fprintf fmt "%s" (odfl "" (string_of_locality lc))
+
+(* -------------------------------------------------------------------- *)
 let string_of_cpos1 ((off, cp) : EcParsetree.codepos1) =
   let s =
     match cp with
@@ -1763,12 +1771,6 @@ let pp_sform ppe fmt f =
   pp_form_r ppe ([], ((100, `Infix `NonAssoc), `NonAssoc)) fmt f
 
 (* -------------------------------------------------------------------- *)
-let pp_locality fmt = function
-  | `Global  -> ()
-  | `Local   -> Format.fprintf fmt "local "
-  | `Declare -> Format.fprintf fmt "declare "
-
-
 let pp_typedecl (ppe : PPEnv.t) fmt (x, tyd) =
   let ppe = PPEnv.add_locals ppe (List.map fst tyd.tyd_params) in
   let name = P.basename x in
@@ -2067,11 +2069,18 @@ let pp_axiom ?(long=false) (ppe : PPEnv.t) fmt (x, ax) =
          Format.fprintf fmt "(* %a *)@ " EcSymbols.pp_qsymbol qs in
 
   let pp_decl fmt () =
-    Format.fprintf fmt "@[<hov 2>%a%a %t%t:@ %t.@]"
-      pp_locality ax.ax_loca
+    let vs =
+      match ax.ax_visibility with
+      | `Visible -> []
+      | `NoSmt   -> ["nosmt"]
+      | `Hidden  -> ["(* hidden *)"] in
+
+
+    Format.fprintf fmt "@[<hov 2>%a %t%t:@ %t.@]"
       (pp_list " " pp_string)
-      (  [string_of_axkind ax.ax_kind]
-       @ (if ax.ax_nosmt then ["nosmt"] else []))
+      (  (otolist (string_of_locality ax.ax_loca))
+       @ [string_of_axkind ax.ax_kind]
+       @ vs)
       pp_tags pp_name pp_spec in
 
   Format.fprintf fmt "@[<v>%a%a@]" pp_long x pp_decl ()
@@ -2877,7 +2886,8 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, cth) =
     (pp_list "@,@," (pp_th_item ppe path)) cth.cth_items
     basename
 
- and pp_th_item ppe p fmt = function
+ and pp_th_item ppe p fmt item =
+  match item.ti_item with
   | EcTheory.Th_type (id, ty) ->
       pp_typedecl ppe fmt (EcPath.pqname p id,ty)
 
@@ -2959,7 +2969,7 @@ let rec pp_theory ppe (fmt : Format.formatter) (path, cth) =
             pp_locality lc (pp_type ppe) ty pp_path p
   end
 
-  | EcTheory.Th_baserw (name, lc) ->
+  | EcTheory.Th_baserw (name, _lc) ->
       (* FIXME: section lc + syntax *)
       Format.fprintf fmt "declare rewrite %s." name
 

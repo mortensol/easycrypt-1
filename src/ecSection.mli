@@ -25,9 +25,9 @@ type scenv
 val env : scenv -> env
 
 val initial : env -> scenv
-val add_item : theory_item -> scenv -> scenv
-val add_decl_mod :
-  EcIdent.t -> module_type -> mod_restr -> scenv -> scenv
+
+val add_item     : theory_item -> scenv -> scenv
+val add_decl_mod : EcIdent.t -> module_type -> mod_restr -> scenv -> scenv
 
 val enter_section : EcSymbols.symbol option -> scenv -> scenv
 val exit_section  : EcSymbols.symbol option -> scenv -> scenv
@@ -44,7 +44,7 @@ val import : EcPath.path -> scenv -> scenv
 
 val import_vars : EcPath.mpath -> scenv -> scenv
 
-val add_th  : EcSymbols.symbol -> checked_ctheory -> scenv -> scenv
+val add_th  : import:import -> EcSymbols.symbol -> checked_ctheory -> scenv -> scenv
 val require : EcSymbols.symbol -> checked_ctheory -> scenv -> scenv
 
 val astop : scenv -> scenv

@@ -70,9 +70,8 @@ val t_simplify : ?mode:smode -> simplify_t
 val t_simplify_with_info : ?mode:smode -> simplify_with_info_t
 
 (* -------------------------------------------------------------------- *)
-val t_change :
-  ?ri:EcReduction.reduction_info -> ?target:ident
-    -> form -> tcenv1 -> tcenv1
+val t_change1 : ?ri:EcReduction.reduction_info -> ?target:ident -> form -> tcenv1 -> tcenv1
+val t_change  : ?ri:EcReduction.reduction_info -> ?target:ident -> form -> FApi.backward
 
 (* -------------------------------------------------------------------- *)
 val t_lazy_match:
@@ -226,7 +225,7 @@ type tside = [`All of [`LtoR | `RtoL] option | `LtoR | `RtoL]
 
 val t_subst:
      ?kind:subst_kind
-  -> ?tg:Sid.t
+  -> ?except:Sid.t
   -> ?clear:bool
   -> ?var:vsubst
   -> ?tside:tside
