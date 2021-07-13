@@ -44,4 +44,13 @@ axiom exp_inj'   : forall x, injective_on EU(fun z => exp g (x*z)).
 
 axiom img_exp    : forall x, image (fun z => exp g (x*z)) EU = image (exp g) EU.
 
+axiom Emult x y  : x \in EU => y \in EU => x * y \in EU.
+axiom Einv x     : x \in EU => inv x \in EU. 
+
+lemma invK a x   : a \in EU => x \in EU => a * x * inv x = a.
+proof. 
+move => aE bE; apply: exp_inj => //; last smt(expM exp_inv mulA mulC).
+apply: Emult => //. apply: Emult => //. exact: Einv.
+qed.
+
 end NominalGroup.

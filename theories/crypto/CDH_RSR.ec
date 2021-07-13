@@ -73,11 +73,10 @@ module type Adversary (O : CDH_RSR_Oracles) = {
 }.
 
 (* Counting wrapper for CDH_RSR Oracles *)
-module Count (O : CDH_RSR_Oracles_i) = {
+module Count (O : CDH_RSR_Oracles) = {
   var ca, cb, cddh : int
 
   proc init () = { 
-    O.init();
     ca <- 0;
     cb <- 0;
     cddh <- 0;
@@ -120,7 +119,7 @@ module Game (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
 
   proc main() = { 
     var r; 
-    
+    O.init();
     O'.init();
     r <@ A(O').guess(); 
     return r;
@@ -229,13 +228,15 @@ module G1b = {
 
 op pa,pb : real.
 
+clone import DList.Program as DL.
+
 module S = {
   var a, b : Z list
   var ia, ib : bool list (* inject a/b *)
   var ca, cb : int list (* call logs *)
   var gx,gy : G
   var stop : bool 
-  var gs : G list
+  var gs : (G*int*int) list
 
   proc init (gx' : G, gy' : G) = {
     ia <$ dlist (dbiased pa) na;
@@ -277,10 +278,9 @@ module S = {
       r <- m = exp g (nth' a i * nth' b j);
     }
     
-    (* record queries for exponents where we injected gx,gy *)
-    if (nth' ia i /\ nth' ib j) {
-      gs <- (m^(inv (nth' a i) * inv (nth' b j))) :: gs ;
-    }
+    (* record queries *)
+    gs <- (m,i,j) :: gs ;
+    
     
     return r;
   }
@@ -293,19 +293,34 @@ module S = {
 3. Define simulation S and an adversary B against the NCDH games
 3. G'[bad] <= P * NCDH.Game(B(A)). 
 
-*) 
+*)
+
+module type S_i = {
+  include CDH_RSR_Oracles
+  proc init (gx : G, gy : G) : unit
+}.
+
+module GameS (A : Adversary) = { 
+  module O' = Count(S)
+
+  proc main(gx:G, gy:G) = { 
+    var r; 
+    S.init(gx,gy);
+    O'.init();
+    r <@ A(O').guess(); 
+    return r;
+  }
+}.
 
 module B (A : Adversary) : NCDH.Adversary = {
-  var ms : (G*Z*Z) list
-
-  proc solve(gx gy : G) : G = { 
+   proc solve(gx gy : G) : G = { 
     var g;
 
     S.init(gx,gy);
     A(S).guess();
     (* return random potentially good group element *)
     g <$ duniform S.gs;
-    return g;
+    return g.`1;
   }
 }.
 
@@ -328,11 +343,11 @@ proof.
 (* Intruduce bad events into G1 and G2 *)
 have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G,A).main() @ &m : res ].
   byequiv => //. proc; inline *. 
-  call (_ : ={glob G2}) => //; (try by sim); 2: by auto => />.
+  call (_ : ={glob G2}) => //; 1..4: (by sim); last by auto => />.
   by proc; inline *; auto.
 have -> : Pr[ Game(G1,A).main() @ &m : res ] = Pr[ Game(G1b,A).main() @ &m : res ].
   byequiv => //; proc; inline *. 
-  call (_ : ={glob G1}); (try by sim); last by auto => />. 
+  call (_ : ={glob G1}); 1..4: (by sim); last by auto => />. 
   by proc; inline *; auto.
 (* up-to-bad reasoning *)
 byequiv (_ : ={glob A} ==> ={G.bad} /\ (!G.bad{2} => ={res})) : G.bad => //; 2: smt().
@@ -346,6 +361,33 @@ qed.
 (* what about res, do we care? *)
 lemma G_G' &m : 
     `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
+admitted.
+
+lemma G'_S_stop &m gx gy : 
+   `| Pr [ Game(G',A).main() @ &m : res ] - Pr [ GameS(A).main(gx,gy) @ &m : res ] | 
+    <= Pr [ GameS(A).main(gx,gy) @ &m : S.stop ].
+admitted.
+
+lemma S_ia &m gx gy i : 0 <= i /\ i < na =>
+    Pr[ GameS(A).main(gx,gy) @ &m : nth' S.ia i ] = pa.
+admitted.
+
+lemma S_ib &m gx gy j : 0 <= j /\ j < nb =>
+    Pr[ GameS(A).main(gx,gy) @ &m : nth' S.ib j ] = pb.
+admitted.
+
+(* we think we can (maybe) prove *)
+lemma G'_S &m x y : 
+    Pr[ Game(G',A).main() @ &m : G.bad ] <= 
+    Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
+        nth' S.ia i && nth' S.ib j => m = exp g (nth' S.a i * nth' S.b j * x * y) ].
+admitted.
+
+(* does this follow (easily)? *)
+lemma G'_S' &m x y :  
+   pa * pb * Pr[ Game(G',A).main() @ &m : G.bad ] <= 
+   Pr[ GameS(A).main(exp g x,exp g y) @ &m : 
+       exists m i j, (m,i,j) \in S.gs /\ m = exp g (nth' S.a i * nth' S.b j * x * y) ].
 admitted.
 
 lemma badG'_cdh &m : 
