@@ -2,6 +2,7 @@ require import AllCore List Distr DBool DInterval DList.
 require import FinType FSet SmtMap NominalGroup.
 
 import Distr.MRat.
+import DBool.Biased.
 
 clone import NominalGroup.NominalGroup as N.
 
@@ -226,31 +227,35 @@ module G1b = {
   } 
 }.
 
+op pa,pb : real.
+
 module S = {
   var a, b : Z list
   var ia, ib : bool list (* inject a/b *)
   var ca, cb : int list (* call logs *)
   var gx,gy : G
   var stop : bool 
+  var gs : G list
 
-  proc init (x : G, y : G) = {
-    (* TODO: choose d and g with bias pa/pb *)
-    ia <$ dlist {0,1} na;
-    ib <$ dlist {0,1} nb;
+  proc init (gx' : G, gy' : G) = {
+    ia <$ dlist (dbiased pa) na;
+    ib <$ dlist (dbiased pb) nb;
     a <$ dlist (duniform (elems EU)) na;
     b <$ dlist (duniform (elems EU)) nb;
-    gx <- x; 
-    gy <- y;
+    gx <- gx'; 
+    gy <- gy';
     stop <- false;
   }
 
   proc oa (i : int) = {
     if (nth' ia i) { stop <- true; }
+    ca <- i :: ca;
     return (nth' a i);
   }
 
   proc ob (j : int) = {
     if (nth' ib j) { stop <- true; }
+    cb <- j :: cb;
     return (nth' b j);
   }
 
@@ -265,11 +270,20 @@ module S = {
   proc ddh (m:G,i:int,j:int) = { 
     var r : bool; 
 
-    (* TODO implement *)
-    r <- witness;
+    r <- false;
+
+    (* i \in ca and !stop, then !nth' ia i, and likewise for j,cb,ib *)
+    if (i \in ca || j \in cb) {
+      r <- m = exp g (nth' a i * nth' b j);
+    }
+    
+    (* record queries for exponents where we injected gx,gy *)
+    if (nth' ia i /\ nth' ib j) {
+      gs <- (m^(inv (nth' a i) * inv (nth' b j))) :: gs ;
+    }
+    
     return r;
   }
-
 }.
 
 (* Proof outline:
@@ -285,15 +299,21 @@ module B (A : Adversary) : NCDH.Adversary = {
   var ms : (G*Z*Z) list
 
   proc solve(gx gy : G) : G = { 
-    S.init(gx,gy);
+    var g;
 
-  return witness; }
+    S.init(gx,gy);
+    A(S).guess();
+    (* return random potentially good group element *)
+    g <$ duniform S.gs;
+    return g;
+  }
 }.
 
 op DELTA : real. (* TODO specify *)
 op p : real.     (* TODO specify *)
 
 section.
+
 
 declare module A : Adversary {G1,G2,G,Count}.
 
