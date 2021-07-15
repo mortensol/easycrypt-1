@@ -53,4 +53,7 @@ move => aE bE; apply: exp_inj => //; last smt(expM exp_inv mulA mulC).
 apply: Emult => //. apply: Emult => //. exact: Einv.
 qed.
 
+lemma invK' a x   : a \in EU => x \in EU => a * inv x * x = a.
+proof. rewrite -mulA (mulC _ x) mulA. exact: invK. qed.
+
 end NominalGroup.
