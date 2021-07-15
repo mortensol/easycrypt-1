@@ -54,6 +54,8 @@ qed.
 end NCDH.
 
 op na,nb,q_oa,q_ob,q_ddh : int.
+axiom na_ge0 : 0 <= na.
+axiom nb_ge0 : 0 <= nb.
 
 module type CDH_RSR_Oracles = { 
   proc oA(i : int) : G
@@ -198,12 +200,14 @@ module G = {
 }.
 
 module G' = { 
-  import var G1
+  import var G1 G2
   include var G [-init]
 
   proc init () = {
     a <$ dlist (duniform (elems EU)) na;
     b <$ dlist (duniform (elems EU)) nb;
+    ca <- [];
+    cb <- [];
     bad <- false;
   }
 }.
@@ -228,12 +232,10 @@ module G1b = {
 
 op pa,pb : real.
 
-clone import DList.Program as DL.
-
 module S = {
-  var a, b : Z list
+  import var G1 (* var a, b : Z list *)
   var ia, ib : bool list (* inject a/b *)
-  var ca, cb : int list (* call logs *)
+  import var G2 (* var ca, cb : int list / call logs *)
   var gx,gy : G
   var stop : bool 
   var gs : (G*int*int) list
@@ -243,6 +245,8 @@ module S = {
     ib <$ dlist (dbiased pb) nb;
     a <$ dlist (duniform (elems EU)) na;
     b <$ dlist (duniform (elems EU)) nb;
+    ca <- [];
+    cb <- [];
     gx <- gx'; 
     gy <- gy';
     stop <- false;
@@ -330,7 +334,39 @@ op p : real.     (* TODO specify *)
 section.
 
 
-declare module A : Adversary {G1,G2,G,Count}.
+declare module A : Adversary {G1,G2,G,Count,S}.
+
+(* same as G', but with a stop event equivalent to S *)
+local module G's = { 
+  import var G1 G2 G
+  include var G' [-init,oa,ob]
+  var ia, ib : bool list (* inject a/b *)
+  var stop : bool
+
+  proc init () = {
+    ia <$ dlist (dbiased pa) na;
+    ib <$ dlist (dbiased pb) nb;
+    a <$ dlist (duniform (elems EU)) na;
+    b <$ dlist (duniform (elems EU)) nb;
+    ca <- [];
+    cb <- [];
+    bad <- false;
+    stop <- false;
+  }
+
+  proc oa (i) = {
+    if (nth' ia i) { stop <- true; }
+    ca <- i :: ca;
+    return (nth' a i);
+  }
+
+  proc ob (j : int) = {
+    if (nth' ib j) { stop <- true; }
+    cb <- j :: cb;
+    return (nth' b j);
+  }
+}.
+
 
 axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.oA => islossless O.oB => islossless O.oa => islossless O.ob => islossless O.ddh => islossless A(O).guess.
@@ -363,9 +399,62 @@ lemma G_G' &m :
     `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 admitted.
 
-lemma G'_S_stop &m gx gy : 
-   `| Pr [ Game(G',A).main() @ &m : res ] - Pr [ GameS(A).main(gx,gy) @ &m : res ] | 
-    <= Pr [ GameS(A).main(gx,gy) @ &m : S.stop ].
+op mapi_rec (f : int -> 'a -> 'b) (xs : 'a list) (i : int) = 
+ with xs = [] => []
+ with xs = x::xs => f i x :: mapi_rec f xs (i+1).
+
+op mapi (f : int -> 'a -> 'b) (xs : 'a list) = mapi_rec f xs 0.
+
+lemma mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) :
+    (forall i, cancel (g i) (f i)) => cancel (mapi g) (mapi f).
+proof. move => can_f xs; rewrite /mapi; elim: xs 0 => //=; smt(). qed.
+
+lemma in_mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) (xs : 'a list) :
+    (forall i x, x \in xs =>  g i (f i x) = x) => mapi g (mapi f xs) = xs.
+proof. rewrite /mapi; elim: xs 0 => //=; smt(). qed.
+
+lemma G'_S_stop &m x y : x \in EU => y \in EU =>
+   `| Pr [ Game(G',A).main() @ &m : res ] - Pr [ GameS(A).main(exp g x,exp g y) @ &m : res ] | 
+    <= Pr [ GameS(A).main(exp g x,exp g y) @ &m : S.stop ].
+proof.
+move => x_EU y_EU.
+have -> : Pr[ Game(G',A).main() @ &m : res ] = Pr[ Game(G's,A).main() @ &m : res ].
+  byequiv => //. proc; inline *.
+  call (: ={glob G1,glob G2}); try by sim.
+  auto => />; smt(dlist_ll dbiased_ll).
+byequiv : G's.stop => //; last by smt().
+proc; inline *. sp. 
+call (_ : S.stop, 
+  ={glob G1,glob Count} /\ ={ia,ib,stop}(G's,S) /\
+  (S.gx = exp g x /\ S.gy = exp g y){2} /\
+  (forall i, nth' G1.a{2} i = if nth' S.ia{2} i then nth' G1.a{1} i * x else nth' G1.a{1} i)
+  (* TODO: bounds, and invariant for ib/b *)
+  ,
+  G's.stop{1}).
+- exact: A_ll.
+proc; inline *. auto => /> &m2 _ Ha. rewrite {1}Ha. smt(fun_if mulA mulC expM).
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+- (* establishing the invariant *)
+wp.
+rnd. (* FIXME: align as well *)
+rnd (mapi (fun i z => if nth' S.ia{2} i then z * x else z)) 
+    (mapi (fun i z => if nth' S.ia{2} i then z * inv x else z)).
+rnd. rnd. auto => /> ia d_ia ib d_ib. 
+split => [a d_a | aK]. rewrite in_mapiK => //= i z z_a. case (nth' ia i) => // _.
+  rewrite -mulA (mulC _ x) mulA invK //. admit.
 admitted.
 
 lemma S_ia &m gx gy i : 0 <= i /\ i < na =>
