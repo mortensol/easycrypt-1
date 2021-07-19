@@ -425,9 +425,22 @@ move: xs_d; case (0 <= n) => Hn; last by rewrite supp_dlist0; smt().
 rewrite supp_dlist // => -[? /allP H]; exact: H.
 qed.
 
+lemma nth_mapi_rec x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n m : 
+    0 <= n && n < size s =>
+    nth x2 (mapi_rec f s m) n = f (m + n) (nth x1 s n).
+proof. by elim: s n m => /= [|x s IHs]; smt(). qed.
+
 lemma nth_mapi x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n : 0 <= n && n < size s =>
     nth x2 (mapi f s) n = f n (nth x1 s n).
-admitted.
+proof. exact: nth_mapi_rec. qed.
+
+lemma mapi_recP x0 (f : int -> 'a -> 'b) (s : 'a list) y m : 
+    y \in mapi_rec f s m <=> exists n, (0 <= n && n < size s) /\ y = f (n+m) (nth x0 s n).
+proof. elim: s m; smt(size_ge0). qed.
+
+lemma mapiP x0 (f : int -> 'a -> 'b) (s : 'a list) y : 
+    y \in mapi f s <=> exists n, (0 <= n && n < size s) /\ y = f n (nth x0 s n).
+proof. exact: mapi_recP. qed.
 
 (* variant of [dlist_fu] whose conclusion is a linear pattern *)
 lemma dlist_fu_eq (d : 'a distr) (xs : 'a list) n :
@@ -462,46 +475,56 @@ call (_ : S.stop,
 - proc; inline*; auto => />. smt().
 - proc; inline*; auto => />. smt().
 - proc; inline*; auto => /> &1 &2 NS Ha Hb Hca Hcb. smt(mulA mulC expM).
-(* establishing the invariant *)
+(* main goal: establishing the invariant *)
 wp.
 rnd (mapi (fun j z => if nth false S.ib{2} j then z * inv y else z)) 
     (mapi (fun j z => if nth false S.ib{2} j then z * y else z)).
 rnd (mapi (fun i z => if nth false S.ia{2} i then z * inv x else z)) 
     (mapi (fun i z => if nth false S.ia{2} i then z * x else z)).
 rnd; rnd; auto => /> ia d_ia ib d_ib. 
+have [? ?] : 0 <= na /\ 0 <= nb. smt(na_ge0 nb_ge0).
+have Hmapi : forall a' b' na' x', 0 <= na' => x' \in EU => a' \in dlist (duniform (elems EU)) na' => 
+    mapi (fun (i : int) (z : Z) => if b' i then z * x' else z) a' \in dlist (duniform (elems EU)) na'.
+  move => a' b' na' x' na'_ge0 x'_EU. rewrite supp_dlist ?na'_ge0 => -[size_a' /allP supp_a'].
+  apply: dlist_fu_eq; 1: by rewrite size_mapi size_a'.
+  move => z /mapiP /(_ witness) [n] /= [Hn Hz].
+  have ? : nth' a' n \in EU. rewrite memE -supp_duniform. exact/supp_a'/mem_nth.
+  rewrite supp_duniform -memE. smt(Emult).
 split => [a d_a | _ ]. 
   rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
   rewrite invK //. exact: dlist_EU d_a z_a.
 split => [a d_a | _ ].
-  apply: dlist_uni => //; 1: exact: duniform_uni.
-  move: d_a; rewrite supp_dlist ?na_ge0 => -[size_a supp_a].
-  apply: dlist_fu_eq; 1: by rewrite size_mapi size_a.
-  admit. (* need mapiP or something similar *)
-move => a a_d; split => [| ?]. 
-  admit. (* almost as above *)
-split => [|aK']. 
+  apply: dlist_uni => //; 1: exact: duniform_uni. 
+  exact: Hmapi.
+move => a a_d; split => [| _]. 
+  apply: Hmapi => //. exact: Einv.
+split => [|_]. 
   rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
   rewrite invK' //. exact: dlist_EU a_d z_a.
 split => [b b_d | _ ]. 
   rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
   rewrite invK //. exact: dlist_EU b_d z_b.
 split => [b b_d | _]. 
-  apply: dlist_uni => //; 1: exact: duniform_uni.
-  admit.
-move => b b_d; split => [| ?].
-  admit.
+  apply: dlist_uni => //; 1: exact: duniform_uni. 
+  exact: Hmapi.
+move => b b_d; split => [| _].
+  apply: Hmapi => //. exact: Einv.
 split => [|_].
   rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
   rewrite invK' //. exact: dlist_EU b_d z_b.
 split; first split.
 - move => i. case (0 <= i && i < size a) => [i_in|i_out]. 
-  + rewrite /nth'. rewrite (nth_mapi witness a) //=.
-    case (nth false ia i) => //. rewrite invK' //. admit. 
-  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //. admit. 
+  + rewrite /nth' (nth_mapi witness a) //=.
+    case (nth false ia i) => //. rewrite invK' //.
+    suff: nth witness a i \in a by apply: dlist_EU a_d. exact/mem_nth.
+  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //. 
+    smt(supp_dlist_size).
 - move => j. case (0 <= j && j < size b) => [j_in|j_out]. 
   + rewrite /nth'. rewrite (nth_mapi witness b) //=.
-    case (nth false ib j) => //. rewrite invK' //. admit. 
-  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //. admit. 
+    case (nth false ib j) => //. rewrite invK' //. 
+    suff: nth witness b j \in b by apply: dlist_EU b_d. exact/mem_nth.
+  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //. 
+    smt(supp_dlist_size).
 move => _ _. smt().
 qed.
 
@@ -517,14 +540,14 @@ admitted.
 lemma G'_S &m x y : 
     Pr[ Game(G',A).main() @ &m : G.bad ] <= 
     Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
-        nth' S.ia i && nth' S.ib j => m = exp g (nth' S.a i * nth' S.b j * x * y) ].
+        nth' S.ia i && nth' S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
 admitted.
 
 (* does this follow (easily)? *)
 lemma G'_S' &m x y :  
    pa * pb * Pr[ Game(G',A).main() @ &m : G.bad ] <= 
    Pr[ GameS(A).main(exp g x,exp g y) @ &m : 
-       exists m i j, (m,i,j) \in S.gs /\ m = exp g (nth' S.a i * nth' S.b j * x * y) ].
+       exists m i j, (m,i,j) \in S.gs /\ m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
 admitted.
 
 lemma badG'_cdh &m : 
