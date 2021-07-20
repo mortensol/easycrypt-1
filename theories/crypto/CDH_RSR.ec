@@ -318,9 +318,9 @@ module GameS (A : Adversary) = {
 }.
 
 module B (A : Adversary) : NCDH.Adversary = {
-   proc solve(gx gy : G) : G = {
-    var g;
+  var g : G * int * int
 
+   proc solve(gx gy : G) : G = {
     S.init(gx,gy);
     A(S).guess();
     (* return random potentially good group element *)
@@ -528,33 +528,29 @@ split; first split.
 move => _ _. smt().
 qed.
 
+lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n : 
+  is_lossless d => 0 <= i && i < n =>
+  mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
+proof.
+move => d_ll. elim/natind : n i => [/#|n n_ge0 IH i Hi].
+pose P1 x := (i = 0 => p x).
+pose P2 xs := i <> 0 => p (nth x0 xs (i - 1)).
+have -> : (fun (xs : 'a list) => p (nth x0 xs i)) = 
+          (fun (xs : 'a list) => P1 (head x0 xs) /\ P2 (behead xs)) by smt().
+rewrite dlistSE //; case: (i = 0) => [i0|iN0].
+- rewrite (eq1_mu _ P2); 1,2: smt(dlist_ll). 
+  have -> : P1 = p; smt(). 
+- rewrite (eq1_mu _ P1) //; 1: smt(). 
+  have -> : P2 = (fun (xs : 'a list) => p (nth x0 xs (i - 1))) by smt(). 
+  by rewrite IH; smt(). 
+qed.
+
 lemma nth_dlist b i n p :
   0%r <= p => p <= 1%r => 0 <= i => i < n =>
   mu (dlist (dbiased p) n) (transpose (nth b) i) = p.
 proof.
-move: b i p; elim/natind: n => [/#|n n_ge0 nP b i p p_ge0 p_le1 i_ge0 i_lt_n].
-have [j jP] : (exists j, j = i + 1) by smt().
-rewrite dlistS //= dmapE /(\o).
-have dP : (iscoupling (dbiased p) (dlist (dbiased p) n)
-                      (dbiased p `*` dlist (dbiased p) n)).
-- rewrite /iscoupling dmap_dprodE /=.
-  have -> : ((fun x => dmap (dlist (dbiased p) n) (fun (_ : bool list) => x)) =
-             (fun (x : bool) => dunit x))
-    by apply/fun_ext=> x; rewrite dmap_cst; smt(dbiased_ll dlist_ll).
-  split; 1: by rewrite dlet_d_unit.
-  rewrite dprodC dmap_comp /(\o) dmap_dprodE /=.
-  have -> : ((fun x => dmap (dbiased p) (fun (_ : bool) => x)) =
-             (fun (x : bool list) => dunit x))
-    by apply/fun_ext=> x; rewrite dmap_cst; smt(dbiased_ll).
-  by rewrite dlet_d_unit.
-case: (i = 0) => [-> /=|iP].
-- have -> : ((fun (x : bool * bool list) => fst x) = idfun \o fst) by smt().
-  by rewrite -(iscpl_muL (dbiased p) (dlist (dbiased p) n)) // dbiasedE clamp_id.
-- have -> : ((fun (x : bool * bool list) =>
-              if i = 0 then fst x else nth b (snd x) (i - 1)) =
-             transpose (nth b) (i - 1) \o snd) by smt().
-  rewrite -(iscpl_muR (dbiased p) (dlist (dbiased p) n)) //.
-  by apply nP; smt().
+move => *; rewrite (dlist_nthE b _ (fun x => x)) ?dbiasedE /=; 
+  smt(clamp_id dlist_ll dbiased_ll).
 qed.
 
 lemma S_ia &m gx gy i e :
@@ -565,7 +561,7 @@ move => eP pa_ge0 pa_le1 [i_ge0 i_lt_na]; byphoare => //; proc; inline *.
 seq 3: (nth' S.ia i) pa 1%r (1%r - pa) 0%r; 1: by auto.
 - by rnd; auto => />; apply nth_dlist.
 - call (: true); 1: (by exact A_ll); 1..5: (by proc; inline *; auto).
-  by wp; rnd; rnd; rnd; skip => />; smt(dbiased_ll dlist_ll duniform_ll).
+  auto => />; smt(dbiased_ll dlist_ll duniform_ll).
 - by hoare; call (: true); 1..5: (by proc; inline *; auto); auto => />.
 - by auto => />.
 qed.
@@ -584,18 +580,71 @@ seq 4: (nth' S.ib j) pb 1%r (1%r - pb) 0%r; 1: by auto.
 qed.
 
 (* we think we can (maybe) prove *)
-lemma G'_S &m x y :
-    Pr[ Game(G',A).main() @ &m : G.bad ] <=
-    Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\
-        nth' S.ia i && nth' S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
+lemma G'_S &m x y : 
+    Pr[ Game(G',A).main() @ &m : G.bad ] <= 
+    Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
+        (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] + 
+    Pr[ GameS(A).main(exp g x,exp g y) @ &m : S.stop ].
+proof.
+byequiv => //. 
+proc. 
+seq 2 2 : (
+  ={glob Count,G2.ca,G2.cb,glob A} /\ ={ia,ib,stop}(G's,S) /\
+  (S.gx = exp g x /\ S.gy = exp g y){2} /\
+  (forall i,
+    nth' G1.a{1} i = if nth false S.ia{2} i then nth' G1.a{2} i * x else nth' G1.a{2} i) /\ 
+  (forall j,
+    nth' G1.b{1} j = if nth false S.ib{2} j then nth' G1.b{2} j * y else nth' G1.b{2} j) /\ !S.stop{2} /\ !G.bad{1} ).
+admit. (* same as previous lemma, TODO: refactor this *)
+call(:
+  ={glob Count, G2.ca, G2.cb} /\
+  (G's.ia{1} = S.ia{2} /\ G's.ib{1} = S.ib{2} /\ G's.stop{1} = S.stop{2}) /\
+  (S.gx{2} = exp g x /\ S.gy{2} = exp g y) /\
+  (forall (i : int), nth' G1.a{1} i = if nth false S.ia{2} i then nth' G1.a{2} i * x else nth' G1.a{2} i) /\
+  (forall (j : int), nth' G1.b{1} j = if nth false S.ib{2} j then nth' G1.b{2} j * y else nth' G1.b{2} j) /\
+  (!S.stop{2} => G.bad{1} => exists (m : G) (i j : int),
+    ((m, i, j) \in S.gs{2}) /\ (nth false S.ia{2} i && nth false S.ib{2} j => m = exp g (nth' G1.a{2} i * nth' G1.b{2} j * x * y)))).
+- proc; inline *; auto => /> &1 &2 Ha Hb NS. rewrite Ha. smt(mulA mulC expM).
+- proc; inline *; auto => /> &1 &2 Ha Hb NS. rewrite Hb. smt(mulA mulC expM).
+- admit.
+- admit.
+- proc; inline * ; auto => /> &1 &2 Ha Hb Hinv. split => [i_ca|iNca]; (split => [j_cb|jNcb]).
+  + admit.
+  + admit.
+  + admit.
+  + split => [NS|? NS Gbad].
+    * exists (exp g (nth' G1.a{1} i{2} * nth' G1.b{1} j{2})) i{2} j{2}. 
+      smt(mulA mulC expM). 
+    * case: (Hinv NS Gbad) => m i j ?. exists m i j. smt(mulA mulC expM). 
+- by auto => />. 
+qed.
+
+lemma foo &m x y : 
+  q_ddh%r * 
+  Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
+      (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] <=
+  Pr[GameS(A).main(exp g x,exp g y) @ &m : 
+    let (m,i,j) = B.g in 
+    (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ].
+proof. 
+admitted.
+
+lemma bar &m x y : 
+  pa * pb * Pr[GameS(A).main(exp g x,exp g y) @ &m : 
+    let (m,i,j) = B.g in 
+    (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] <=
+  Pr[GameS(A).main(exp g x,exp g y) @ &m : 
+    let (m,i,j) = B.g in m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
 admitted.
 
 (* does this follow (easily)? *)
-lemma G'_S' &m x y :
-   pa * pb * Pr[ Game(G',A).main() @ &m : G.bad ] <=
-   Pr[ GameS(A).main(exp g x,exp g y) @ &m :
-       exists m i j, (m,i,j) \in S.gs /\ m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
-admitted.
+lemma G'_S' &m x y :  
+   pa * pb * Pr[ Game(G',A).main() @ &m : G.bad ] <= 
+   Pr[ GameS(A).main(exp g x,exp g y) @ &m : 
+       exists m i j, (m,i,j) \in S.gs /\ m = exp g (nth' G1.a i * nth' G1.b j * x * y) ] + 
+   Pr[ GameS(A).main(exp g x,exp g y) @ &m : S.stop ].
+proof.
+abort. (*likely not ... *)
 
 lemma badG'_cdh &m :
     Pr[ Game(G',A).main() @ &m : G.bad ] <= p * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
