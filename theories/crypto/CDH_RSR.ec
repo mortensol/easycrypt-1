@@ -3,6 +3,7 @@ require import FinType FSet SmtMap NominalGroup.
 
 import Distr.MRat.
 import DBool.Biased.
+import StdOrder.RealOrder.
 
 clone import NominalGroup.NominalGroup as N.
 
@@ -250,6 +251,7 @@ module S = {
     gx <- gx';
     gy <- gy';
     stop <- false;
+    gs <- [];
   }
 
   proc oa (i : int) = {
@@ -320,13 +322,20 @@ module GameS (A : Adversary) = {
 module B (A : Adversary) : NCDH.Adversary = {
   var g : G * int * int
 
-   proc solve(gx gy : G) : G = {
+  proc solve(gx gy : G) : G = {
+    GameS(A).main(gx,gy);
+    g <$ duniform S.gs;
+    return g.`1;
+  }
+
+  (*
+  proc solve(gx gy : G) : G = {
     S.init(gx,gy);
     A(S).guess();
     (* return random potentially good group element *)
     g <$ duniform S.gs;
     return g.`1;
-  }
+  } *)
 }.
 
 op DELTA : real. (* TODO specify *)
@@ -619,21 +628,49 @@ call(:
 - by auto => />. 
 qed.
 
-lemma foo &m x y : 
-  q_ddh%r * 
+lemma GameS_size_gs : hoare [GameS(A).main : true ==> size S.gs <= q_ddh].
+admitted. (* needs a axiom on the number of queries performed by A *)
+
+lemma B_qddh &m x y : 
+  1%r/q_ddh%r * 
   Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
       (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] <=
-  Pr[GameS(A).main(exp g x,exp g y) @ &m : 
+  Pr[B(A).solve(exp g x,exp g y) @ &m : 
     let (m,i,j) = B.g in 
     (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ].
 proof. 
-admitted.
+pose p := Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
+      (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ].
+byphoare (_ : gx = exp g x /\ gy = exp g y /\ glob A = (glob A){m} ==> _) => //. proc => /=. 
+seq 1 : (exists (m : G) (i j : int),
+            ((m, i, j) \in S.gs) /\
+            (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)))
+      p (1%r/q_ddh%r) _ 0%r (size S.gs <= q_ddh).
+- by call (: true ==> size S.gs <= q_ddh) => //; apply GameS_size_gs.
+- (* this is the definition of p, up to the implicit memory of the pHL goal *)
+  (* proof follows what's done in LorR.ec, is there a simpler way? *)
+  call (: gx = exp g x /\ gy = exp g y /\ (glob A) = (glob A){m} ==> 
+    exists (m : G) (i j : int),
+      ((m, i, j) \in S.gs) /\ 
+      (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y))).
+  + bypr => /> &m' -> -> eqA. rewrite /p /=. (* only the memory differs *)
+    byequiv => //; proc; inline *. 
+    call (: ={glob Count, glob S, glob G1, glob G2}); try sim.
+    auto => /> _ _ _ _ _ _ _ _. by rewrite eqA.
+  + skip => />.
+- rnd; skip => /> &1 size_gs m i j mij_gs mij_good. 
+  apply (ler_trans (mu1 (duniform S.gs{1}) (m,i,j))).
+  + rewrite duniform1E mij_gs /=. smt. (* slow, but works *)
+  + apply mu_sub => -[m' i' j']. case => -> -> -> /=. exact mij_good.
+- by auto.
+- by auto.
+qed.
 
 lemma bar &m x y : 
-  pa * pb * Pr[GameS(A).main(exp g x,exp g y) @ &m : 
+  pa * pb * Pr[B(A).solve(exp g x,exp g y) @ &m : 
     let (m,i,j) = B.g in 
     (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] <=
-  Pr[GameS(A).main(exp g x,exp g y) @ &m : 
+  Pr[B(A).solve(exp g x,exp g y) @ &m : 
     let (m,i,j) = B.g in m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
 admitted.
 
