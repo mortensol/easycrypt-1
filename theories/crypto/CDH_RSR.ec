@@ -4,8 +4,123 @@ require import FinType FSet SmtMap NominalGroup.
 import Distr.MRat.
 import DBool.Biased.
 import StdOrder.RealOrder.
+import RField.
+
+(* preliminaries , move elsewhere *)
+
+lemma inj_card_image (f : 'a -> 'b) (A : 'a fset) : 
+    injective f => card (image f A) = card A.
+proof. 
+move => inj_f.
+have/oflist_uniq uniq_f : uniq (map f (elems A)). 
+  apply map_inj_in_uniq; 2: exact uniq_elems; move => x y _ _; exact inj_f. 
+by rewrite /image /card -(perm_eq_size _ _ uniq_f) size_map.
+qed.
+
+(** theory of [mapi] *)
+op mapi_rec (f : int -> 'a -> 'b) (xs : 'a list) (i : int) =
+ with xs = [] => []
+ with xs = x::xs => f i x :: mapi_rec f xs (i+1).
+
+op mapi (f : int -> 'a -> 'b) (xs : 'a list) = mapi_rec f xs 0.
+
+lemma mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) :
+    (forall i, cancel (g i) (f i)) => cancel (mapi g) (mapi f).
+proof. move => can_f xs; rewrite /mapi; elim: xs 0 => //=; smt(). qed.
+
+lemma in_mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) (xs : 'a list) :
+    (forall i x, x \in xs =>  g i (f i x) = x) => mapi g (mapi f xs) = xs.
+proof. rewrite /mapi; elim: xs 0 => //=; smt(). qed.
+
+lemma size_mapi (f : int -> 'a -> 'b) (xs : 'a list) : size (mapi f xs) = size xs.
+proof. rewrite /mapi. elim: xs 0 => //= xs IHxs n. by rewrite IHxs. qed.
+
+lemma nth_mapi_rec x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n m :
+    0 <= n && n < size s =>
+    nth x2 (mapi_rec f s m) n = f (m + n) (nth x1 s n).
+proof. by elim: s n m => /= [|x s IHs]; smt(). qed.
+
+lemma nth_mapi x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n : 0 <= n && n < size s =>
+    nth x2 (mapi f s) n = f n (nth x1 s n).
+proof. exact: nth_mapi_rec. qed.
+
+lemma mapi_recP x0 (f : int -> 'a -> 'b) (s : 'a list) y m :
+    y \in mapi_rec f s m <=> exists n, (0 <= n && n < size s) /\ y = f (n+m) (nth x0 s n).
+proof. elim: s m; smt(size_ge0). qed.
+
+lemma mapiP x0 (f : int -> 'a -> 'b) (s : 'a list) y :
+    y \in mapi f s <=> exists n, (0 <= n && n < size s) /\ y = f n (nth x0 s n).
+proof. exact: mapi_recP. qed.
+
+(* variant of [dlist_fu] whose conclusion is a linear pattern *)
+lemma dlist_fu_eq (d : 'a distr) (xs : 'a list) n :
+   n = size xs => (forall (x : 'a), x \in xs => x \in d) => xs \in dlist d n.
+proof. move => ->. exact: dlist_fu. qed.
+
+
+lemma muT (d : 'a distr) (p : 'a -> bool) : p == predT => mu d p = weight d.
+proof. by move/fun_ext => ->. qed.
+
+(* TODO: For [I = fset1 i], this subsumes dlist_nthE *)
+lemma dlist_setE x0 (d : 'a distr) (p : 'a -> bool) n (I : int fset) : 
+  is_lossless d => (forall i, i \in I => 0 <= i && i < n) => 
+  mu (dlist d n) (fun xs => forall i, i \in I => p (nth x0 xs i)) = (mu d p)^(card I).
+proof.
+move => d_ll. elim/natind : n I => [n n_le0 I ranI|n n_ge0 IH I ranI].
+  have -> : I = fset0 by smt(in_eq_fset0).
+  rewrite muT ?dlist_ll; smt(in_fset0 fcards0 expr0).
+rewrite dlistS //= dmapE.
+pose P1 x := (0 \in I => p x).
+pose P2 xs := (forall i, i \in image (fun i => i - 1) (I `\` fset1 0)  => p (nth x0 xs i)).
+have -> : ((fun (xs : 'a list) => forall (i : int), i \in I => p (nth x0 xs i)) \o 
+           fun (xy : 'a * 'a list) => xy.`1 :: xy.`2) =  
+          (fun ab : 'a * 'a list => P1 ab.`1 /\ P2 ab.`2).
+  apply/fun_ext => -[x xs]; rewrite /(\o) /= /P1 /P2.
+  apply/eq_iff; split => [H|[H0 Hi]]. split; 1: exact H.
+  move => i /imageP [j [J1 J2]]; smt(in_fsetD1).
+  move => i; case (i = 0) => [/#|iN0 iI]; apply: (Hi (i-1)). 
+  apply/imageP; exists i. smt(in_fsetD1).
+rewrite dprodE.
+have {IH} IH := IH (image (transpose Int.(+) (-1)) (I `\` fset1 0)) _.
+  move => i /imageP [j [J1 <-]] /=. smt(in_fsetD1 in_fset0).
+rewrite IH inj_card_image; 1: smt().
+rewrite /P1 (fcardD1 I 0); case (0 \in I) => /= [I0|IN0]. 
+- by rewrite exprS ?card_ge0; smt. 
+- by rewrite d_ll. 
+qed.
+
+lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n : 
+  is_lossless d => 0 <= i && i < n =>
+  mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
+proof.
+move => d_ll Hn.
+have E := dlist_setE x0 d p n (fset1 i) d_ll _; 1: smt(in_fset1).
+have -> : (fun xs => p (nth x0 xs i)) = 
+          (fun (xs : 'a list) => forall (i0 : int), i0 \in fset1 i => p (nth x0 xs i0)).
+  by apply fun_ext => xs; smt(in_fset1).
+by rewrite E fcard1 expr1.
+(* initial direct proof 
+move => d_ll. elim/natind : n i => [/#|n n_ge0 IH i Hi].
+pose P1 x := (i = 0 => p x).
+pose P2 xs := i <> 0 => p (nth x0 xs (i - 1)).
+have -> : (fun (xs : 'a list) => p (nth x0 xs i)) = 
+          (fun (xs : 'a list) => P1 (head x0 xs) /\ P2 (behead xs)) by smt().
+rewrite dlistSE //; case: (i = 0) => [i0|iN0].
+- rewrite (eq1_mu _ P2); 1,2: smt(dlist_ll). 
+  have -> : P1 = p; smt(). 
+- rewrite (eq1_mu _ P1) //; 1: smt(). 
+  have -> : P2 = (fun (xs : 'a list) => p (nth x0 xs (i - 1))) by smt(). 
+  by rewrite IH; smt(). *)
+qed.
 
 clone import NominalGroup.NominalGroup as N.
+
+lemma dlist_EU n x xs : xs \in dlist (duniform (elems EU)) n => x \in xs => x \in EU.
+proof.
+move => xs_d x_xs. rewrite memE -supp_duniform.
+move: xs_d; case (0 <= n) => Hn; last by rewrite supp_dlist0; smt().
+rewrite supp_dlist // => -[? /allP H]; exact: H.
+qed.
 
 theory NCDH.
 
@@ -57,6 +172,9 @@ end NCDH.
 op na,nb,q_oa,q_ob,q_ddh : int.
 axiom na_ge0 : 0 <= na.
 axiom nb_ge0 : 0 <= nb.
+axiom q_oa_ge0 : 0 <= q_oa.
+axiom q_ob_ge0 : 0 <= q_ob.
+axiom q_ddh_ge0 : 0 <= q_ddh.
 
 module type CDH_RSR_Oracles = {
   proc oA(i : int) : G
@@ -233,6 +351,10 @@ module G1b = {
 
 op pa,pb : real.
 
+(* the "simulation", called "A" in cryptoprim.pdf *)
+(* we have an event "stop" that corresponds to the simulation stoping, 
+   i.e., oa(i) is queried but ia[i] is true, meaning we cannot actually
+   compute the correct return value *)
 module S = {
   import var G1 (* var a, b : Z list *)
   var ia, ib : bool list (* inject a/b *)
@@ -307,6 +429,7 @@ module type S_i = {
   proc init (gx : G, gy : G) : unit
 }.
 
+(* the simulation game *)
 module GameS (A : Adversary) = {
   module O' = Count(S)
 
@@ -319,6 +442,7 @@ module GameS (A : Adversary) = {
   }
 }.
 
+(* adversary against CDH problem for nominal groups *)
 module B (A : Adversary) : NCDH.Adversary = {
   var g : G * int * int
 
@@ -327,15 +451,6 @@ module B (A : Adversary) : NCDH.Adversary = {
     g <$ duniform S.gs;
     return g.`1;
   }
-
-  (*
-  proc solve(gx gy : G) : G = {
-    S.init(gx,gy);
-    A(S).guess();
-    (* return random potentially good group element *)
-    g <$ duniform S.gs;
-    return g.`1;
-  } *)
 }.
 
 op DELTA : real. (* TODO specify *)
@@ -343,8 +458,18 @@ op p : real.     (* TODO specify *)
 
 section.
 
-
 declare module A : Adversary {G1,G2,G,Count,S}.
+
+axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
+  islossless O.oA => 
+  islossless O.oB => 
+  islossless O.oa => 
+  islossless O.ob => 
+  islossless O.ddh => 
+  islossless A(O).guess.
+
+axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
+  hoare [ A(Count(O)).guess : true ==> Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
 
 (* same as G', but with a stop event equivalent to S *)
 local module G's = {
@@ -378,15 +503,11 @@ local module G's = {
 }.
 
 
-axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
-  islossless O.oA => islossless O.oB => islossless O.oa => islossless O.ob => islossless O.ddh => islossless A(O).guess.
-
-
 lemma G1G2_Gbad &m :
     `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
        Pr[ Game(G,A).main() @ &m : G.bad ].
 proof.
-(* Intruduce bad events into G1 and G2 *)
+(* Introduce bad events into G1 and G2 *)
 have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G,A).main() @ &m : res ].
   byequiv => //. proc; inline *.
   call (_ : ={glob G2}) => //; 1..4: (by sim); last by auto => />.
@@ -409,55 +530,33 @@ lemma G_G' &m :
     `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 admitted.
 
-(** theory of [mapi], move elsewhere *)
-op mapi_rec (f : int -> 'a -> 'b) (xs : 'a list) (i : int) =
- with xs = [] => []
- with xs = x::xs => f i x :: mapi_rec f xs (i+1).
-
-op mapi (f : int -> 'a -> 'b) (xs : 'a list) = mapi_rec f xs 0.
-
-lemma mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) :
-    (forall i, cancel (g i) (f i)) => cancel (mapi g) (mapi f).
-proof. move => can_f xs; rewrite /mapi; elim: xs 0 => //=; smt(). qed.
-
-lemma in_mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) (xs : 'a list) :
-    (forall i x, x \in xs =>  g i (f i x) = x) => mapi g (mapi f xs) = xs.
-proof. rewrite /mapi; elim: xs 0 => //=; smt(). qed.
-
-lemma size_mapi (f : int -> 'a -> 'b) (xs : 'a list) : size (mapi f xs) = size xs.
-proof. rewrite /mapi. elim: xs 0 => //= xs IHxs n. by rewrite IHxs. qed.
-
-local lemma dlist_EU n x xs : xs \in dlist (duniform (elems EU)) n => x \in xs => x \in EU.
-proof.
-move => xs_d x_xs. rewrite memE -supp_duniform.
-move: xs_d; case (0 <= n) => Hn; last by rewrite supp_dlist0; smt().
-rewrite supp_dlist // => -[? /allP H]; exact: H.
-qed.
-
-lemma nth_mapi_rec x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n m :
-    0 <= n && n < size s =>
-    nth x2 (mapi_rec f s m) n = f (m + n) (nth x1 s n).
-proof. by elim: s n m => /= [|x s IHs]; smt(). qed.
-
-lemma nth_mapi x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n : 0 <= n && n < size s =>
-    nth x2 (mapi f s) n = f n (nth x1 s n).
-proof. exact: nth_mapi_rec. qed.
-
-lemma mapi_recP x0 (f : int -> 'a -> 'b) (s : 'a list) y m :
-    y \in mapi_rec f s m <=> exists n, (0 <= n && n < size s) /\ y = f (n+m) (nth x0 s n).
-proof. elim: s m; smt(size_ge0). qed.
-
-lemma mapiP x0 (f : int -> 'a -> 'b) (s : 'a list) y :
-    y \in mapi f s <=> exists n, (0 <= n && n < size s) /\ y = f n (nth x0 s n).
-proof. exact: mapi_recP. qed.
-
-(* variant of [dlist_fu] whose conclusion is a linear pattern *)
-lemma dlist_fu_eq (d : 'a distr) (xs : 'a list) n :
-   n = size xs => (forall (x : 'a), x \in xs => x \in d) => xs \in dlist d n.
-proof. move => ->. exact: dlist_fu. qed.
-
+(* this is only enough if we can prove that P[G's : !stop] and [G's :
+bad] are independent, which is most likely not the case *)
 local lemma G's_stop &m : 
-    Pr [Game(G's,A).main() @ &m : !G's.stop] >= (1%r-pa)^q_oa * (1%r-pb)^q_ob.
+    Pr [Game(G's,A).main() @ &m : !G's.stop] >= (1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob.
+proof.
+have H : hoare [Game(G's,A).main : true ==> size G2.ca <= q_oa /\ size G2.cb <= q_ob ].
+  admit. (* A_bound *)
+have -> : Pr[Game(G's, A).main() @ &m : !G's.stop] = 
+          Pr[Game(G's, A).main() @ &m : (forall i, i \in G2.ca => !nth false G's.ia i) /\ 
+                                        (forall i, i \in G2.cb => !nth false G's.ib i) ].
+byequiv => //; proc; inline *.
+call(: ={glob G's,glob G1,glob G2,glob Count} /\
+      (!G's.stop{1} <=> (forall (i : int), i \in G2.ca{2} => ! nth false G's.ia{2} i) /\
+                         forall (i : int), i \in G2.cb{2} => ! nth false G's.ib{2} i)); 
+  by (try proc); inline *; auto => /> /#.
+admitted.
+
+local lemma G's_stop' &m :
+    (1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob * Pr[Game(G's,A).main() @ &m : G.bad]
+    <= Pr [Game(G's,A).main() @ &m : G.bad /\ !G's.stop].
+proof.
+(* proof idea:
+  - If Game(G's,A).main() triggers G.bad, it does so by making at most 
+  q_oa queries to oa and q_ob queries to ob. 
+  - thus the query logs ca and cb have at most length q_oa (resp. q_ob)
+  - !stop holds if the log contains no i(resp. j) such that ia[i] (resp. ib[j]) is true
+  - all the ia[i]/ib[j] are sampled independently at the start. *)   
 admitted.
 
 local lemma G's_S &m x y : x \in EU => y \in EU => 
@@ -640,22 +739,7 @@ move => _ _. smt().
 qed.
 *)
 
-lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n : 
-  is_lossless d => 0 <= i && i < n =>
-  mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
-proof.
-move => d_ll. elim/natind : n i => [/#|n n_ge0 IH i Hi].
-pose P1 x := (i = 0 => p x).
-pose P2 xs := i <> 0 => p (nth x0 xs (i - 1)).
-have -> : (fun (xs : 'a list) => p (nth x0 xs i)) = 
-          (fun (xs : 'a list) => P1 (head x0 xs) /\ P2 (behead xs)) by smt().
-rewrite dlistSE //; case: (i = 0) => [i0|iN0].
-- rewrite (eq1_mu _ P2); 1,2: smt(dlist_ll). 
-  have -> : P1 = p; smt(). 
-- rewrite (eq1_mu _ P1) //; 1: smt(). 
-  have -> : P2 = (fun (xs : 'a list) => p (nth x0 xs (i - 1))) by smt(). 
-  by rewrite IH; smt(). 
-qed.
+
 
 lemma nth_dlist b i n p :
   0%r <= p => p <= 1%r => 0 <= i => i < n =>
@@ -664,6 +748,7 @@ proof.
 move => *; rewrite (dlist_nthE b _ (fun x => x)) ?dbiasedE /=; 
   smt(clamp_id dlist_ll dbiased_ll).
 qed.
+
 
 lemma S_ia &m gx gy i e :
   e \in EU => 0%r <= pa => pa <= 1%r => 0 <= i /\ i < na =>
