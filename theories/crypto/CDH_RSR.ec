@@ -231,7 +231,9 @@ module Count (O : CDH_RSR_Oracles) = {
   }
 }.
 
-op nth' (zs : 'a list) = nth witness zs.
+op e : Z.
+axiom e_EU : e \in EU.
+op nth' (zs : Z list) = nth e zs.
 
 (* The acutal CDH_RSR game: initialize oracles and counters and
 dispatach to adversary *)
@@ -361,7 +363,7 @@ module S = {
   import var G2 (* var ca, cb : int list / call logs *)
   var gx,gy : G
   var stop : bool
-  var mij : G * int * int
+  var m_crit : G
   var cddh, k : int
 
   proc init (gx' : G, gy' : G) = {
@@ -412,8 +414,9 @@ module S = {
     }
 
     (* record k-th query *)
-    if (!(i \in ca) /\ !(j \in cb) /\ cddh = k) { mij <- (m,i,j);}
-
+    if (!(i \in ca) /\ !(j \in cb) /\ cddh = k) { 
+      m_crit <- m^(inv (nth' G1.a i) * inv(nth' G1.b j));
+    }
     return r;
   }
 }.
@@ -448,11 +451,8 @@ module GameS (A : Adversary) = {
 (* adversary against CDH problem for nominal groups *)
 module B (A : Adversary) : NCDH.Adversary = {
   proc solve(gx gy : G) : G = {
-    var m, i, j;
-
     GameS(A).main(gx,gy);
-    (m,i,j) <- S.mij;
-    return m^(inv (nth' G1.a i) * inv(nth' G1.b i));
+    return S.m_crit;
   }
 }.
 
@@ -581,8 +581,7 @@ local lemma guess_S &m x y : x \in EU => y \in EU =>
   Pr [ Game(Gk',A).main() @ &m : 
     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ 
     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ] <= 
-  Pr [GameS(A).main(exp g x,exp g y) @ &m : 
-    let (m,i,j) = S.mij in m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
+  Pr [GameS(A).main(exp g x,exp g y) @ &m : S.m_crit = exp g (x * y) ].
 proof.
 move => x_EU y_EU.
 byequiv => //; proc; inline *. sp. 
@@ -597,28 +596,28 @@ call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/
     nth' G1.a{2} i = if nth false S.ia{1} i then nth' G1.a{1} i * x else nth' G1.a{1} i) /\
   (forall j,
     nth' G1.b{2} j = if nth false S.ib{1} j then nth' G1.b{1} j * y else nth' G1.b{1} j) /\
-  (G.bad{2} => 
-    (let (m, i, j) = S.mij{1} in m = exp g (nth' G1.a{1} i * nth' G1.b{1} j * x * y) /\ 
-      i = Gk.i_k{2} /\ j = Gk.j_k{2})) /\ 
-  (G.bad <=> Gk.k <= Gk.cddh){2}
+  (G.bad{2} => S.m_crit{1} = exp g (x * y)) /\ 
+  (G.bad <=> Gk.k <= Gk.cddh){2} /\ 
+  (forall i, nth' G1.a{1} i \in EU /\ nth' G1.b{1} i \in EU)
   ) ; try by move => *; proc; inline*; auto.
 - exact A_ll.
 - proc; inline *; auto => /> &1 &2. smt(mulA mulC expM). 
 - proc; inline *; auto => /> &1 &2. smt(mulA mulC expM). 
 - proc; inline *; auto => /> &1 &2. 
-  rewrite !negb_or !negbK => - _ Ha Hb _ [[Hca Hcb] _]. by rewrite Ha Hca.
+  rewrite !negb_or !negbK => - _ Ha Hb _ ? [[Hca Hcb] _]. by rewrite Ha Hca.
 - move => _. proc; inline *; auto => /> /#.
 - proc; inline *; auto => /> &1 &2. 
-  rewrite !negb_or !negbK => - _ Ha Hb _ [[Hca Hcb] _]. by rewrite Hb Hcb.
+  rewrite !negb_or !negbK => - _ Ha Hb _ ? [[Hca Hcb] _]. by rewrite Hb Hcb.
 - move => _. proc; inline *; auto => /> /#.
-- proc; inline *; auto => />; smt(mulA mulC expM).
-  (*
+- (* proc; inline *; auto => />; smt(mulA mulC expM). *)
+  proc; inline *. sp 6 7.
   if{1}. auto => />; smt(mulA mulC expM).
   if{1}. auto => />; smt(mulA mulC expM).
   rcondf{2} 1; 1: by auto => />; smt().
-  auto => />. move => &1 &2 cddh. rewrite !negb_or !negbK. smt(mulA mulC expM). 
-  move => -[[Hca Hcb] [? Hcddh]] Ha Hb HbadI ? ?. split; 1:smt(mulA mulC expM). 
-  *)
+  auto => />. move => &1 &2 cddh. rewrite !negb_or !negbK. 
+  move => -[[Hca Hcb] [? Hcddh]] Ha Hb HbadI HEU ? ?. split; 2:smt(). 
+  move => _ _ [_ [H1 H2]]. rewrite Ha Hb H1 H2 /=. 
+  rewrite -expM'. smt(mulA mulC invK Emult). 
 - by move => _; proc; inline *; auto => /> /#.
 (* establishing the invariant *)
 wp. rnd. wp.
@@ -632,7 +631,7 @@ have Hmapi : forall a' b' na' x', 0 <= na' => x' \in EU => a' \in dlist (dunifor
     mapi (fun (i : int) (z : Z) => if b' i then z * x' else z) a' \in dlist (duniform (elems EU)) na'.
   move => a' b' na' x' na'_ge0 x'_EU. rewrite supp_dlist ?na'_ge0 => -[size_a' /allP supp_a'].
   apply: dlist_fu_eq; 1: by rewrite size_mapi size_a'.
-  move => z /mapiP /(_ witness) [n] /= [Hn Hz].
+  move => z /mapiP /(_ e) [n] /= [Hn Hz].
   have ? : nth' a' n \in EU. rewrite memE -supp_duniform. exact/supp_a'/mem_nth.
   rewrite supp_duniform -memE. smt(Emult).
 
@@ -659,19 +658,43 @@ split => [|_].
   rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
   rewrite invK //. exact: dlist_EU b_d z_b.
 move => k supp_k. split.
-- move => _; split. 
+- move => _; split; last split.
   + move => i. case (0 <= i && i < size a) => [i_in|i_out].
-      rewrite /nth' (nth_mapi witness a) //=.
-    rewrite /nth' !(nth_out false) //= ?(nth_out witness) //.
+      rewrite /nth' (nth_mapi e a) //=.
+    rewrite /nth' !(nth_out false) //= ?(nth_out e) //.
       smt(supp_dlist_size).
     by rewrite size_mapi. 
   + move => j. case (0 <= j && j < size b) => [j_in|j_out].
-      rewrite /nth' (nth_mapi witness b) //=.
-    rewrite /nth' !(nth_out false) //= ?(nth_out witness) //.
+      rewrite /nth' (nth_mapi e b) //=.
+    rewrite /nth' !(nth_out false) //= ?(nth_out e) //.
       smt(supp_dlist_size).
     by rewrite size_mapi. 
+  + move => i; split.
+    * case (0 <= i && i < size a) => [i_in|i_out]. 
+        move: a_d. rewrite supp_dlist // => -[? /allP /(_ (nth' a i))].
+        rewrite supp_duniform -memE. apply. exact mem_nth.
+      by rewrite /nth' nth_out // e_EU.
+    * case (0 <= i && i < size b) => [i_in|i_out]. 
+        move: b_d. rewrite supp_dlist // => -[? /allP /(_ (nth' b i))].
+        rewrite supp_duniform -memE. apply. exact mem_nth.
+      by rewrite /nth' nth_out // e_EU.
 smt().
 qed.
+
+local lemma A_B &m : 
+  Pr [ Game(Gk',A).main() @ &m : 
+    G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ 
+    nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ] <=
+  Pr [ NCDH.Game(B(A)).main() @ &m : res ].
+proof.
+pose p := Pr[Game(Gk', A).main() @ &m :
+   G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
+byphoare => //. proc; inline B(A).solve.
+wp. 
+seq 2 : (x \in EU /\ y \in EU) 1%r p 0%r _ true => //.
+- admit.
+sp. (* this should be essentially an application of the lemma above *)
+admitted.
 
 (* same as G', but with a stop event equivalent to S *)
 local module G's = {
@@ -1039,3 +1062,5 @@ abort. (*likely not ... *)
 lemma badG'_cdh &m :
     Pr[ Game(G',A).main() @ &m : G.bad ] <= p * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
 admitted.
+
+end section.

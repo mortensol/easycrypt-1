@@ -56,4 +56,7 @@ qed.
 lemma invK' a x   : a \in EU => x \in EU => a * inv x * x = a.
 proof. rewrite -mulA (mulC _ x) mulA. exact: invK. qed.
 
+lemma expM' a x y : exp a (x * y) = (exp a x)^y.
+proof. by rewrite /exp -!expM -!mulA (mulC y). qed.
+
 end NominalGroup.
