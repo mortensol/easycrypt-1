@@ -499,6 +499,7 @@ local module Gk : CDH_RSR_Oracles_i = {
     if (i \in ca || j \in cb) { r <- t; }
 
     (* execute bad if neither was leaked and "false" is not the right answer *)
+    (* remember on which query *)
     if (!(i \in ca || j \in cb) /\ t /\ !bad) { 
       bad <- true; 
       k_bad <- cddh;
@@ -514,6 +515,7 @@ op nstop (ia ib : bool list) (ca cb : int list) =
   (forall i, i \in ca => nth false ia i = false) /\
   (forall j, j \in cb => nth false ib j = false).
 
+(* TODO: maintain i_k \notin ca and same for j_k/cb *)
 local lemma guess_bound &m : 
   1%r/q_ddh%r * (1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob * clamp pa * clamp pb * 
   Pr [ Game(G',A).main() @ &m : G.bad] <=
@@ -689,12 +691,23 @@ local lemma A_B &m :
 proof.
 pose p := Pr[Game(Gk', A).main() @ &m :
    G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
-byphoare => //. proc; inline B(A).solve.
-wp. 
-seq 2 : (x \in EU /\ y \in EU) 1%r p 0%r _ true => //.
-- admit.
-sp. (* this should be essentially an application of the lemma above *)
-admitted.
+byphoare (: (glob A,Gk.i_k,Gk.j_k) = (glob A,Gk.i_k,Gk.j_k){m} ==> _) => //. 
+proc; inline B(A).solve. wp. 
+seq 4 : true 1%r p 0%r _ 
+  (x \in EU /\ y \in EU /\ gx = exp g x /\ gy = exp g y 
+  /\ (glob A,Gk.i_k,Gk.j_k) = (glob A,Gk.i_k,Gk.j_k){m}) => //.
+- auto => />; smt( supp_duniform memE).
+- islossless; apply duniform_ll; smt(e_EU).
+exlim x, y => x' y'. 
+call (: (x' \in EU) /\ (y' \in EU) /\ gx = exp g x' /\ gy = exp g y' 
+    /\ (glob A,Gk.i_k,Gk.j_k) = (glob A,Gk.i_k,Gk.j_k){m}
+  ==> S.m_crit = exp g (x' * y')); 2: by auto.
+bypr => &m' /> ? ? -> -> *.
+suff -> : p = Pr[Game(Gk', A).main() @ &m' :
+    G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] 
+  by apply guess_S.
+rewrite /p; byequiv => //. sim => /> /#. 
+qed.
 
 (* same as G', but with a stop event equivalent to S *)
 local module G's = {
