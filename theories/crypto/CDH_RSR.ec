@@ -89,6 +89,18 @@ rewrite /P1 (fcardD1 I 0); case (0 \in I) => /= [I0|IN0].
 - by rewrite d_ll. 
 qed.
 
+lemma dlist_set2E x0 (d : 'a distr) (p : 'a -> bool) n (I J : int fset) : 
+  is_lossless d => 
+  (forall i, i \in I => 0 <= i && i < n) => 
+  (forall j, j \in J => 0 <= j && j < n) => 
+  (forall k, !(k \in I /\ k \in J)) => 
+  mu (dlist d n) 
+     (fun xs => (forall i, i \in I => p (nth x0 xs i)) /\ 
+                (forall j, j \in J => !p (nth x0 xs j)))
+  = (mu d p)^(card I) * (mu d (predC p))^(card J).
+proof.
+admitted.
+
 lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n : 
   is_lossless d => 0 <= i && i < n =>
   mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
@@ -539,8 +551,8 @@ local lemma guess_bound &m :
     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k
   ].
 proof.
-byphoare => //; proc; inline *.
-swap 10 4. swap [1..2] 12. 
+byphoare => //.  
+(* swap 10 4. swap [1..2] 12.  *)
 admitted.
 
 local module Gk' : CDH_RSR_Oracles_i = { 
