@@ -361,6 +361,15 @@ module G1b = {
   }
 }.
 
+(* Same behavior as G2, but defining a bad event equivalent to G *)
+module G2b = {
+  import var G1 G2
+  include var G [-oa,ob]
+
+  proc oa = G2.oa
+  proc ob = G2.ob
+}.
+
 op pa,pb : real.
 
 (* the "simulation", called "A" in cryptoprim.pdf *)
@@ -753,9 +762,9 @@ lemma G1G2_Gbad &m :
     `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
        Pr[ Game(G,A).main() @ &m : G.bad ].
 proof.
-(* TODO: fix proof to account for not logging queries after bad has ocurred 
+(* TODO: fix proof to account for not logging queries after bad has ocurred *)
 (* Introduce bad events into G1 and G2 *)
-have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G,A).main() @ &m : res ].
+have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G2b,A).main() @ &m : res ].
   byequiv => //. proc; inline *.
   call (_ : ={glob G2}) => //; 1..4: (by sim); last by auto => />.
   by proc; inline *; auto.
@@ -763,14 +772,19 @@ have -> : Pr[ Game(G1,A).main() @ &m : res ] = Pr[ Game(G1b,A).main() @ &m : res
   byequiv => //; proc; inline *.
   call (_ : ={glob G1}); 1..4: (by sim); last by auto => />.
   by proc; inline *; auto.
-(* up-to-bad reasoning *)
+(* we can continue logging oa/ob queries once bad happens *)
+have -> : Pr[Game(G, A).main() @ &m : G.bad] = Pr[Game(G2b, A).main() @ &m : G.bad].
+  byequiv => //; proc; inline *.
+  call (: G.bad, ={G.bad,glob G1,glob G2,glob Count}, ={G.bad});
+    try by move => *; proc; inline *; auto => /> /#.
+  exact: A_ll.
+  by auto => /> /#. 
 byequiv (_ : ={glob A} ==> ={G.bad} /\ (!G.bad{2} => ={res})) : G.bad => //; 2: smt().
 proc; inline *.
 call (_ : G.bad, ={G.bad,glob G2,glob Count}, ={G.bad});
   try by move => *; by proc; inline *; auto => /> /#.
 exact: A_ll.
 by auto => /> /#. 
-*) admit.
 qed.
 
 
