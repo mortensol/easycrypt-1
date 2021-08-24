@@ -281,7 +281,7 @@ module G2 : CDH_RSR_Oracles = {
   proc oA = G1.oA
   proc oB = G1.oB
   proc oa (i : int) = { ca <- i::ca ; return nth' a i; }
-  proc ob (i : int) = { cb <- i::cb ; return nth' b i; }
+  proc ob (j : int) = { cb <- j::cb ; return nth' b j; }
 
   proc ddh(m, i, j) = {
     return
@@ -297,12 +297,22 @@ module G2 : CDH_RSR_Oracles = {
 
 module G = {
   import var G1
-  include var G2 [-ddh,init]
+  include var G2 [-ddh,init,oa,ob]
   var bad : bool
 
   proc init () = {
     G2.init();
     bad <- false;
+  }
+  
+  proc oa (i : int) = { 
+    if (!bad) { ca <- i::ca ; }
+    return nth' a i; 
+  }
+
+  proc ob (j : int) = { 
+    if (!bad) { cb <- j::cb ; }
+    return nth' b j; 
   }
 
   proc ddh(m : G, i,j : int) = {
@@ -362,7 +372,6 @@ module S = {
   var ia, ib : bool list (* inject a/b *)
   import var G2 (* var ca, cb : int list / call logs *)
   var gx,gy : G
-  var stop : bool
   var m_crit : G
   var cddh, k : int
 
@@ -375,20 +384,17 @@ module S = {
     cb <- [];
     gx <- gx';
     gy <- gy';
-    stop <- false;
     k <$ [1..q_ddh];
     cddh <- 0;
   }
 
   proc oa (i : int) = {
-    if (nth false ia i) { stop <- true; }
-    ca <- i :: ca;
+    if (cddh < k) { ca <- i :: ca; }
     return (nth' a i);
   }
 
   proc ob (j : int) = {
-    if (nth false ib j) { stop <- true; }
-    cb <- j :: cb;
+    if (cddh < k) { cb <- j :: cb; }
     return (nth' b j);
   }
 
@@ -590,7 +596,7 @@ byequiv => //; proc; inline *. sp.
 symmetry.
 call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/ 
         !(G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k) \/
-        (!G.bad /\ Gk.k <= Gk.cddh )
+        Gk.k <= Gk.cddh
          ,
   ={glob Count,G2.ca,G2.cb} /\ ={ia,ib,cddh,k}(S,Gk) /\ 
   (S.gx = exp g x /\ S.gy = exp g y){1} /\
@@ -599,29 +605,32 @@ call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/
   (forall j,
     nth' G1.b{2} j = if nth false S.ib{1} j then nth' G1.b{1} j * y else nth' G1.b{1} j) /\
   (G.bad{2} => S.m_crit{1} = exp g (x * y)) /\ 
-  (G.bad <=> Gk.k <= Gk.cddh){2} /\ 
+  (G.bad <=> Gk.k <= Gk.cddh){2} /\
   (forall i, nth' G1.a{1} i \in EU /\ nth' G1.b{1} i \in EU)
-  ) ; try by move => *; proc; inline*; auto.
+  ,
+  !(nstop Gk.ia Gk.ib G2.ca G2.cb){2} \/ 
+  !(G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k){2} \/
+  (S.k <= S.cddh /\ S.m_crit{1} = exp g (x * y)){1} \/
+  (Gk.k <= Gk.cddh /\ !G.bad){2}
+  ); try by move => *; proc; inline*; auto. (* 11 goals left *)
 - exact A_ll.
 - proc; inline *; auto => /> &1 &2. smt(mulA mulC expM). 
 - proc; inline *; auto => /> &1 &2. smt(mulA mulC expM). 
+- proc; inline *; auto => /> &1 &2. smt().
+- move => &1; proc; inline *; auto => />. smt().
 - proc; inline *; auto => /> &1 &2. 
-  rewrite !negb_or !negbK => - _ Ha Hb _ ? [[Hca Hcb] _]. by rewrite Ha Hca.
-- move => _. proc; inline *; auto => /> /#.
-- proc; inline *; auto => /> &1 &2. 
-  rewrite !negb_or !negbK => - _ Ha Hb _ ? [[Hca Hcb] _]. by rewrite Hb Hcb.
-- move => _. proc; inline *; auto => /> /#.
-- (* proc; inline *; auto => />; smt(mulA mulC expM). *)
-  proc; inline *. sp 6 7.
-  if{1}. auto => />; smt(mulA mulC expM).
-  if{1}. auto => />; smt(mulA mulC expM).
-  rcondf{2} 1; 1: by auto => />; smt().
-  auto => />. move => &1 &2 cddh. rewrite !negb_or !negbK. 
-  move => -[[Hca Hcb] [? Hcddh]] Ha Hb HbadI HEU ? ?. split; 2:smt(). 
-  move => _ _ [_ [H1 H2]]. rewrite Ha Hb H1 H2 /=. 
-  rewrite -expM'. smt(mulA mulC invK Emult). 
-- by move => _; proc; inline *; auto => /> /#.
-(* establishing the invariant *)
+  rewrite !negb_or !negbK. smt().
+- move => &1; proc; inline *; auto => />. smt().
+- proc; inline *; auto => /> &1 &2. rewrite !negb_or !negbK => />.
+  move => Hca Hcb Hbad G1 G2.
+  have {G1 G2} G1 : Gk.cddh{2} < Gk.k{2} by smt().
+  move => Ha Hb _ HEU. split; 1: smt(expM mulA mulC). 
+  case (i{2} \in G2.ca{2}) => //= iNca jNcb; rewrite jNcb /=.
+  split; 2: smt(). move => G2 _ _. rewrite -implybE => -[Hia Hib].
+  rewrite Ha Hb Hia Hib /= -expM'. smt(mulA mulC invK Emult). 
+- move => *; proc; inline *; auto => />. smt().
+- move => *; proc; inline *; auto => />. smt().
+(* main goal: establishing the invariant *)
 wp. rnd. wp.
 rnd (mapi (fun j z => if nth false S.ib{1} j then z * y else z))
     (mapi (fun j z => if nth false S.ib{1} j then z * inv y else z)).
@@ -659,28 +668,27 @@ move => b b_d; split => [| _].
 split => [|_].
   rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
   rewrite invK //. exact: dlist_EU b_d z_b.
-move => k supp_k. split.
-- move => _; split; last split.
-  + move => i. case (0 <= i && i < size a) => [i_in|i_out].
-      rewrite /nth' (nth_mapi e a) //=.
-    rewrite /nth' !(nth_out false) //= ?(nth_out e) //.
-      smt(supp_dlist_size).
-    by rewrite size_mapi. 
-  + move => j. case (0 <= j && j < size b) => [j_in|j_out].
-      rewrite /nth' (nth_mapi e b) //=.
-    rewrite /nth' !(nth_out false) //= ?(nth_out e) //.
-      smt(supp_dlist_size).
-    by rewrite size_mapi. 
-  + move => i; split.
-    * case (0 <= i && i < size a) => [i_in|i_out]. 
-        move: a_d. rewrite supp_dlist // => -[? /allP /(_ (nth' a i))].
-        rewrite supp_duniform -memE. apply. exact mem_nth.
-      by rewrite /nth' nth_out // e_EU.
-    * case (0 <= i && i < size b) => [i_in|i_out]. 
-        move: b_d. rewrite supp_dlist // => -[? /allP /(_ (nth' b i))].
-        rewrite supp_duniform -memE. apply. exact mem_nth.
-      by rewrite /nth' nth_out // e_EU.
-smt().
+move => k supp_k. split; 2: smt(). split; 1: smt().
+move => _; split; last split.
++ move => i. case (0 <= i && i < size a) => [i_in|i_out].
+    rewrite /nth' (nth_mapi e a) //=.
+  rewrite /nth' !(nth_out false) //= ?(nth_out e) //.
+    smt(supp_dlist_size).
+  by rewrite size_mapi. 
++ move => j. case (0 <= j && j < size b) => [j_in|j_out].
+    rewrite /nth' (nth_mapi e b) //=.
+  rewrite /nth' !(nth_out false) //= ?(nth_out e) //.
+    smt(supp_dlist_size).
+  by rewrite size_mapi. 
++ move => i; split.
+  * case (0 <= i && i < size a) => [i_in|i_out]. 
+      move: a_d. rewrite supp_dlist // => -[? /allP /(_ (nth' a i))].
+      rewrite supp_duniform -memE. apply. exact mem_nth.
+    by rewrite /nth' nth_out // e_EU.
+  * case (0 <= i && i < size b) => [i_in|i_out]. 
+      move: b_d. rewrite supp_dlist // => -[? /allP /(_ (nth' b i))].
+      rewrite supp_duniform -memE. apply. exact mem_nth.
+    by rewrite /nth' nth_out // e_EU.
 qed.
 
 local lemma A_B &m : 
@@ -745,6 +753,7 @@ lemma G1G2_Gbad &m :
     `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
        Pr[ Game(G,A).main() @ &m : G.bad ].
 proof.
+(* TODO: fix proof to account for not logging queries after bad has ocurred 
 (* Introduce bad events into G1 and G2 *)
 have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G,A).main() @ &m : res ].
   byequiv => //. proc; inline *.
@@ -760,8 +769,10 @@ proc; inline *.
 call (_ : G.bad, ={G.bad,glob G2,glob Count}, ={G.bad});
   try by move => *; by proc; inline *; auto => /> /#.
 exact: A_ll.
-by auto => /> /#.
+by auto => /> /#. 
+*) admit.
 qed.
+
 
 (* what about res, do we care? *)
 lemma G_G' &m :
