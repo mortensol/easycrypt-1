@@ -89,8 +89,34 @@ rewrite /P1 (fcardD1 I 0); case (0 \in I) => /= [I0|IN0].
 - by rewrite d_ll. 
 qed.
 
+require import StdBigop.
+(*---*) import IterOp Bigint Bigreal Bigreal.BRM.
+
+(* local copy of new DList lemma: remove *)
+lemma dlistSr (d : 'a distr) (n : int) : 0 <= n => 
+  dlist d (n + 1) = dapply (fun (xy : 'a list * 'a) => rcons xy.`1 xy.`2) (dlist d n `*` d).
+admitted.
+
+lemma dlistE x0 (d : 'a distr) (p : int -> 'a -> bool) n : 
+    mu (dlist d n) (fun xs : 'a list => forall i, (0 <= i) && (i < n) => (p i (nth x0 xs i))) 
+  = bigi (fun _ => true) (fun i => mu d (p i)) 0 n.
+proof.
+elim/natind : n p => [n n_le0|n n_ge0 IHn] p. 
+- rewrite dlist0 // dunitE range_geq //= big_nil; smt().
+rewrite rangeSr // -cats1 big_cat big_seq1. 
+rewrite dlistSr //= dmapE. 
+pose P1 xs := forall i, 0 <= i && i < n => p i (nth x0 xs i). 
+pose P2 x := p n x.
+pose P (a : 'a list * 'a) := P1 a.`1 /\ P2 a.`2.
+rewrite (mu_eq_support _ _ P); 2: by rewrite dprodE IHn.
+case => xs x /=. rewrite supp_dprod /= supp_dlist // => -[[? ?] ?].
+rewrite /(\o) /P /P1 /P2 /= eq_iff; subst n; split; 2: smt(nth_rcons).
+move => H; split => [i|];[have := (H i)|have := H (size xs)]; smt(nth_rcons). 
+qed.
+
+(* 0 <= n could be removed, but applying the lemma is pointless in that case *)
 lemma dlist_set2E x0 (d : 'a distr) (p : 'a -> bool) n (I J : int fset) : 
-  is_lossless d => 
+  is_lossless d => 0 <= n => 
   (forall i, i \in I => 0 <= i && i < n) => 
   (forall j, j \in J => 0 <= j && j < n) => 
   (forall k, !(k \in I /\ k \in J)) => 
@@ -99,7 +125,25 @@ lemma dlist_set2E x0 (d : 'a distr) (p : 'a -> bool) n (I J : int fset) :
                 (forall j, j \in J => !p (nth x0 xs j)))
   = (mu d p)^(card I) * (mu d (predC p))^(card J).
 proof.
-admitted.
+move => d_ll n_ge0 I_range J_range disjIJ. 
+pose q i x := (i \in I => p x) /\ (i \in J => !p x).
+rewrite (mu_eq_support _ _ 
+  (fun xs => forall i, (0 <= i) && (i < n) => q i (nth x0 xs i))); 1: smt(supp_dlist).
+rewrite dlistE (bigEM (mem (I `|` J))).
+rewrite (big1 (predC (mem (I `|` J)))) ?mulr1.
+  move => i; rewrite /predC in_fsetU negb_or /= /q => -[iNI iNJ].
+  rewrite (mu_eq _ _ predT) 1:/# //. 
+rewrite -big_filter (eq_big_perm _ _ _ (elems I ++ elems J)) ?big_cat.
+- apply uniq_perm_eq => [| |x].
+  + by rewrite filter_uniq range_uniq.
+  + rewrite cat_uniq !uniq_elems => />; apply/hasPn; smt().
+  + by rewrite mem_filter mem_range mem_cat -!memE in_fsetU /#.
+rewrite big_seq_cond (eq_bigr _ _ (fun _ => mu d p)) -?big_seq_cond. 
+  move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.
+rewrite mulr_const big_seq_cond (eq_bigr _ _ (fun _ => mu d (predC p))) -?big_seq_cond. 
+  move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.
+by rewrite mulr_const /card.
+qed.
 
 lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n : 
   is_lossless d => 0 <= i && i < n =>

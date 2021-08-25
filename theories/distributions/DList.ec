@@ -17,6 +17,12 @@ op dlist (d : 'a distr) (n : int): 'a list distr =
 lemma dlist0 (d : 'a distr) n: n <= 0 => dlist d n = dunit [].
 proof. by move=> ge0_n; rewrite dlist_def foldle0. qed.
 
+lemma dlist1 (d : 'a distr) : dlist d 1 = dmap d (fun x => [x]). 
+proof.
+rewrite /dlist -foldpos //= fold0 /= dmap_dprodE /dmap /(\o).
+by apply eq_dlet => // x; rewrite dlet_unit.
+qed.
+
 lemma dlistS (d : 'a distr) n:
   0 <= n =>
   dlist d (n + 1)
@@ -34,20 +40,21 @@ lemma dlist_add (d:'a distr) n1 n2:
   dlist d (n1 + n2) =
     dmap (dlist d n1 `*` dlist d n2) (fun (p:'a list * 'a list) => p.`1 ++ p.`2).
 proof.
-move=> hn1 hn2;elim: n1 hn1 => /= [ | n1 hn1 hrec].
-+ rewrite dprod_dlet //= (dlist0 d 0) // dlet_unit /= /dmap dlet_dlet.
-  rewrite -{1}(dlet_d_unit (dlist d n2)) &(eq_dlet) // => l.
-  by rewrite dlet_unit.
-rewrite addzAC !dlistS 1:/# 1:// hrec.
-rewrite !dprod_dlet !dlet_dlet dapply_dmap /dapply /dmap !dlet_dlet.
-apply eq_dlet => // x.
-rewrite /(\o) /= !dlet_dlet &(eq_dlet) // => l1 /=.
-rewrite dlet_unit /= dlet_unit /= dlet_dlet.
-have /eq_sym:= (dlet_dlet (dlist d n2) (fun (b : 'a list) => dunit (x :: l1, b))
-                 (fun (x0 : 'a list * 'a list) => dunit (x0.`1 ++ x0.`2))).
-apply: eq_trans; rewrite dlet_dlet.
-apply: eq_dlet => // l2 /=.
-by rewrite !dlet_unit /= dlet_unit /= dlet_unit.
+elim: n1 => [hn2|n1 hn1 IHn1 hn2].
+  by rewrite (dlist0 d 0) //= /(\o) dmap_dprodE dlet_unit /= dmap_id_eq_in.
+rewrite addzAC !dlistS 1:/# //= IHn1 //.
+rewrite !dmap_dprodE /= dlet_dlet; apply eq_dlet => //= x.
+rewrite dmap_dlet dlet_dmap; apply eq_dlet => //= x1.
+rewrite /dmap dlet_dlet /(\o); apply eq_dlet => //= x2. 
+by rewrite dlet_dunit dmap_dunit.
+qed.
+
+lemma dlistSr (d : 'a distr) (n : int) : 0 <= n => 
+  dlist d (n + 1) = dapply (fun (xy : 'a list * 'a) => rcons xy.`1 xy.`2) (dlist d n `*` d).
+proof.
+move => hn; rewrite dlist_add // dlist1 /= !dmap_dprodE.
+apply eq_dlet => // xs; rewrite dmap_comp. 
+by apply eq_dmap => x //=; rewrite /(\o) cats1.
 qed.
 
 lemma dlist01E (d : 'a distr) n x:
