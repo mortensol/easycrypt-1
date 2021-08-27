@@ -773,18 +773,30 @@ seq 1 : (G.bad /\ 1 <= Gk_bad.k_bad /\ Gk_bad.k_bad < q_ddh + 1 /\
             (1%r - ((1%r - clamp pa) ^ q_oa * clamp pa)) 0%r;
     [by auto| | |by auto|smt()].
     * conseq (: _ ==>
-                (forall (i : int), i \in oflist G2.ca =>
-                                     p (nth false Game'.ia i)) /\
-                (forall (j : int), j \in fset1 Gk_bad.i_k =>
-                                   ! p (nth false Game'.ia j))) => //.
-      rnd; auto => {&m} &m ?; rewrite dlist_set2E;
-      [exact dbiased_ll|exact na_ge0| | |smt(mem_oflist)|].
+                (forall (i : int),
+                   i \in (oflist G2.ca `&`
+                          oflist (range 0 (size Game'.ia))) =>
+                     p (nth false Game'.ia i)) /\
+                (forall (j : int),
+                   j \in (fset1 Gk_bad.i_k `&`
+                          oflist (range 0 (size Game'.ia))) =>
+                   ! p (nth false Game'.ia j))).
+      move => /> {&m c} &m _ _ _ _ ia IP JP.
+      split; 1: smt (in_filter mem_oflist mem_range nth_default nth_neg).
+      move => j ?; suff: (j \in oflist (range 0 (size ia))) by smt (in_filter).
+      (* not provable since it would mean that there exists
+         an adversary able to distinguish between G1 and G2 *)
 admit.
+
+      rnd; auto => {&m} &m ?. print dlist_set2E.
 admit.
-rewrite !dbiasedE /p /predC /= fcard1.
-have: clamp pa = clamp pa ^ 1 by admit.
-have: ((1%r - clamp pa) ^ q_oa <= (1%r - clamp pa) ^ card (oflist G2.ca{m})) by admit.
-smt().
+(*
+      [exact dbiased_ll|exact na_ge0|
+       smt(fsetIC mem_oflist mem_range subsetIl subsetP)|
+       smt(fsetIC mem_oflist mem_range subsetIl subsetP)|
+       smt(mem_oflist subsetIl subsetP)|].
+      rewrite !dbiasedE /p /predC /= fcard1.
+*)
     * conseq (: card (oflist G2.cb) <= q_ob /\ ! (Gk_bad.j_k \in G2.cb) /\
                 (forall (i : int), i \in oflist G2.ca =>
                                      p (nth false Game'.ia i)) /\
