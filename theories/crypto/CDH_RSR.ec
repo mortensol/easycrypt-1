@@ -29,8 +29,15 @@ lemma mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) :
 proof. move => can_f xs; rewrite /mapi; elim: xs 0 => //=; smt(). qed.
 
 lemma in_mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) (xs : 'a list) :
-    (forall i x, x \in xs =>  g i (f i x) = x) => mapi g (mapi f xs) = xs.
-proof. rewrite /mapi; elim: xs 0 => //=; smt(). qed.
+    (forall i x, x \in xs => 0 <= i && i < size xs => g i (f i x) = x) => mapi g (mapi f xs) = xs.
+proof. 
+have : (0 <= 0). by [].
+case: xs => // x xs. elim: xs {-2}(0) (size_ge0 xs).
+  admit.
+ (* => //= x xs IHxs k Hk H.  *)
+admit.
+(* rewrite /mapi; elim: xs 0 => //=; smt().  *)
+qed.
 
 lemma size_mapi (f : int -> 'a -> 'b) (xs : 'a list) : size (mapi f xs) = size xs.
 proof. rewrite /mapi. elim: xs 0 => //= xs IHxs n. by rewrite IHxs. qed.
@@ -562,7 +569,9 @@ axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless A(O).guess.
 
 axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
-  hoare [ A(Count(O)).guess : true ==> Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
+  hoare [ A(Count(O)).guess : 
+    Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
+    Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
 
 local module Gk : CDH_RSR_Oracles_i = { 
   import var G1 G2 G
@@ -667,8 +676,9 @@ conseq (: _ ==> card (oflist G2.ca) <= Count.ca /\
                 card (oflist G2.cb) <= Count.cb /\ Count.cddh = Gk.cddh)
        (: _ ==> Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh);
   1: smt().
-- proc; seq 2 : true; 1: by auto.
-  admit.
+- proc. 
+  seq 2 : (Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0); 1: by inline *; auto.
+  by call (A_bound Gk_bad).
 - proc; inline *.
   seq 12 : (card (oflist G2.ca) <= Count.ca /\
             card (oflist G2.cb) <= Count.cb /\ Count.cddh = Gk.cddh);
@@ -874,6 +884,8 @@ call (: G.bad /\ Gk.k <> Gk.k_bad,
 - move => *; proc; inline *; auto => /> /#. 
 - auto => />; smt(supp_dinter).
 qed.
+
+
 
 local lemma guess_S &m x y : x \in EU => y \in EU => 
   Pr [ Game(Gk',A).main() @ &m : 
