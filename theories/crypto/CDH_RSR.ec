@@ -926,12 +926,11 @@ call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/
 - proc; inline *; auto => /> &1 &2. rewrite !negb_or !negbK => />.
   move => Hca Hcb Hbad G1 G2.
   have {G1 G2} G1 : Gk.cddh{2} < Gk.k{2} by smt().
-    move => Ha Hb _ HEU. admit.
-  (*
-  split; 1: smt(expM mulA mulC). 
-  case (i{2} \in G2.ca{2}) => //= iNca jNcb; rewrite jNcb /=.
-  split; 2: smt(). move => G2 _ _. rewrite -implybE => -[Hia Hib].
-  rewrite Ha Hb Hia Hib /= -expM'. smt(mulA mulC invK Emult). *)
+  case (0 <= i{2} && i{2} < na /\ 0 <= j{2} && j{2} < nb); 2: smt().
+  move => /> 4? => Ha Hb _ HEU. split; 2: smt(expM mulA mulC). 
+  rewrite oraE negb_or => -[iNca jNcb]. rewrite iNca jNcb /=.
+  move => G2 _ _. rewrite -implybE => -[Hia Hib]. 
+  rewrite Ha Hb Hia Hib /= -expM'. smt(mulA mulC invK Emult).
 - move => *; proc; inline *; auto => />. smt().
 - move => *; proc; inline *; auto => />. smt().
 (* main goal: establishing the invariant *)
