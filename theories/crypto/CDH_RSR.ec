@@ -6,144 +6,6 @@ import DBool.Biased.
 import StdOrder.RealOrder.
 import RField.
 
-(* preliminaries , move elsewhere *)
-
-lemma inj_card_image (f : 'a -> 'b) (A : 'a fset) :
-    injective f => card (image f A) = card A.
-proof.
-move => inj_f.
-have/oflist_uniq uniq_f : uniq (map f (elems A)).
-  apply map_inj_in_uniq; 2: exact uniq_elems; move => x y _ _; exact inj_f.
-by rewrite /image /card -(perm_eq_size _ _ uniq_f) size_map.
-qed.
-
-(** theory of [mapi] *)
-op mapi_rec (f : int -> 'a -> 'b) (xs : 'a list) (i : int) =
- with xs = [] => []
- with xs = x::xs => f i x :: mapi_rec f xs (i+1).
-
-op mapi (f : int -> 'a -> 'b) (xs : 'a list) = mapi_rec f xs 0.
-
-lemma mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) :
-    (forall i, cancel (g i) (f i)) => cancel (mapi g) (mapi f).
-proof. move => can_f xs; rewrite /mapi; elim: xs 0 => //=; smt(). qed.
-
-lemma in_mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) (xs : 'a list) :
-    (forall i x, x \in xs => 0 <= i && i < size xs => g i (f i x) = x) => mapi g (mapi f xs) = xs.
-proof.
-move => H.
-have {H} : forall i x, x \in xs => 0 <= i && i < (0 + size xs) => g (i) (f (i) x) = x; 1: by [].
-rewrite /mapi; move: (0) => k. elim: xs k => //= x xs IHxs k Hk.
-split; 1: by rewrite Hk; smt(size_ge0).
-apply IHxs; smt(size_ge0).
-qed.
-
-lemma size_mapi (f : int -> 'a -> 'b) (xs : 'a list) : size (mapi f xs) = size xs.
-proof. rewrite /mapi. elim: xs 0 => //= xs IHxs n. by rewrite IHxs. qed.
-
-lemma nth_mapi_rec x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n m :
-    0 <= n && n < size s =>
-    nth x2 (mapi_rec f s m) n = f (m + n) (nth x1 s n).
-proof. by elim: s n m => /= [|x s IHs]; smt(). qed.
-
-lemma nth_mapi x1 (s : 'a list) x2 (f : int -> 'a -> 'b) n : 0 <= n && n < size s =>
-    nth x2 (mapi f s) n = f n (nth x1 s n).
-proof. exact: nth_mapi_rec. qed.
-
-lemma mapi_recP x0 (f : int -> 'a -> 'b) (s : 'a list) y m :
-    y \in mapi_rec f s m <=> exists n, (0 <= n && n < size s) /\ y = f (n+m) (nth x0 s n).
-proof. elim: s m; smt(size_ge0). qed.
-
-lemma mapiP x0 (f : int -> 'a -> 'b) (s : 'a list) y :
-    y \in mapi f s <=> exists n, (0 <= n && n < size s) /\ y = f n (nth x0 s n).
-proof. exact: mapi_recP. qed.
-
-(* variant of [dlist_fu] whose conclusion is a linear pattern *)
-lemma dlist_fu_eq (d : 'a distr) (xs : 'a list) n :
-   n = size xs => (forall (x : 'a), x \in xs => x \in d) => xs \in dlist d n.
-proof. move => ->. exact: dlist_fu. qed.
-
-
-lemma muT (d : 'a distr) (p : 'a -> bool) : p == predT => mu d p = weight d.
-proof. by move/fun_ext => ->. qed.
-
-require import StdBigop.
-(*---*) import IterOp Bigint Bigreal Bigreal.BRM.
-
-(* local copy of new DList lemma: remove *)
-lemma dlistSr (d : 'a distr) (n : int) : 0 <= n =>
-  dlist d (n + 1) = dapply (fun (xy : 'a list * 'a) => rcons xy.`1 xy.`2) (dlist d n `*` d).
-admitted.
-
-lemma dlistE x0 (d : 'a distr) (p : int -> 'a -> bool) n :
-    mu (dlist d n) (fun xs : 'a list => forall i, (0 <= i) && (i < n) => (p i (nth x0 xs i)))
-  = bigi (fun _ => true) (fun i => mu d (p i)) 0 n.
-proof.
-elim/natind : n p => [n n_le0|n n_ge0 IHn] p.
-- rewrite dlist0 // dunitE range_geq //= big_nil; smt().
-rewrite rangeSr // -cats1 big_cat big_seq1.
-rewrite dlistSr //= dmapE.
-pose P1 xs := forall i, 0 <= i && i < n => p i (nth x0 xs i).
-pose P2 x := p n x.
-pose P (a : 'a list * 'a) := P1 a.`1 /\ P2 a.`2.
-rewrite (mu_eq_support _ _ P); 2: by rewrite dprodE IHn.
-case => xs x /=. rewrite supp_dprod /= supp_dlist // => -[[? ?] ?].
-rewrite /(\o) /P /P1 /P2 /= eq_iff; subst n; split; 2: smt(nth_rcons).
-move => H; split => [i|];[have := (H i)|have := H (size xs)]; smt(nth_rcons).
-qed.
-
-(* 0 <= n could be removed, but applying the lemma is pointless in that case *)
-lemma dlist_set2E x0 (d : 'a distr) (p : 'a -> bool) n (I J : int fset) :
-  is_lossless d => 0 <= n =>
-  (forall i, i \in I => 0 <= i && i < n) =>
-  (forall j, j \in J => 0 <= j && j < n) =>
-  (forall k, !(k \in I /\ k \in J)) =>
-  mu (dlist d n)
-     (fun xs => (forall i, i \in I => p (nth x0 xs i)) /\
-                (forall j, j \in J => !p (nth x0 xs j)))
-  = (mu d p)^(card I) * (mu d (predC p))^(card J).
-proof.
-move => d_ll n_ge0 I_range J_range disjIJ.
-pose q i x := (i \in I => p x) /\ (i \in J => !p x).
-rewrite (mu_eq_support _ _
-  (fun xs => forall i, (0 <= i) && (i < n) => q i (nth x0 xs i))); 1: smt(supp_dlist).
-rewrite dlistE (bigEM (mem (I `|` J))).
-rewrite (big1 (predC (mem (I `|` J)))) ?mulr1.
-  move => i; rewrite /predC in_fsetU negb_or /= /q => -[iNI iNJ].
-  rewrite (mu_eq _ _ predT) 1:/# //.
-rewrite -big_filter (eq_big_perm _ _ _ (elems I ++ elems J)) ?big_cat.
-- apply uniq_perm_eq => [| |x].
-  + by rewrite filter_uniq range_uniq.
-  + rewrite cat_uniq !uniq_elems => />; apply/hasPn; smt().
-  + by rewrite mem_filter mem_range mem_cat -!memE in_fsetU /#.
-rewrite big_seq_cond (eq_bigr _ _ (fun _ => mu d p)) -?big_seq_cond.
-  move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.
-rewrite mulr_const big_seq_cond (eq_bigr _ _ (fun _ => mu d (predC p))) -?big_seq_cond.
-  move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.
-by rewrite mulr_const /card.
-qed.
-
-lemma dlist_setE x0 (d : 'a distr) (p : 'a -> bool) n (I : int fset) :
-  is_lossless d => 0 <= n => (forall i, i \in I => 0 <= i && i < n) =>
-  mu (dlist d n) (fun xs => forall i, i \in I => p (nth x0 xs i)) = (mu d p)^(card I).
-proof.
-move => d_ll n_ge0 hI.
-have := dlist_set2E x0 d p n I fset0 d_ll n_ge0 hI _ _; 1,2 : smt(in_fset0).
-rewrite fcards0 expr0 mulr1 => <-.
-apply: mu_eq_support => xs; rewrite supp_dlist //= => -[? ?]; smt(in_fset0).
-qed.
-
-lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n :
-  is_lossless d => 0 <= i && i < n =>
-  mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
-proof.
-move => d_ll Hn.
-have E := dlist_setE x0 d p n (fset1 i) d_ll _ _; 1,2: smt(in_fset1).
-rewrite (mu_eq _ _ (fun (xs : 'a list) => forall (i0 : int), i0 \in fset1 i => p (nth x0 xs i0))).
-  smt(in_fset1).
-by rewrite E fcard1 expr1.
-qed.
-
 clone import NominalGroup.NominalGroup as N.
 
 lemma dlist_EU n x xs : xs \in dlist (duniform (elems EU)) n => x \in xs => x \in EU.
@@ -953,11 +815,10 @@ have [? ?] : 0 <= na /\ 0 <= nb. smt(na_ge0 nb_ge0).
 have Hmapi : forall a' b' na' x', 0 <= na' => x' \in EU => a' \in dlist (duniform (elems EU)) na' =>
     mapi (fun (i : int) (z : Z) => if b' i then z * x' else z) a' \in dlist (duniform (elems EU)) na'.
   move => a' b' na' x' na'_ge0 x'_EU. rewrite supp_dlist ?na'_ge0 => -[size_a' /allP supp_a'].
-  apply: dlist_fu_eq; 1: by rewrite size_mapi size_a'.
+  rewrite -size_a' -(size_mapi (fun (i : int) (z : Z) => if b' i then z * x' else z)) dlist_fu.
   move => z /mapiP /(_ e) [n] /= [Hn Hz].
   have ? : nth' a' n \in EU. rewrite memE -supp_duniform. exact/supp_a'/mem_nth.
   rewrite supp_duniform -memE. smt(Emult).
-
 split => [a d_a | ? ].
   rewrite in_mapiK => //= i z z_a _. case (nth false ia i) => // _.
   rewrite invK' //. exact: dlist_EU d_a z_a.
@@ -1062,6 +923,18 @@ lemma G_G' &m :
     `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 admitted.
 
+(* keep or delete? 
+lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n :
+  is_lossless d => 0 <= i && i < n =>
+  mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
+proof.
+move => d_ll Hn.
+have E := dlist_setE x0 d p n (fset1 i) d_ll _ _; 1,2: smt(in_fset1).
+rewrite (mu_eq _ _ (fun (xs : 'a list) => forall (i0 : int), i0 \in fset1 i => p (nth x0 xs i0))).
+  smt(in_fset1).
+by rewrite E fcard1 expr1.
+qed.
+
 lemma nth_dlist b i n p :
   0%r <= p => p <= 1%r => 0 <= i => i < n =>
   mu (dlist (dbiased p) n) (transpose (nth b) i) = p.
@@ -1069,6 +942,7 @@ proof.
 move => *; rewrite (dlist_nthE b _ (fun x => x)) ?dbiasedE /=;
   smt(clamp_id dlist_ll dbiased_ll).
 qed.
+*)
 
 lemma badG'_cdh &m : 1 <= q_ddh => 0%r < pa && pa < 1%r => 0%r < pb && pb < 1%r =>
     Pr[ Game(G',A).main() @ &m : G.bad ] <=

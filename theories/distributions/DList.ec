@@ -7,8 +7,8 @@
  * -------------------------------------------------------------------- *)
 
 (* -------------------------------------------------------------------- *)
-require import AllCore List Distr DProd StdBigop.
-(*---*) import Bigreal.BRM MUnit.
+require import AllCore List FSet Distr DProd StdBigop.
+(*---*) import Bigreal Bigreal.BRM MUnit.
 
 op dlist (d : 'a distr) (n : int): 'a list distr =
   fold (fun d' => dapply (fun (xy : 'a * 'a list) => xy.`1 :: xy.`2) (d `*` d')) (dunit []) n
@@ -113,6 +113,24 @@ lemma supp_dlist_size (d : 'a distr) n xs:
   0 <= n => xs \in dlist d n => size xs = n.
 proof. by move=> ge0_n; case/(supp_dlist d n xs ge0_n). qed.
 
+lemma dlistE x0 (d : 'a distr) (p : int -> 'a -> bool) n :
+    mu (dlist d n) (fun xs : 'a list => 
+                    forall i, (0 <= i) && (i < n) => (p i (nth x0 xs i)))
+  = bigi predT (fun i => mu d (p i)) 0 n.
+proof.
+elim/natind : n p => [n n_le0|n n_ge0 IHn] p.
+- rewrite dlist0 // dunitE range_geq //= big_nil; smt().
+rewrite rangeSr // -cats1 big_cat big_seq1.
+rewrite dlistSr //= dmapE.
+pose P1 xs := forall i, 0 <= i && i < n => p i (nth x0 xs i).
+pose P2 x := p n x.
+pose P (a : 'a list * 'a) := P1 a.`1 /\ P2 a.`2.
+rewrite (mu_eq_support _ _ P); 2: by rewrite dprodE IHn.
+case => xs x /=. rewrite supp_dprod /= supp_dlist // => -[[? ?] ?].
+rewrite /(\o) /P /P1 /P2 /= eq_iff; subst n; split; 2: smt(nth_rcons).
+move => H; split => [i|];[have := (H i)|have := H (size xs)]; smt(nth_rcons).
+qed.
+
 lemma dlist1E (d : 'a distr) n xs:
   0 <= n =>
   mu1 (dlist d n) xs
@@ -123,7 +141,7 @@ proof.
 move=> le0_n; case (n = size xs)=> [->|].
 + elim xs=> [|x xs ih];first by rewrite dlist01E.
   by rewrite dlistS1E /= big_cons ih.
-smt w=(supp_dlist mu_bounded).
+have := supp_dlist d n xs le0_n; smt(mu_bounded).
 qed.
 
 lemma dlist0E n (d : 'a distr) P : n <= 0 => mu (dlist d n) P = b2r (P []).
@@ -175,6 +193,47 @@ proof.
 elim/natind: n => [n le0_n| n ge0_n ih].
 - by rewrite !dlist0 // dmap_dunit.
 - by rewrite !dlistS //= ih -dmap_dprod_comp dmap_comp.
+qed.
+
+(* 0 <= n could be removed, but applying the lemma is pointless in that case *)
+lemma dlist_set2E x0 (d : 'a distr) (p : 'a -> bool) n (I J : int fset) :
+  is_lossless d => 0 <= n =>
+  (forall i, i \in I => 0 <= i && i < n) =>
+  (forall j, j \in J => 0 <= j && j < n) =>
+  (forall k, !(k \in I /\ k \in J)) =>
+  mu (dlist d n)
+     (fun xs => (forall i, i \in I => p (nth x0 xs i)) /\
+                (forall j, j \in J => !p (nth x0 xs j)))
+  = (mu d p)^(card I) * (mu d (predC p))^(card J).
+proof.
+move => d_ll n_ge0 I_range J_range disjIJ.
+pose q i x := (i \in I => p x) /\ (i \in J => !p x).
+rewrite (mu_eq_support _ _
+  (fun xs => forall i, (0 <= i) && (i < n) => q i (nth x0 xs i))); 1: smt(supp_dlist).
+rewrite dlistE (bigEM (mem (I `|` J))).
+rewrite (big1 (predC (mem (I `|` J)))) ?mulr1.
+  move => i; rewrite /predC in_fsetU negb_or /= /q => -[iNI iNJ].
+  rewrite (mu_eq _ _ predT) 1:/# //.
+rewrite -big_filter (eq_big_perm _ _ _ (elems I ++ elems J)) ?big_cat.
+- apply uniq_perm_eq => [| |x].
+  + by rewrite filter_uniq range_uniq.
+  + rewrite cat_uniq !uniq_elems => />; apply/hasPn; smt().
+  + by rewrite mem_filter mem_range mem_cat -!memE in_fsetU /#.
+rewrite big_seq_cond (eq_bigr _ _ (fun _ => mu d p)) -?big_seq_cond.
+  move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.
+rewrite mulr_const big_seq_cond (eq_bigr _ _ (fun _ => mu d (predC p))) -?big_seq_cond.
+  move => i; rewrite /= /q -memE => -[iI _]; apply mu_eq => /#.
+by rewrite mulr_const /card.
+qed.
+
+lemma dlist_setE x0 (d : 'a distr) (p : 'a -> bool) n (I : int fset) :
+  is_lossless d => 0 <= n => (forall i, i \in I => 0 <= i && i < n) =>
+  mu (dlist d n) (fun xs => forall i, i \in I => p (nth x0 xs i)) = (mu d p)^(card I).
+proof.
+move => d_ll n_ge0 hI.
+have := dlist_set2E x0 d p n I fset0 d_ll n_ge0 hI _ _; 1,2 : smt(in_fset0).
+rewrite fcards0 RField.expr0 RField.mulr1 => <-.
+apply: mu_eq_support => xs; rewrite supp_dlist //= => -[? ?]; smt(in_fset0).
 qed.
 
 abstract theory Program.
