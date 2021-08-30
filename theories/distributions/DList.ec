@@ -33,6 +33,12 @@ elim n=> [|n le0_n ih].
 by rewrite dlist_def -foldpos 1:/# -dlist_def /=.
 qed.
 
+lemma dlist_djoin (d : 'a distr) n: 0 <= n => dlist d n = djoin (nseq n d).
+proof. 
+elim: n => [|n Hn IHn]; first by rewrite dlist0 // /nseq iter0 // djoin_nil. 
+by rewrite dlistS // nseqS // djoin_cons IHn.
+qed.
+
 lemma dapply_dmap ['a 'b] (d:'a distr) (F:'a -> 'b): dapply F d = dmap d F by done.
 
 lemma dlist_add (d:'a distr) n1 n2:
@@ -67,6 +73,7 @@ lemma dlistS1E (d : 'a distr) x xs:
 proof.
 rewrite /= addzC dlistS 1:size_ge0 /= dmap1E -dprod1E &(mu_eq) => z /#.
 qed.
+
 
 lemma dlist0_ll (d : 'a distr) n:
   n <= 0 =>

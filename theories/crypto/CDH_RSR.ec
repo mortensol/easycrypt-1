@@ -30,13 +30,12 @@ proof. move => can_f xs; rewrite /mapi; elim: xs 0 => //=; smt(). qed.
 
 lemma in_mapiK (f : int -> 'a -> 'b) (g : int -> 'b -> 'a) (xs : 'a list) :
     (forall i x, x \in xs => 0 <= i && i < size xs => g i (f i x) = x) => mapi g (mapi f xs) = xs.
-proof. 
-have : (0 <= 0). by [].
-case: xs => // x xs. elim: xs {-2}(0) (size_ge0 xs).
-  admit.
- (* => //= x xs IHxs k Hk H.  *)
-admit.
-(* rewrite /mapi; elim: xs 0 => //=; smt().  *)
+proof.
+move => H.
+have {H} : forall i x, x \in xs => 0 <= i && i < (0 + size xs) => g (i) (f (i) x) = x; 1: by [].
+rewrite /mapi; move: (0) => k. elim: xs k => //= x xs IHxs k Hk. 
+split; 1: by rewrite Hk; smt(size_ge0).
+apply IHxs; smt(size_ge0). 
 qed.
 
 lemma size_mapi (f : int -> 'a -> 'b) (xs : 'a list) : size (mapi f xs) = size xs.
@@ -950,7 +949,7 @@ have Hmapi : forall a' b' na' x', 0 <= na' => x' \in EU => a' \in dlist (dunifor
   rewrite supp_duniform -memE. smt(Emult).
 
 split => [a d_a | ? ].
-  rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
+  rewrite in_mapiK => //= i z z_a _. case (nth false ia i) => // _.
   rewrite invK' //. exact: dlist_EU d_a z_a.
 split => [a d_a | _ ].
   apply: dlist_uni => //; 1: exact: duniform_uni.
@@ -958,10 +957,10 @@ split => [a d_a | _ ].
 move => a a_d; split => [| _].
   exact Hmapi.
 split => [|_].
-  rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
+  rewrite in_mapiK => //= i z z_a _. case (nth false ia i) => // _.
   rewrite invK //. exact: dlist_EU a_d z_a.
 split => [b b_d | _ ].
-  rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
+  rewrite in_mapiK => //= j z z_b _. case (nth false ib j) => // _.
   rewrite invK' //. exact: dlist_EU b_d z_b.
 split => [b b_d | _].
   apply: dlist_uni => //; 1: exact: duniform_uni.
@@ -969,7 +968,7 @@ split => [b b_d | _].
 move => b b_d; split => [| _].
   exact Hmapi.
 split => [|_].
-  rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
+  rewrite in_mapiK => //= j z z_b _. case (nth false ib j) => // _.
   rewrite invK //. exact: dlist_EU b_d z_b.
 move => k supp_k. split; 2: smt(). split; 1: smt().
 move => _; split; last split.
