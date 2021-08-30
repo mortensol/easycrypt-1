@@ -67,34 +67,6 @@ proof. move => ->. exact: dlist_fu. qed.
 lemma muT (d : 'a distr) (p : 'a -> bool) : p == predT => mu d p = weight d.
 proof. by move/fun_ext => ->. qed.
 
-(* TODO: For [I = fset1 i], this subsumes dlist_nthE *)
-lemma dlist_setE x0 (d : 'a distr) (p : 'a -> bool) n (I : int fset) : 
-  is_lossless d => (forall i, i \in I => 0 <= i && i < n) => 
-  mu (dlist d n) (fun xs => forall i, i \in I => p (nth x0 xs i)) = (mu d p)^(card I).
-proof.
-move => d_ll. elim/natind : n I => [n n_le0 I ranI|n n_ge0 IH I ranI].
-  have -> : I = fset0 by smt(in_eq_fset0).
-  rewrite muT ?dlist_ll; smt(in_fset0 fcards0 expr0).
-rewrite dlistS //= dmapE.
-pose P1 x := (0 \in I => p x).
-pose P2 xs := (forall i, i \in image (fun i => i - 1) (I `\` fset1 0)  => p (nth x0 xs i)).
-have -> : ((fun (xs : 'a list) => forall (i : int), i \in I => p (nth x0 xs i)) \o 
-           fun (xy : 'a * 'a list) => xy.`1 :: xy.`2) =  
-          (fun ab : 'a * 'a list => P1 ab.`1 /\ P2 ab.`2).
-  apply/fun_ext => -[x xs]; rewrite /(\o) /= /P1 /P2.
-  apply/eq_iff; split => [H|[H0 Hi]]. split; 1: exact H.
-  move => i /imageP [j [J1 J2]]; smt(in_fsetD1).
-  move => i; case (i = 0) => [/#|iN0 iI]; apply: (Hi (i-1)). 
-  apply/imageP; exists i. smt(in_fsetD1).
-rewrite dprodE.
-have {IH} IH := IH (image (transpose Int.(+) (-1)) (I `\` fset1 0)) _.
-  move => i /imageP [j [J1 <-]] /=. smt(in_fsetD1 in_fset0).
-rewrite IH inj_card_image; 1: smt().
-rewrite /P1 (fcardD1 I 0); case (0 \in I) => /= [I0|IN0]. 
-- by rewrite exprS ?card_ge0; smt. 
-- by rewrite d_ll. 
-qed.
-
 require import StdBigop.
 (*---*) import IterOp Bigint Bigreal Bigreal.BRM.
 
@@ -151,28 +123,25 @@ rewrite mulr_const big_seq_cond (eq_bigr _ _ (fun _ => mu d (predC p))) -?big_se
 by rewrite mulr_const /card.
 qed.
 
+lemma dlist_setE x0 (d : 'a distr) (p : 'a -> bool) n (I : int fset) : 
+  is_lossless d => 0 <= n => (forall i, i \in I => 0 <= i && i < n) => 
+  mu (dlist d n) (fun xs => forall i, i \in I => p (nth x0 xs i)) = (mu d p)^(card I).
+proof.
+move => d_ll n_ge0 hI. 
+have := dlist_set2E x0 d p n I fset0 d_ll n_ge0 hI _ _; 1,2 : smt(in_fset0). 
+rewrite fcards0 expr0 mulr1 => <-. 
+apply: mu_eq_support => xs; rewrite supp_dlist //= => -[? ?]; smt(in_fset0).
+qed.
+
 lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n : 
   is_lossless d => 0 <= i && i < n =>
   mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
 proof.
-move => d_ll Hn.
-have E := dlist_setE x0 d p n (fset1 i) d_ll _; 1: smt(in_fset1).
-have -> : (fun xs => p (nth x0 xs i)) = 
-          (fun (xs : 'a list) => forall (i0 : int), i0 \in fset1 i => p (nth x0 xs i0)).
-  by apply fun_ext => xs; smt(in_fset1).
+move => d_ll Hn. 
+have E := dlist_setE x0 d p n (fset1 i) d_ll _ _; 1,2: smt(in_fset1).
+rewrite (mu_eq _ _ (fun (xs : 'a list) => forall (i0 : int), i0 \in fset1 i => p (nth x0 xs i0))).
+  smt(in_fset1).
 by rewrite E fcard1 expr1.
-(* initial direct proof 
-move => d_ll. elim/natind : n i => [/#|n n_ge0 IH i Hi].
-pose P1 x := (i = 0 => p x).
-pose P2 xs := i <> 0 => p (nth x0 xs (i - 1)).
-have -> : (fun (xs : 'a list) => p (nth x0 xs i)) = 
-          (fun (xs : 'a list) => P1 (head x0 xs) /\ P2 (behead xs)) by smt().
-rewrite dlistSE //; case: (i = 0) => [i0|iN0].
-- rewrite (eq1_mu _ P2); 1,2: smt(dlist_ll). 
-  have -> : P1 = p; smt(). 
-- rewrite (eq1_mu _ P1) //; 1: smt(). 
-  have -> : P2 = (fun (xs : 'a list) => p (nth x0 xs (i - 1))) by smt(). 
-  by rewrite IH; smt(). *)
 qed.
 
 clone import NominalGroup.NominalGroup as N.
@@ -628,6 +597,7 @@ local module Gk_bad : CDH_RSR_Oracles_i = {
   }
 }.
 
+(* Variant of Game, where the samling for Gk is done at the end *)
 module Game' (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
   var k : int
   var ia,ib : bool list
@@ -826,6 +796,7 @@ admit.
 admit.
 qed.
 
+(* Same as Gk, but bad is set only at the k-th dhh call (if set at all) *)
 local module Gk' : CDH_RSR_Oracles_i = { 
   import var G1 G2 G
   include var Gk [-init,ddh]
@@ -862,11 +833,10 @@ local module Gk' : CDH_RSR_Oracles_i = {
         else false
       else false;
   }
-
 }.
 
 (* should be an equality, but this should suffice *)
-local lemma foo &m : 
+local lemma Gk_Gk' &m : 
     Pr [ Game(Gk,A).main() @ &m : 
       G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ 
       nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ] <=
@@ -883,8 +853,6 @@ call (: G.bad /\ Gk.k <> Gk.k_bad,
 - move => *; proc; inline *; auto => /> /#. 
 - auto => />; smt(supp_dinter).
 qed.
-
-
 
 local lemma guess_S &m x y : x \in EU => y \in EU => 
   Pr [ Game(Gk',A).main() @ &m : 
@@ -1019,43 +987,10 @@ suff -> : p = Pr[Game(Gk', A).main() @ &m' :
 rewrite /p; byequiv => //. sim => /> /#. 
 qed.
 
-(* same as G', but with a stop event equivalent to S *)
-local module G's = {
-  import var G1 G2 G
-  include var G' [-init,oa,ob]
-  var ia, ib : bool list (* inject a/b *)
-  var stop : bool
-
-  proc init () = {
-    ia <$ dlist (dbiased pa) na;
-    ib <$ dlist (dbiased pb) nb;
-    a <$ dlist (duniform (elems EU)) na;
-    b <$ dlist (duniform (elems EU)) nb;
-    ca <- [];
-    cb <- [];
-    bad <- false;
-    stop <- false;
-  }
-
-  proc oa (i) = {
-    if (nth false ia i) { stop <- true; }
-    ca <- i :: ca;
-    return (nth' a i);
-  }
-
-  proc ob (j : int) = {
-    if (nth false ib j) { stop <- true; }
-    cb <- j :: cb;
-    return (nth' b j);
-  }
-}.
-
-
 lemma G1G2_Gbad &m :
     `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
        Pr[ Game(G,A).main() @ &m : G.bad ].
 proof.
-(* TODO: fix proof to account for not logging queries after bad has ocurred *)
 (* Introduce bad events into G1 and G2 *)
 have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G2b,A).main() @ &m : res ].
   byequiv => //. proc; inline *.
@@ -1086,218 +1021,6 @@ lemma G_G' &m :
     `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 admitted.
 
-(* this is only enough if we can prove that P[G's : !stop] and [G's :
-bad] are independent, which is most likely not the case *)
-local lemma G's_stop &m : 
-    Pr [Game(G's,A).main() @ &m : !G's.stop] >= (1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob.
-proof.
-have H : hoare [Game(G's,A).main : true ==> size G2.ca <= q_oa /\ size G2.cb <= q_ob ].
-  admit. (* A_bound *)
-have -> : Pr[Game(G's, A).main() @ &m : !G's.stop] = 
-          Pr[Game(G's, A).main() @ &m : (forall i, i \in G2.ca => !nth false G's.ia i) /\ 
-                                        (forall i, i \in G2.cb => !nth false G's.ib i) ].
-byequiv => //; proc; inline *.
-call(: ={glob G's,glob G1,glob G2,glob Count} /\
-      (!G's.stop{1} <=> (forall (i : int), i \in G2.ca{2} => ! nth false G's.ia{2} i) /\
-                         forall (i : int), i \in G2.cb{2} => ! nth false G's.ib{2} i)); 
-  by (try proc); inline *; auto => /> /#.
-admitted.
-
-local lemma G's_stop' &m :
-    (1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob * Pr[Game(G's,A).main() @ &m : G.bad]
-    <= Pr [Game(G's,A).main() @ &m : G.bad /\ !G's.stop].
-proof.
-(* proof idea:
-  - If Game(G's,A).main() triggers G.bad, it does so by making at most 
-  q_oa queries to oa and q_ob queries to ob. 
-  - thus the query logs ca and cb have at most length q_oa (resp. q_ob)
-  - !stop holds if the log contains no i(resp. j) such that ia[i] (resp. ib[j]) is true
-  - all the ia[i]/ib[j] are sampled independently at the start. *)   
-admitted.
-
-(* also not the lemma we need/want 
-local lemma G's_S &m x y : x \in EU => y \in EU => 
-    Pr [Game(G's,A).main() @ &m : G.bad /\ !G's.stop] <= 
-    Pr [GameS(A).main(exp g x, exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
-        (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ].
-proof.
-move => x_EU y_EU.
-byequiv => //; proc; inline *. 
-call (: S.stop, 
-  ={glob Count,G2.ca,G2.cb} /\ ={ia,ib,stop}(G's,S) /\ 
-  (S.gx = exp g x /\ S.gy = exp g y){2} /\
-  (forall i,
-    nth' G1.a{1} i = if nth false S.ia{2} i then nth' G1.a{2} i * x else nth' G1.a{2} i) /\
-  (forall j,
-    nth' G1.b{1} j = if nth false S.ib{2} j then nth' G1.b{2} j * y else nth' G1.b{2} j) /\
-  (forall i, i \in G2.ca{2} => !nth false S.ia{2} i) /\
-  (forall j, j \in G2.cb{2} => !nth false S.ib{2} j) /\ 
-  (G.bad{1} => exists (m : G) (i j : int),
-    ((m, i, j) \in S.gs{2}) /\ 
-    (nth false S.ia{2} i && nth false S.ib{2} j => m = exp g (nth' G1.a{2} i * nth' G1.b{2} j * x * y))), 
-  ={stop}(G's,S));
-  try by move => *; proc; inline*; auto.
-- exact: A_ll.
-- proc; inline *; auto => /> &1 &2 NS Ha Hb Hca Hcb ?. rewrite Ha. smt(mulA mulC expM). 
-- proc; inline *; auto => /> &1 &2 NS Ha Hb Hca Hcb ?. rewrite Hb. smt(mulA mulC expM).
-- proc; inline *; auto => /> &1 &2 NS Ha Hb Hca Hcb ?. smt().
-- move => *; proc; inline*; auto => /> /#.
-- move => *; proc; inline*; auto => /> /#.
-- proc; inline *; auto => /> &1 &2 NS Ha Hb Hca Hcb ?. smt().
-- move => *; proc; inline*; auto => /> /#.
-- move => *; proc; inline*; auto => /> /#.
-- proc; inline *; auto => /> &1 &2 NS Ha Hb Hca Hcb Hinv. 
-- (* ddh sumulation *)
-  move: (i{2}) (j{2}) => i j. 
-  split => [i_ca|iNca]; (split => [j_cb|jNcb]); (split => [|Hbad]).
-  + rewrite Ha. smt(mulA mulC expM). 
-  + case: (Hinv Hbad) => m' i' j' ?. exists m' i' j'. smt().
-  + rewrite Hb. smt(mulA mulC expM). 
-  + case: (Hinv Hbad) => m' i' j' ?. exists m' i' j'. smt().
-  + rewrite Ha. smt(mulA mulC expM). 
-  + case: (Hinv Hbad) => m' i' j' ?. exists m' i' j'. smt().
-  + exists (exp g (nth' G1.a{1} i * nth' G1.b{1} j)) i j. smt(mulA mulC expM).
-  + move => {Hbad} Hbad. case: (Hinv Hbad) => m' i' j' ?. exists m' i' j'. smt().
-(* establishing the invariant *)
-wp; sp.
-rnd (mapi (fun j z => if nth false S.ib{2} j then z * inv y else z))
-    (mapi (fun j z => if nth false S.ib{2} j then z * y else z)).
-rnd (mapi (fun i z => if nth false S.ia{2} i then z * inv x else z))
-    (mapi (fun i z => if nth false S.ia{2} i then z * x else z)).
-rnd; rnd; auto => /> ia d_ia ib d_ib.
-have [? ?] : 0 <= na /\ 0 <= nb. smt(na_ge0 nb_ge0).
-have Hmapi : forall a' b' na' x', 0 <= na' => x' \in EU => a' \in dlist (duniform (elems EU)) na' =>
-    mapi (fun (i : int) (z : Z) => if b' i then z * x' else z) a' \in dlist (duniform (elems EU)) na'.
-  move => a' b' na' x' na'_ge0 x'_EU. rewrite supp_dlist ?na'_ge0 => -[size_a' /allP supp_a'].
-  apply: dlist_fu_eq; 1: by rewrite size_mapi size_a'.
-  move => z /mapiP /(_ witness) [n] /= [Hn Hz].
-  have ? : nth' a' n \in EU. rewrite memE -supp_duniform. exact/supp_a'/mem_nth.
-  rewrite supp_duniform -memE. smt(Emult).
-split => [a d_a | ? ].
-  rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
-  rewrite invK //. exact: dlist_EU d_a z_a.
-split => [a d_a | _ ].
-  apply: dlist_uni => //; 1: exact: duniform_uni.
-  exact: Hmapi.
-move => a a_d; split => [| _].
-  apply: Hmapi => //. exact: Einv.
-split => [|_].
-  rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
-  rewrite invK' //. exact: dlist_EU a_d z_a.
-split => [b b_d | _ ].
-  rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
-  rewrite invK //. exact: dlist_EU b_d z_b.
-split => [b b_d | _].
-  apply: dlist_uni => //; 1: exact: duniform_uni.
-  exact: Hmapi.
-move => b b_d; split => [| _].
-  apply: Hmapi => //. exact: Einv.
-split => [|_].
-  rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
-  rewrite invK' //. exact: dlist_EU b_d z_b.
-split; first split.
-- move => i. case (0 <= i && i < size a) => [i_in|i_out].
-  + rewrite /nth' (nth_mapi witness a) //=.
-    case (nth false ia i) => //. rewrite invK' //.
-    suff: nth witness a i \in a by apply: dlist_EU a_d. exact/mem_nth.
-  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //.
-    smt(supp_dlist_size).
-- move => j. case (0 <= j && j < size b) => [j_in|j_out].
-  + rewrite /nth'. rewrite (nth_mapi witness b) //=.
-    case (nth false ib j) => //. rewrite invK' //.
-    suff: nth witness b j \in b by apply: dlist_EU b_d. exact/mem_nth.
-  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //.
-    smt(supp_dlist_size).
-by move => _ _ />; smt().
-qed.
-*)
-
-
-(* not really the lemma we want 
-lemma G'_S_stop &m x y : x \in EU => y \in EU =>
-   `| Pr [ Game(G',A).main() @ &m : res ] - Pr [ GameS(A).main(exp g x,exp g y) @ &m : res ] |
-    <= Pr [ GameS(A).main(exp g x,exp g y) @ &m : S.stop ].
-proof.
-move => x_EU y_EU.
-have -> : Pr[ Game(G',A).main() @ &m : res ] = Pr[ Game(G's,A).main() @ &m : res ].
-  byequiv => //. proc; inline *.
-  call (: ={glob G1,glob G2}); try by sim.
-  auto => />; smt(dlist_ll dbiased_ll).
-byequiv : G's.stop => //; last by smt().
-proc; inline *. sp.
-call (_ : S.stop,
-  ={glob Count,G2.ca,G2.cb} /\ ={ia,ib,stop}(G's,S) /\
-  (S.gx = exp g x /\ S.gy = exp g y){2} /\
-  (forall i,
-    nth' G1.a{1} i = if nth false S.ia{2} i then nth' G1.a{2} i * x else nth' G1.a{2} i) /\
-  (forall j,
-    nth' G1.b{1} j = if nth false S.ib{2} j then nth' G1.b{2} j * y else nth' G1.b{2} j) /\
-  (forall i, i \in G2.ca{2} => !nth false S.ia{2} i) /\
-  (forall j, j \in G2.cb{2} => !nth false S.ib{2} j)
-  ,
-  G's.stop{1}); try by move => *; proc; inline*; auto => />.
-- exact: A_ll.
-- proc; inline *; auto => /> &m1 &m2 _ Ha Hb. rewrite Ha. smt(mulA mulC expM).
-- proc; inline *; auto => /> &m1 &m2 _ Ha Hb. rewrite Hb. smt(mulA mulC expM).
-- proc; inline*; auto => />. smt().
-- proc; inline*; auto => />. smt().
-- proc; inline*; auto => /> &1 &2 NS Ha Hb Hca Hcb. smt(mulA mulC expM).
-(* main goal: establishing the invariant *)
-wp.
-rnd (mapi (fun j z => if nth false S.ib{2} j then z * inv y else z))
-    (mapi (fun j z => if nth false S.ib{2} j then z * y else z)).
-rnd (mapi (fun i z => if nth false S.ia{2} i then z * inv x else z))
-    (mapi (fun i z => if nth false S.ia{2} i then z * x else z)).
-rnd; rnd; auto => /> ia d_ia ib d_ib.
-have [? ?] : 0 <= na /\ 0 <= nb. smt(na_ge0 nb_ge0).
-have Hmapi : forall a' b' na' x', 0 <= na' => x' \in EU => a' \in dlist (duniform (elems EU)) na' =>
-    mapi (fun (i : int) (z : Z) => if b' i then z * x' else z) a' \in dlist (duniform (elems EU)) na'.
-  move => a' b' na' x' na'_ge0 x'_EU. rewrite supp_dlist ?na'_ge0 => -[size_a' /allP supp_a'].
-  apply: dlist_fu_eq; 1: by rewrite size_mapi size_a'.
-  move => z /mapiP /(_ witness) [n] /= [Hn Hz].
-  have ? : nth' a' n \in EU. rewrite memE -supp_duniform. exact/supp_a'/mem_nth.
-  rewrite supp_duniform -memE. smt(Emult).
-split => [a d_a | _ ].
-  rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
-  rewrite invK //. exact: dlist_EU d_a z_a.
-split => [a d_a | _ ].
-  apply: dlist_uni => //; 1: exact: duniform_uni.
-  exact: Hmapi.
-move => a a_d; split => [| _].
-  apply: Hmapi => //. exact: Einv.
-split => [|_].
-  rewrite in_mapiK => //= i z z_a. case (nth false ia i) => // _.
-  rewrite invK' //. exact: dlist_EU a_d z_a.
-split => [b b_d | _ ].
-  rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
-  rewrite invK //. exact: dlist_EU b_d z_b.
-split => [b b_d | _].
-  apply: dlist_uni => //; 1: exact: duniform_uni.
-  exact: Hmapi.
-move => b b_d; split => [| _].
-  apply: Hmapi => //. exact: Einv.
-split => [|_].
-  rewrite in_mapiK => //= j z z_b. case (nth false ib j) => // _.
-  rewrite invK' //. exact: dlist_EU b_d z_b.
-split; first split.
-- move => i. case (0 <= i && i < size a) => [i_in|i_out].
-  + rewrite /nth' (nth_mapi witness a) //=.
-    case (nth false ia i) => //. rewrite invK' //.
-    suff: nth witness a i \in a by apply: dlist_EU a_d. exact/mem_nth.
-  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //.
-    smt(supp_dlist_size).
-- move => j. case (0 <= j && j < size b) => [j_in|j_out].
-  + rewrite /nth'. rewrite (nth_mapi witness b) //=.
-    case (nth false ib j) => //. rewrite invK' //.
-    suff: nth witness b j \in b by apply: dlist_EU b_d. exact/mem_nth.
-  + rewrite /nth' !(nth_out false) //= ?(nth_out witness) ?size_mapi //.
-    smt(supp_dlist_size).
-move => _ _. smt().
-qed.
-*)
-
-
-
 lemma nth_dlist b i n p :
   0%r <= p => p <= 1%r => 0 <= i => i < n =>
   mu (dlist (dbiased p) n) (transpose (nth b) i) = p.
@@ -1306,92 +1029,18 @@ move => *; rewrite (dlist_nthE b _ (fun x => x)) ?dbiasedE /=;
   smt(clamp_id dlist_ll dbiased_ll).
 qed.
 
-(*
-lemma S_ia &m gx gy i e :
-  e \in EU => 0%r <= pa => pa <= 1%r => 0 <= i /\ i < na =>
-  Pr[ GameS(A).main(gx, gy) @ &m : nth' S.ia i ] = pa.
+lemma badG'_cdh &m : 1 <= q_ddh => 0%r < pa && pa < 1%r => 0%r < pb && pb < 1%r =>
+    Pr[ Game(G',A).main() @ &m : G.bad ] <= 
+    q_ddh%r / ((1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob * clamp pa * clamp pb)
+    * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
 proof.
-move => eP pa_ge0 pa_le1 [i_ge0 i_lt_na]; byphoare => //; proc; inline *.
-seq 3: (nth' S.ia i) pa 1%r (1%r - pa) 0%r; 1: by auto.
-- by rnd; auto => />; apply nth_dlist.
-- call (: true); 1: (by exact A_ll); 1..5: (by proc; inline *; auto).
-  auto => />; smt(dbiased_ll dlist_ll duniform_ll).
-- by hoare; call (: true); 1..5: (by proc; inline *; auto); auto => />.
-- by auto => />.
+move => Bq Bpa Bpb.
+have H1 := guess_bound &m; have H2 := Gk_Gk' &m; have H3 := A_B &m. 
+have {H2 H3} H4 := ler_trans _ _ _ H2 H3.
+have {H1 H4} := ler_trans _ _ _ H1 H4.
+rewrite !clamp_id; 1,2: smt(). move => H5.
+rewrite -ler_pdivr_mull. smt(divr_gt0 mulr_gt0 expr_gt0).
+rewrite invf_div. smt().
 qed.
-
-lemma S_ib &m gx gy j e :
-  e \in EU => 0%r <= pb => pb <= 1%r => 0 <= j /\ j < nb =>
-  Pr[ GameS(A).main(gx,gy) @ &m : nth' S.ib j ] = pb.
-proof.
-move => eP pb_ge0 pb_le1 [i_ge0 i_lt_nb]; byphoare => //; proc; inline *.
-seq 4: (nth' S.ib j) pb 1%r (1%r - pb) 0%r; 1: by auto.
-- by rnd; rnd; auto => />; split; [by apply nth_dlist|smt(dbiased_ll dlist_ll)].
-- call (: true); 1: (by exact A_ll); 1..5: (by proc; inline *; auto).
-  by wp; rnd; rnd; skip => />; smt(dbiased_ll dlist_ll duniform_ll).
-- by hoare; call (: true); 1..5: (by proc; inline *; auto); auto => />.
-- by auto => />.
-qed.
-
-lemma GameS_size_gs : hoare [GameS(A).main : true ==> size S.gs <= q_ddh].
-admitted. (* needs a axiom on the number of queries performed by A *)
-
-lemma B_qddh &m x y : 
-  1%r/q_ddh%r * 
-  Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
-      (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] <=
-  Pr[B(A).solve(exp g x,exp g y) @ &m : 
-    let (m,i,j) = B.g in 
-    (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ].
-proof. 
-pose p := Pr[ GameS(A).main(exp g x,exp g y) @ &m : exists m i j, (m,i,j) \in S.gs /\ 
-      (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ].
-byphoare (_ : gx = exp g x /\ gy = exp g y /\ glob A = (glob A){m} ==> _) => //. proc => /=. 
-seq 1 : (exists (m : G) (i j : int),
-            ((m, i, j) \in S.gs) /\
-            (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)))
-      p (1%r/q_ddh%r) _ 0%r (size S.gs <= q_ddh).
-- by call (: true ==> size S.gs <= q_ddh) => //; apply GameS_size_gs.
-- (* this is the definition of p, up to the implicit memory of the pHL goal *)
-  (* proof follows what's done in LorR.ec, is there a simpler way? *)
-  call (: gx = exp g x /\ gy = exp g y /\ (glob A) = (glob A){m} ==> 
-    exists (m : G) (i j : int),
-      ((m, i, j) \in S.gs) /\ 
-      (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y))).
-  + bypr => /> &m' -> -> eqA. rewrite /p /=. (* only the memory differs *)
-    byequiv => //; proc; inline *. 
-    call (: ={glob Count, glob S, glob G1, glob G2}); try sim.
-    auto => /> _ _ _ _ _ _ _ _. by rewrite eqA.
-  + skip => />.
-- rnd; skip => /> &1 size_gs m i j mij_gs mij_good. 
-  apply (ler_trans (mu1 (duniform S.gs{1}) (m,i,j))).
-  + rewrite duniform1E mij_gs /=. smt. (* slow, but works *)
-  + apply mu_sub => -[m' i' j']. case => -> -> -> /=. exact mij_good.
-- by auto.
-- by auto.
-qed.
-
-lemma bar &m x y : 
-  pa * pb * Pr[B(A).solve(exp g x,exp g y) @ &m : 
-    let (m,i,j) = B.g in 
-    (nth false S.ia i && nth false S.ib j => m = exp g (nth' G1.a i * nth' G1.b j * x * y)) ] <=
-  Pr[B(A).solve(exp g x,exp g y) @ &m : 
-    let (m,i,j) = B.g in m = exp g (nth' G1.a i * nth' G1.b j * x * y) ].
-admitted.
-*)
-
-(* does this follow (easily)? 
-lemma G'_S' &m x y :  
-   pa * pb * Pr[ Game(G',A).main() @ &m : G.bad ] <= 
-   Pr[ GameS(A).main(exp g x,exp g y) @ &m : 
-       exists m i j, (m,i,j) \in S.gs /\ m = exp g (nth' G1.a i * nth' G1.b j * x * y) ] + 
-   Pr[ GameS(A).main(exp g x,exp g y) @ &m : S.stop ].
-proof.
-abort. (*likely not ... *)
-*)
-
-lemma badG'_cdh &m :
-    Pr[ Game(G',A).main() @ &m : G.bad ] <= p * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
-admitted.
 
 end section.
