@@ -67,7 +67,7 @@ axiom na_ge0 : 0 <= na.
 axiom nb_ge0 : 0 <= nb.
 axiom q_oa_ge0 : 0 <= q_oa.
 axiom q_ob_ge0 : 0 <= q_ob.
-axiom q_ddh_ge0 : 0 <= q_ddh.
+axiom q_ddh_ge1 : 1 <= q_ddh.
 
 module type CDH_RSR_Oracles = {
   proc oA(i : int) : G
@@ -281,6 +281,8 @@ module G2b = {
 }.
 
 op pa,pb : real.
+axiom pa_bound : 0%r < pa && pa < 1%r.
+axiom pb_bound : 0%r < pb && pb < 1%r.
 
 (* the "simulation", called "A" in cryptoprim.pdf *)
 (* we have an event "stop" that corresponds to the simulation stoping,
@@ -528,14 +530,14 @@ qed.
 
 (* TODO: maintain i_k \notin ca and same for j_k/cb *)
 local lemma guess_bound &m :
-  1%r/q_ddh%r * (1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob * clamp pa * clamp pb *
+  1%r/q_ddh%r * (1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb *
   Pr [Game(G',A).main() @ &m : G.bad] <=
   Pr [Game(Gk,A).main() @ &m :
       G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
       nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
 proof.
 pose p := Pr[Game(G', A).main() @ &m : G.bad].
-pose c := (1%r-clamp pa)^q_oa * clamp pa * (1%r- clamp pb)^q_ob * clamp pb.
+pose c := (1%r-pa)^q_oa * pa * (1%r- pb)^q_ob * pb.
 rewrite Game_Game'; byphoare (_ : glob A = (glob A){m} ==> _) => //; proc.
 conseq (: _ ==>
           G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
@@ -613,22 +615,22 @@ seq 1 : (G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
              Gk.j_k \in oflist (range 0 nb) /\
              (forall i, i \in oflist G2.ca =>   p (nth false Game'.ia i)) /\
              (forall j, j \in fset1 Gk.i_k => ! p (nth false Game'.ia j)))
-            ((1%r - clamp pa) ^ q_oa * clamp pa)
-            ((1%r - clamp pb) ^ q_ob * clamp pb)
-            (1%r - ((1%r - clamp pa) ^ q_oa * clamp pa)) 0%r;
+            ((1%r - pa) ^ q_oa * pa)
+            ((1%r - pb) ^ q_ob * pb)
+            (1%r - ((1%r - pa) ^ q_oa * pa)) 0%r;
     [by auto| | |by auto|smt()].
     * conseq (: _ ==> IP G2.ca Game'.ia (size Game'.ia) /\
                       JP Gk.i_k Game'.ia na);
         1: smt (in_filter mem_oflist mem_range nth_default nth_neg).
       rnd; auto => {&m} &m ?.
-      suff: (1%r - clamp pa) ^ q_oa * clamp pa <=
+      suff: (1%r - pa) ^ q_oa * pa <=
             mu (dlist (dbiased pa) na)
                (fun (x : bool list) => IP G2.ca{m} x na /\ JP Gk.i_k{m} x na)
         by smt (mu_eq_support na_ge0 supp_dlist_size).
       rewrite dlist_set2E; [exact dbiased_ll|exact na_ge0| | | |];
         1..3: smt(fsetIC mem_oflist mem_range subsetIl subsetP).
-      rewrite !dbiasedE /p /predC /= fset1I.
-      smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard).
+      rewrite !dbiasedE /p /predC /= fset1I. 
+      smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard pa_bound pb_bound).
     * conseq (: _ ==>
                 ((forall (i : int), i \in oflist G2.ca =>
                                       p (nth false Game'.ia i)) /\
@@ -638,14 +640,14 @@ seq 1 : (G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
                 JP Gk.j_k Game'.ib nb) => //;
         1: smt (fset1I in_filter mem_oflist mem_range nth_default nth_neg).
       rnd; auto => /> {&m} &m 3? _ _.
-      suff: (1%r - clamp pb) ^ q_ob * clamp pb <=
+      suff: (1%r - pb) ^ q_ob * pb <=
             mu (dlist (dbiased pb) nb)
                (fun (x : bool list) => IP G2.cb{m} x nb /\ JP Gk.j_k{m} x nb)
         by smt (mu_eq_support nb_ge0 supp_dlist_size).
       rewrite dlist_set2E; [exact dbiased_ll|exact nb_ge0| | | |];
         1..3: smt(fsetIC mem_oflist mem_range subsetIl subsetP).
       rewrite !dbiasedE /p /predC /= fset1I.
-      smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard).
+      smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard pa_bound pb_bound).
 qed.
 
 (* Same as Gk, but bad is set only at the k-th dhh call (if set at all) *)
@@ -892,18 +894,30 @@ move => *; rewrite (dlist_nthE b _ (fun x => x)) ?dbiasedE /=;
 qed.
 *)
 
-lemma badG'_cdh &m : 1 <= q_ddh => 0%r < pa && pa < 1%r => 0%r < pb && pb < 1%r =>
+lemma badG'_cdh &m : 
     Pr[ Game(G',A).main() @ &m : G.bad ] <=
-    q_ddh%r / ((1%r-clamp pa)^q_oa * (1%r- clamp pb)^q_ob * clamp pa * clamp pb)
+    q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb)
     * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
 proof.
-move => Bq Bpa Bpb.
 have H1 := guess_bound &m; have H2 := Gk_Gk' &m; have H3 := A_B &m.
 have {H2 H3} H4 := ler_trans _ _ _ H2 H3.
-have {H1 H4} := ler_trans _ _ _ H1 H4.
-rewrite !clamp_id; 1,2: smt(). move => H5.
-rewrite -ler_pdivr_mull. smt(divr_gt0 mulr_gt0 expr_gt0).
+have {H1 H4} H5 := ler_trans _ _ _ H1 H4.
+rewrite -ler_pdivr_mull; 1: smt(divr_gt0 mulr_gt0 expr_gt0 pa_bound pb_bound q_ddh_ge1).
 rewrite invf_div. smt().
 qed.
 
+lemma G1G2_NCDH &m : 
+    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
+     q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) 
+     * Pr [ NCDH.Game(B(A)).main() @ &m : res ] + DELTA.
+proof.
+apply (ler_trans _ _ _ (G1G2_Gbad &m) _).
+have H1 := G_G' &m; have H2 := badG'_cdh &m; smt().
+qed.
+
 end section.
+
+(* Wolfram Alpha says the derivative of this expression is 
+   n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) *)   
+axiom foo_monotone (n m : int) : 
+  0 <= n => n <= m => (n%r/(n+1)%r)^(n+1) <= (m%r/(m+1)%r)^(m+1).
