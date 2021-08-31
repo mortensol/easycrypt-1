@@ -564,32 +564,21 @@ seq 1 : (G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
   + conseq (: _ ==> card (oflist G2.ca) <= q_oa /\ card (oflist G2.cb) <= q_ob)
            (: _ ==> G.bad => 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1);
     [by []|smt()| |by conseq Gk_bound].
-    conseq (: _ ==> G.bad => 1 <= Gk.k_bad /\ Gk.k_bad <= Gk.cddh /\
-                             Gk.cddh <= q_ddh) => //; 1: smt().
     conseq (: _ ==> G.bad => 1 <= Gk.k_bad /\ Gk.k_bad <= Gk.cddh)
            Gk_bound => //; 1: smt().
     proc; inline *.
     seq 12 : (G.bad = false /\ Gk.cddh = 0 /\ Gk.k_bad = -1); auto.
-    call (: 0 <= Gk.cddh /\ (G.bad => 1 <= Gk.k_bad /\ Gk.k_bad <= Gk.cddh)).
-    * by proc.
-    * by proc.
-    * by proc; inline *; auto.
-    * by proc; inline *; auto.
-    * by proc; inline *; auto; smt().
-    * by auto.
+    call (: 0 <= Gk.cddh /\ (G.bad => 1 <= Gk.k_bad /\ Gk.k_bad <= Gk.cddh));
+      6: (by auto); by proc; inline *; auto; smt().
   + bypr => &m' gA; rewrite /p; byequiv => //; proc; inline *.
     call (: ={glob G1, glob G2, glob Count, G.bad} /\
             (G.bad{1} =>
              G.bad{2} /\ ! (Gk.i_k{2} \in G2.ca{2}) /\
                          ! (Gk.j_k{2} \in G2.cb{2}) /\
              Gk.i_k{2} \in oflist (range 0 na) /\
-             Gk.j_k{2} \in oflist (range 0 nb))).
-    * by proc.
-    * by proc.
-    * by proc; inline *; auto.
-    * by proc; inline *; auto.
-    * by proc; inline *; auto; smt(mem_oflist mem_range).
-    * by auto; smt().
+             Gk.j_k{2} \in oflist (range 0 nb)));
+      6: (by auto; smt()); 1..4: by proc; inline *; auto.
+    by proc; inline *; auto; smt(mem_oflist mem_range).
 - conseq (: 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
             card (oflist G2.ca) <= q_oa /\ card (oflist G2.cb) <= q_ob /\
             ! (Gk.i_k \in G2.ca) /\ ! (Gk.j_k \in G2.cb) /\
@@ -612,8 +601,14 @@ seq 1 : (G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
               Gk.i_k \in oflist (range 0 na) /\
               Gk.j_k \in oflist (range 0 nb) ==>
               nth false Game'.ia Gk.i_k /\ nth false Game'.ib Gk.j_k /\
-              nstop Game'.ia Game'.ib G2.ca G2.cb) => // {p}.
-    pose p := (fun b => b = false); rewrite /c; move => {c}.
+              nstop Game'.ia Game'.ib G2.ca G2.cb) => //.
+    rewrite /c => {c p}; pose p := (fun b => b = false).
+    pose IP := fun (cs : int list) (is : bool list) (n : int) =>
+               forall (i : int), i \in oflist cs `&` oflist (range 0 n) =>
+                                   p (nth false is i).
+    pose JP := fun (c : int) (is : bool list) (n : int) =>
+               forall (j : int), j \in fset1 c `&` oflist (range 0 n) =>
+                                 ! p (nth false is j).
     seq 1 : (card (oflist G2.cb) <= q_ob /\ ! (Gk.j_k \in G2.cb) /\
              Gk.j_k \in oflist (range 0 nb) /\
              (forall i, i \in oflist G2.ca =>   p (nth false Game'.ia i)) /\
@@ -622,80 +617,33 @@ seq 1 : (G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
             ((1%r - clamp pb) ^ q_ob * clamp pb)
             (1%r - ((1%r - clamp pa) ^ q_oa * clamp pa)) 0%r;
     [by auto| | |by auto|smt()].
-    * conseq (: _ ==>
-                (forall (i : int),
-                   i \in (oflist G2.ca `&`
-                          oflist (range 0 (size Game'.ia))) =>
-                     p (nth false Game'.ia i)) /\
-                (forall (j : int),
-                   j \in (fset1 Gk.i_k `&` oflist (range 0 na)) =>
-                   ! p (nth false Game'.ia j)));
+    * conseq (: _ ==> IP G2.ca Game'.ia (size Game'.ia) /\
+                      JP Gk.i_k Game'.ia na);
         1: smt (in_filter mem_oflist mem_range nth_default nth_neg).
       rnd; auto => {&m} &m ?.
-      have -> : mu (dlist (dbiased pa) na)
-                   (fun (x : bool list) =>
-                     (forall (i : int),
-                        i \in oflist G2.ca{m} `&` oflist (range 0 (size x)) =>
-                          p (nth false x i)) /\
-                     (forall (j : int),
-                        j \in fset1 Gk.i_k{m} `&` oflist (range 0 na) =>
-                        ! p (nth false x j))) =
-                mu (dlist (dbiased pa) na)
-                   (fun (x : bool list) =>
-                     (forall (i : int),
-                        i \in oflist G2.ca{m} `&` oflist (range 0 na) =>
-                          p (nth false x i)) /\
-                     (forall (j : int),
-                        j \in fset1 Gk.i_k{m} `&` oflist (range 0 na) =>
-                        ! p (nth false x j)))
+      suff: (1%r - clamp pa) ^ q_oa * clamp pa <=
+            mu (dlist (dbiased pa) na)
+               (fun (x : bool list) => IP G2.ca{m} x na /\ JP Gk.i_k{m} x na)
         by smt (mu_eq_support na_ge0 supp_dlist_size).
-      rewrite dlist_set2E;
-      [exact dbiased_ll|exact na_ge0|
-       smt(fsetIC mem_oflist mem_range subsetIl subsetP)|
-       smt(fsetIC mem_oflist mem_range subsetIl subsetP)|
-       smt(mem_oflist subsetIl subsetP)|].
+      rewrite dlist_set2E; [exact dbiased_ll|exact na_ge0| | | |];
+        1..3: smt(fsetIC mem_oflist mem_range subsetIl subsetP).
       rewrite !dbiasedE /p /predC /= fset1I.
       smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard).
-    * conseq (: card (oflist G2.cb) <= q_ob /\ ! (Gk.j_k \in G2.cb) /\
-                Gk.j_k \in oflist (range 0 nb) /\
-                (forall (i : int), i \in oflist G2.ca =>
-                                     p (nth false Game'.ia i)) /\
-                (forall (j : int), j \in fset1 Gk.i_k =>
-                                   ! p (nth false Game'.ia j)) ==>
+    * conseq (: _ ==>
                 ((forall (i : int), i \in oflist G2.ca =>
                                       p (nth false Game'.ia i)) /\
                  (forall (j : int), j \in fset1 Gk.i_k =>
                                     ! p (nth false Game'.ia j))) /\
-                ((forall (i : int), i \in oflist G2.cb `&`
-                                          oflist (range 0 (size Game'.ib)) =>
-                                      p (nth false Game'.ib i)) /\
-                 (forall (j : int), j \in fset1 Gk.j_k `&`
-                                          oflist (range 0 nb) =>
-                                    ! p (nth false Game'.ib j)))) => //;
+                IP G2.cb Game'.ib (size Game'.ib) /\
+                JP Gk.j_k Game'.ib nb) => //;
         1: smt (fset1I in_filter mem_oflist mem_range nth_default nth_neg).
       rnd; auto => /> {&m} &m 3? _ _.
-      have -> : mu (dlist (dbiased pb) nb)
-                   (fun (x : bool list) =>
-                     (forall (i : int),
-                        i \in oflist G2.cb{m} `&` oflist (range 0 (size x)) =>
-                          p (nth false x i)) /\
-                     (forall (j : int),
-                        j \in fset1 Gk.j_k{m} `&` oflist (range 0 nb) =>
-                        ! p (nth false x j))) =
-                mu (dlist (dbiased pb) nb)
-                   (fun (x : bool list) =>
-                     (forall (i : int),
-                        i \in oflist G2.cb{m} `&` oflist (range 0 nb) =>
-                          p (nth false x i)) /\
-                     (forall (j : int),
-                        j \in fset1 Gk.j_k{m} `&` oflist (range 0 nb) =>
-                        ! p (nth false x j)))
+      suff: (1%r - clamp pb) ^ q_ob * clamp pb <=
+            mu (dlist (dbiased pb) nb)
+               (fun (x : bool list) => IP G2.cb{m} x nb /\ JP Gk.j_k{m} x nb)
         by smt (mu_eq_support nb_ge0 supp_dlist_size).
-      rewrite dlist_set2E;
-      [exact dbiased_ll|exact nb_ge0|
-       smt(fsetIC mem_oflist mem_range subsetIl subsetP)|
-       smt(fsetIC mem_oflist mem_range subsetIl subsetP)|
-       smt(mem_oflist subsetIl subsetP)|].
+      rewrite dlist_set2E; [exact dbiased_ll|exact nb_ge0| | | |];
+        1..3: smt(fsetIC mem_oflist mem_range subsetIl subsetP).
       rewrite !dbiasedE /p /predC /= fset1I.
       smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard).
 qed.
@@ -923,7 +871,7 @@ lemma G_G' &m :
     `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 admitted.
 
-(* keep or delete? 
+(* keep or delete?
 lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n :
   is_lossless d => 0 <= i && i < n =>
   mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
