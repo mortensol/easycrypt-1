@@ -62,12 +62,11 @@ qed.
 
 end NCDH.
 
-op na,nb,q_oa,q_ob,q_ddh : int.
-axiom na_ge0 : 0 <= na.
-axiom nb_ge0 : 0 <= nb.
-axiom q_oa_ge0 : 0 <= q_oa.
-axiom q_ob_ge0 : 0 <= q_ob.
-axiom q_ddh_ge1 : 1 <= q_ddh.
+op na : { int | 0 <= na } as na_ge0.
+op nb : { int | 0 <= nb } as nb_ge0.
+op q_oa : { int | 0 <= q_oa } as q_oa_ge0.
+op q_ob : { int | 0 <= q_ob } as q_ob_ge0.
+op q_ddh : { int | 1 <= q_ddh } as q_ddh_ge1.
 
 module type CDH_RSR_Oracles = {
   proc oA(i : int) : G
@@ -280,9 +279,11 @@ module G2b = {
   proc ob = G2.ob
 }.
 
+theory Inner.
+
 op pa,pb : real.
-axiom pa_bound : 0%r < pa && pa < 1%r.
-axiom pb_bound : 0%r < pb && pb < 1%r.
+axiom pa_bound : 0%r < pa && if q_oa = 0 then pa <= 1%r else pa < 1%r.
+axiom pb_bound : 0%r < pb && if q_ob = 0 then pb <= 1%r else pb < 1%r.
 
 (* the "simulation", called "A" in cryptoprim.pdf *)
 (* we have an event "stop" that corresponds to the simulation stoping,
@@ -386,7 +387,6 @@ module B (A : Adversary) : NCDH.Adversary = {
 }.
 
 op DELTA : real. (* TODO specify *)
-op p : real.     (* TODO specify *)
 
 section.
 
@@ -404,6 +404,39 @@ axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
   hoare [ A(Count(O)).guess :
     Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
     Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
+
+local lemma G1G2_Gbad &m :
+    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
+       Pr[ Game(G,A).main() @ &m : G.bad ].
+proof.
+(* Introduce bad events into G1 and G2 *)
+have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G2b,A).main() @ &m : res ].
+  byequiv => //. proc; inline *.
+  call (_ : ={glob G2}) => //; 1..4: (by sim); last by auto => />.
+  by proc; inline *; auto.
+have -> : Pr[ Game(G1,A).main() @ &m : res ] = Pr[ Game(G1b,A).main() @ &m : res ].
+  byequiv => //; proc; inline *.
+  call (_ : ={glob G1}); 1..4: (by sim); last by auto => />.
+  by proc; inline *; auto.
+(* we can continue logging oa/ob queries once bad happens *)
+have -> : Pr[Game(G, A).main() @ &m : G.bad] = Pr[Game(G2b, A).main() @ &m : G.bad].
+  byequiv => //; proc; inline *.
+  call (: G.bad, ={G.bad,glob G1,glob G2,glob Count}, ={G.bad});
+    try by move => *; proc; inline *; auto => /> /#.
+  exact: A_ll.
+  by auto => /> /#.
+byequiv (_ : ={glob A} ==> ={G.bad} /\ (!G.bad{2} => ={res})) : G.bad => //; 2: smt().
+proc; inline *.
+call (_ : G.bad, ={G.bad,glob G2,glob Count}, ={G.bad});
+  try by move => *; by proc; inline *; auto => /> /#.
+exact: A_ll.
+by auto => /> /#.
+qed.
+
+(* what about res, do we care? *)
+local lemma G_G' &m :
+    `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
+admitted.
 
 local module Gk : CDH_RSR_Oracles_i = {
   import var G1 G2 G
@@ -447,6 +480,20 @@ local module Gk : CDH_RSR_Oracles_i = {
    }
 }.
 
+
+(* Variant of Game, where the samling for Gk is done at the end *)
+local module Game' (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
+  var k : int
+  var ia,ib : bool list
+
+  proc main() = {
+    Game(O, A).main();
+    k <$ [1..q_ddh];
+    ia <$ dlist (dbiased pa) na;
+    ib <$ dlist (dbiased pb) nb;
+  }
+}.
+
 local module Gk_bad : CDH_RSR_Oracles_i = {
   import var G1 G2 G
   include var Gk [-init]
@@ -458,19 +505,6 @@ local module Gk_bad : CDH_RSR_Oracles_i = {
     k_bad <- -1;
     i_k <- -1;
     j_k <- -1;
-  }
-}.
-
-(* Variant of Game, where the samling for Gk is done at the end *)
-module Game' (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
-  var k : int
-  var ia,ib : bool list
-
-  proc main() = {
-    Game(O, A).main();
-    k <$ [1..q_ddh];
-    ia <$ dlist (dbiased pa) na;
-    ib <$ dlist (dbiased pb) nb;
   }
 }.
 
@@ -528,7 +562,6 @@ conseq (: _ ==> card (oflist G2.ca) <= Count.ca /\
   * by auto.
 qed.
 
-(* TODO: maintain i_k \notin ca and same for j_k/cb *)
 local lemma guess_bound &m :
   1%r/q_ddh%r * (1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb *
   Pr [Game(G',A).main() @ &m : G.bad] <=
@@ -708,6 +741,7 @@ call (: G.bad /\ Gk.k <> Gk.k_bad,
 - auto => />; smt(supp_dinter).
 qed.
 
+
 local lemma guess_S &m x y : x \in EU => y \in EU =>
   Pr [ Game(Gk',A).main() @ &m :
     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
@@ -840,61 +874,9 @@ suff -> : p = Pr[Game(Gk', A).main() @ &m' :
 rewrite /p; byequiv => //. sim => /> /#.
 qed.
 
-lemma G1G2_Gbad &m :
-    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
-       Pr[ Game(G,A).main() @ &m : G.bad ].
-proof.
-(* Introduce bad events into G1 and G2 *)
-have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G2b,A).main() @ &m : res ].
-  byequiv => //. proc; inline *.
-  call (_ : ={glob G2}) => //; 1..4: (by sim); last by auto => />.
-  by proc; inline *; auto.
-have -> : Pr[ Game(G1,A).main() @ &m : res ] = Pr[ Game(G1b,A).main() @ &m : res ].
-  byequiv => //; proc; inline *.
-  call (_ : ={glob G1}); 1..4: (by sim); last by auto => />.
-  by proc; inline *; auto.
-(* we can continue logging oa/ob queries once bad happens *)
-have -> : Pr[Game(G, A).main() @ &m : G.bad] = Pr[Game(G2b, A).main() @ &m : G.bad].
-  byequiv => //; proc; inline *.
-  call (: G.bad, ={G.bad,glob G1,glob G2,glob Count}, ={G.bad});
-    try by move => *; proc; inline *; auto => /> /#.
-  exact: A_ll.
-  by auto => /> /#.
-byequiv (_ : ={glob A} ==> ={G.bad} /\ (!G.bad{2} => ={res})) : G.bad => //; 2: smt().
-proc; inline *.
-call (_ : G.bad, ={G.bad,glob G2,glob Count}, ={G.bad});
-  try by move => *; by proc; inline *; auto => /> /#.
-exact: A_ll.
-by auto => /> /#.
-qed.
 
-(* what about res, do we care? *)
-lemma G_G' &m :
-    `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
-admitted.
-
-(* keep or delete?
-lemma dlist_nthE x0 (d : 'a distr) (p : 'a -> bool) i n :
-  is_lossless d => 0 <= i && i < n =>
-  mu (dlist d n) (fun xs => p (nth x0 xs i)) = mu d p.
-proof.
-move => d_ll Hn.
-have E := dlist_setE x0 d p n (fset1 i) d_ll _ _; 1,2: smt(in_fset1).
-rewrite (mu_eq _ _ (fun (xs : 'a list) => forall (i0 : int), i0 \in fset1 i => p (nth x0 xs i0))).
-  smt(in_fset1).
-by rewrite E fcard1 expr1.
-qed.
-
-lemma nth_dlist b i n p :
-  0%r <= p => p <= 1%r => 0 <= i => i < n =>
-  mu (dlist (dbiased p) n) (transpose (nth b) i) = p.
-proof.
-move => *; rewrite (dlist_nthE b _ (fun x => x)) ?dbiasedE /=;
-  smt(clamp_id dlist_ll dbiased_ll).
-qed.
-*)
-
-lemma badG'_cdh &m : 
+(* TODO: inline this lemma - CD *)
+local lemma badG'_cdh &m : 
     Pr[ Game(G',A).main() @ &m : G.bad ] <=
     q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb)
     * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
@@ -902,7 +884,7 @@ proof.
 have H1 := guess_bound &m; have H2 := Gk_Gk' &m; have H3 := A_B &m.
 have {H2 H3} H4 := ler_trans _ _ _ H2 H3.
 have {H1 H4} H5 := ler_trans _ _ _ H1 H4.
-rewrite -ler_pdivr_mull; 1: smt(divr_gt0 mulr_gt0 expr_gt0 pa_bound pb_bound q_ddh_ge1).
+rewrite -ler_pdivr_mull; 1: smt(divr_gt0 mulr_gt0 expr_gt0 pa_bound pb_bound q_ddh_ge1 expr0).
 rewrite invf_div. smt().
 qed.
 
@@ -917,7 +899,70 @@ qed.
 
 end section.
 
+end Inner.
+
+lemma pa_bound :
+  0%r < (1%r/(q_oa + 1)%r) && 
+  if q_oa = 0 then (1%r/(q_oa + 1)%r) <= 1%r else (1%r/(q_oa + 1)%r) < 1%r.
+proof. smt. qed.
+
+lemma pb_bound :
+  0%r < (1%r/(q_ob + 1)%r) && 
+  if q_ob = 0 then (1%r/(q_ob + 1)%r) <= 1%r else (1%r/(q_ob + 1)%r) < 1%r.
+proof. smt. qed.
+
+clone import Inner as I with 
+  op pa <- (1%r/(q_oa + 1)%r),
+  op pb <- (1%r/(q_ob + 1)%r),
+  axiom pa_bound <- pa_bound, (* does anything break/change if we remove this? *)
+  axiom pb_bound <- pb_bound.
+
 (* Wolfram Alpha says the derivative of this expression is 
    n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) *)   
 axiom foo_monotone (n m : int) : 
   0 <= n => n <= m => (n%r/(n+1)%r)^(n+1) <= (m%r/(m+1)%r)^(m+1).
+
+section.
+
+declare module A : Adversary {G1,G2,G,Count,S}.
+
+axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
+  islossless O.oA =>
+  islossless O.oB =>
+  islossless O.oa =>
+  islossless O.ob =>
+  islossless O.ddh =>
+  islossless A(O).guess.
+
+axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
+  hoare [ A(Count(O)).guess :
+    Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
+    Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
+
+lemma G1G2_NCDH &m : 
+    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
+     q_ddh%r * (max 1 (4*q_oa))%r * (max 1 (4 * q_ob))%r  
+     * Pr [ NCDH.Game(B(A)).main() @ &m : res ] + DELTA.
+proof.
+have H := I.G1G2_NCDH (<:A) A_ll A_bound &m.
+apply (ler_trans _ _ _ H) => {H}. 
+have Hoa : 1%r / ((1%r - 1%r / (q_oa + 1)%r) ^ q_oa * (1%r / (q_oa + 1)%r)) <= (max 1 (4*q_oa))%r.
+  case (q_oa = 0) => [-> /=|H]; 1: smt(expr0).
+  have {H} q_oa_gt0 : 1 <= q_oa by smt(q_oa_ge0).
+  apply (ler_trans (4 * q_oa)%r); 2: smt().
+  (* rewrite ler_pdivr_mulr; 1: smt (divr_gt0 mulr_gt0 expr_gt0). *)
+  admit.
+have Hob : 1%r / ((1%r - 1%r / (q_ob + 1)%r) ^ q_ob * (1%r / (q_ob + 1)%r)) <= (max 1 (4*q_ob))%r.
+  admit.
+have -> : q_ddh%r /
+((1%r - 1%r / (q_oa + 1)%r) ^ q_oa * (1%r - 1%r / (q_ob + 1)%r) ^ q_ob * (1%r / (q_oa + 1)%r) * (1%r / (q_ob + 1)%r)) = 
+  q_ddh%r * (1%r / ((1%r - 1%r / (q_oa + 1)%r) ^ q_oa * (1%r / (q_oa + 1)%r))) * 
+   (1%r / ((1%r - 1%r / (q_ob + 1)%r) ^ q_ob * (1%r / (q_ob + 1)%r))).
+smt.
+rewrite ler_add2r.
+apply ler_wpmul2r; 1:smt. 
+apply ler_pmul; 1,2,4 : smt(q_ddh_ge1 q_oa_ge0 q_ob_ge0 divr_ge0 mulr_ge0 expr_ge0).
+apply ler_pmul; smt(q_ddh_ge1 q_oa_ge0 divr_ge0 mulr_ge0 expr_ge0).
+qed.
+
+end section.
