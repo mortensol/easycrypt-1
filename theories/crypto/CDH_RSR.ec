@@ -937,9 +937,9 @@ axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
          Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
 
 lemma G1G2_NCDH &m :
-  `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
+  `| Pr[Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res] | <=
   q_ddh%r * (max 1 (4*q_oa))%r * (max 1 (4 * q_ob))%r *
-  Pr [ NCDH.Game(B(A)).main() @ &m : res ] + DELTA.
+  Pr [NCDH.Game(B(A)).main() @ &m : res] + DELTA.
 proof.
 have H := I.G1G2_NCDH (<:A) A_ll A_bound &m.
 apply (ler_trans _ _ _ H) => {H}.
@@ -959,9 +959,14 @@ suff Hmax : forall (n : int),
   rewrite mulrC -ler_pdivr_mulr; 1: smt().
   have -> : 1%r / (4 * n)%r = (1%r /(1 + 1)%r)^(1 + 1) * (1%r / n%r)
     by rewrite !div1r expr2 -!invfM fromintD fromintM mulrDl mul1r -addrA.
-  have -> : (1%r - 1%r / (n + 1)%r) ^ n * (1%r / (n + 1)%r) =
-            (n%r / (n + 1)%r)^(n + 1) * (1%r / n%r) by smt.
-  by rewrite ler_wpmul2r; [smt(divr_ge0)|by apply foo_monotone].
+  suff -> : (1%r - 1%r / (n + 1)%r) ^ n * (1%r / (n + 1)%r) =
+            (n%r / (n + 1)%r)^(n + 1) * (1%r / n%r)
+    by rewrite ler_wpmul2r; [smt(divr_ge0)|by apply foo_monotone].
+  apply (can2_eq (fun x, x * (1%r / (n + 1)%r)) (fun x, x * (n + 1)%r)) => /=;
+    1,2: by move => x; smt(divrr).
+  rewrite -mulrA exprSr; 1: smt().
+  rewrite- mulrA -{2}invf_div divrr ?mulr1; 1: smt().
+  suff: 1%r - inv (n + 1)%r = n%r / (n + 1)%r; smt.
 qed.
 
 end section.
