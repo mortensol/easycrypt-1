@@ -401,13 +401,13 @@ axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless A(O).guess.
 
 axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
-  hoare [ A(Count(O)).guess :
-    Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
-    Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
+  hoare [A(Count(O)).guess :
+         Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
+         Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
 
 local lemma G1G2_Gbad &m :
-    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
-       Pr[ Game(G,A).main() @ &m : G.bad ].
+  `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
+  Pr[ Game(G,A).main() @ &m : G.bad ].
 proof.
 (* Introduce bad events into G1 and G2 *)
 have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G2b,A).main() @ &m : res ].
@@ -435,7 +435,7 @@ qed.
 
 (* what about res, do we care? *)
 local lemma G_G' &m :
-    `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
+  `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 admitted.
 
 local module Gk : CDH_RSR_Oracles_i = {
@@ -479,7 +479,6 @@ local module Gk : CDH_RSR_Oracles_i = {
       else false;
    }
 }.
-
 
 (* Variant of Game, where the samling for Gk is done at the end *)
 local module Game' (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
@@ -662,7 +661,7 @@ seq 1 : (G.bad /\ 1 <= Gk.k_bad /\ Gk.k_bad < q_ddh + 1 /\
         by smt (mu_eq_support na_ge0 supp_dlist_size).
       rewrite dlist_set2E; [exact dbiased_ll|exact na_ge0| | | |];
         1..3: smt(fsetIC mem_oflist mem_range subsetIl subsetP).
-      rewrite !dbiasedE /p /predC /= fset1I. 
+      rewrite !dbiasedE /p /predC /= fset1I.
       smt(fcard1 fcard_ge0 expr1 ler_wiexpn2l subsetIl subset_leq_fcard pa_bound pb_bound).
     * conseq (: _ ==>
                 ((forall (i : int), i \in oflist G2.ca =>
@@ -724,12 +723,12 @@ local module Gk' : CDH_RSR_Oracles_i = {
 
 (* should be an equality, but this should suffice *)
 local lemma Gk_Gk' &m :
-    Pr [ Game(Gk,A).main() @ &m :
+  Pr [Game(Gk,A).main() @ &m :
       G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ] <=
-    Pr [ Game(Gk',A).main() @ &m :
+      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
+  Pr [Game(Gk',A).main() @ &m :
       G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ].
+      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
 proof.
 byequiv => //. proc; inline *. symmetry.
 call (: G.bad /\ Gk.k <> Gk.k_bad,
@@ -741,12 +740,11 @@ call (: G.bad /\ Gk.k <> Gk.k_bad,
 - auto => />; smt(supp_dinter).
 qed.
 
-
 local lemma guess_S &m x y : x \in EU => y \in EU =>
-  Pr [ Game(Gk',A).main() @ &m :
+  Pr [Game(Gk',A).main() @ &m :
     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-    nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ] <=
-  Pr [GameS(A).main(exp g x,exp g y) @ &m : S.m_crit = exp g (x * y) ].
+    nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
+  Pr [GameS(A).main(exp g x,exp g y) @ &m : S.m_crit = exp g (x * y)].
 proof.
 move => x_EU y_EU.
 byequiv => //; proc; inline *. sp.
@@ -849,10 +847,10 @@ move => _; split; last split.
 qed.
 
 local lemma A_B &m :
-  Pr [ Game(Gk',A).main() @ &m :
-    G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-    nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k ] <=
-  Pr [ NCDH.Game(B(A)).main() @ &m : res ].
+  Pr[Game(Gk',A).main() @ &m :
+     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
+  Pr[NCDH.Game(B(A)).main() @ &m : res].
 proof.
 pose p := Pr[Game(Gk', A).main() @ &m :
    G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\ nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
@@ -874,12 +872,11 @@ suff -> : p = Pr[Game(Gk', A).main() @ &m' :
 rewrite /p; byequiv => //. sim => /> /#.
 qed.
 
-
 (* TODO: inline this lemma - CD *)
-local lemma badG'_cdh &m : 
-    Pr[ Game(G',A).main() @ &m : G.bad ] <=
-    q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb)
-    * Pr [ NCDH.Game(B(A)).main() @ &m : res ].
+local lemma badG'_cdh &m :
+  Pr[Game(G',A).main() @ &m : G.bad] <=
+  q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) *
+  Pr[NCDH.Game(B(A)).main() @ &m : res].
 proof.
 have H1 := guess_bound &m; have H2 := Gk_Gk' &m; have H3 := A_B &m.
 have {H2 H3} H4 := ler_trans _ _ _ H2 H3.
@@ -888,10 +885,10 @@ rewrite -ler_pdivr_mull; 1: smt(divr_gt0 mulr_gt0 expr_gt0 pa_bound pb_bound q_d
 rewrite invf_div. smt().
 qed.
 
-lemma G1G2_NCDH &m : 
-    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
-     q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) 
-     * Pr [ NCDH.Game(B(A)).main() @ &m : res ] + DELTA.
+lemma G1G2_NCDH &m :
+  `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res] | <=
+  q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) *
+  Pr[NCDH.Game(B(A)).main() @ &m : res] + DELTA.
 proof.
 apply (ler_trans _ _ _ (G1G2_Gbad &m) _).
 have H1 := G_G' &m; have H2 := badG'_cdh &m; smt().
@@ -902,24 +899,24 @@ end section.
 end Inner.
 
 lemma pa_bound :
-  0%r < (1%r/(q_oa + 1)%r) && 
+  0%r < (1%r/(q_oa + 1)%r) &&
   if q_oa = 0 then (1%r/(q_oa + 1)%r) <= 1%r else (1%r/(q_oa + 1)%r) < 1%r.
 proof. smt. qed.
 
 lemma pb_bound :
-  0%r < (1%r/(q_ob + 1)%r) && 
+  0%r < (1%r/(q_ob + 1)%r) &&
   if q_ob = 0 then (1%r/(q_ob + 1)%r) <= 1%r else (1%r/(q_ob + 1)%r) < 1%r.
 proof. smt. qed.
 
-clone import Inner as I with 
+clone import Inner as I with
   op pa <- (1%r/(q_oa + 1)%r),
   op pb <- (1%r/(q_ob + 1)%r),
   axiom pa_bound <- pa_bound, (* does anything break/change if we remove this? *)
   axiom pb_bound <- pb_bound.
 
-(* Wolfram Alpha says the derivative of this expression is 
-   n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) *)   
-axiom foo_monotone (n m : int) : 
+(* Wolfram Alpha says the derivative of this expression is
+   n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) *)
+axiom foo_monotone (n m : int) :
   0 <= n => n <= m => (n%r/(n+1)%r)^(n+1) <= (m%r/(m+1)%r)^(m+1).
 
 section.
@@ -935,34 +932,36 @@ axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless A(O).guess.
 
 axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
-  hoare [ A(Count(O)).guess :
-    Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
-    Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
+  hoare [A(Count(O)).guess :
+         Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
+         Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
 
-lemma G1G2_NCDH &m : 
-    `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
-     q_ddh%r * (max 1 (4*q_oa))%r * (max 1 (4 * q_ob))%r  
-     * Pr [ NCDH.Game(B(A)).main() @ &m : res ] + DELTA.
+lemma G1G2_NCDH &m :
+  `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
+  q_ddh%r * (max 1 (4*q_oa))%r * (max 1 (4 * q_ob))%r *
+  Pr [ NCDH.Game(B(A)).main() @ &m : res ] + DELTA.
 proof.
 have H := I.G1G2_NCDH (<:A) A_ll A_bound &m.
-apply (ler_trans _ _ _ H) => {H}. 
-have Hoa : 1%r / ((1%r - 1%r / (q_oa + 1)%r) ^ q_oa * (1%r / (q_oa + 1)%r)) <= (max 1 (4*q_oa))%r.
-  case (q_oa = 0) => [-> /=|H]; 1: smt(expr0).
-  have {H} q_oa_gt0 : 1 <= q_oa by smt(q_oa_ge0).
-  apply (ler_trans (4 * q_oa)%r); 2: smt().
-  (* rewrite ler_pdivr_mulr; 1: smt (divr_gt0 mulr_gt0 expr_gt0). *)
-  admit.
-have Hob : 1%r / ((1%r - 1%r / (q_ob + 1)%r) ^ q_ob * (1%r / (q_ob + 1)%r)) <= (max 1 (4*q_ob))%r.
-  admit.
-have -> : q_ddh%r /
-((1%r - 1%r / (q_oa + 1)%r) ^ q_oa * (1%r - 1%r / (q_ob + 1)%r) ^ q_ob * (1%r / (q_oa + 1)%r) * (1%r / (q_ob + 1)%r)) = 
-  q_ddh%r * (1%r / ((1%r - 1%r / (q_oa + 1)%r) ^ q_oa * (1%r / (q_oa + 1)%r))) * 
-   (1%r / ((1%r - 1%r / (q_ob + 1)%r) ^ q_ob * (1%r / (q_ob + 1)%r))).
-smt.
-rewrite ler_add2r.
-apply ler_wpmul2r; 1:smt. 
-apply ler_pmul; 1,2,4 : smt(q_ddh_ge1 q_oa_ge0 q_ob_ge0 divr_ge0 mulr_ge0 expr_ge0).
-apply ler_pmul; smt(q_ddh_ge1 q_oa_ge0 divr_ge0 mulr_ge0 expr_ge0).
+apply (ler_trans _ _ _ H) => {H}.
+suff Hmax : forall (n : int),
+              0 <= n =>
+              1%r/((1%r-1%r/(n+1)%r)^n*(1%r/(n+1)%r)) <= (max 1 (4*n))%r.
+- rewrite ler_add2r ler_wpmul2r; 1: smt.
+  rewrite -!mulrA ler_wpmul2l; 1: smt(q_ddh_ge1).
+  apply (ler_trans ((1%r/((1%r-1%r/(q_oa+1)%r)^q_oa*(1%r/(q_oa+1)%r))) *
+                    (1%r/((1%r-1%r/(q_ob+1)%r)^q_ob*(1%r/(q_ob+1)%r)))));
+    1: smt.
+  apply ler_pmul; smt(q_oa_ge0 q_ob_ge0 divr_ge0 expr_ge0 invr_ge0 mulr_ge0).
+- move => n n_ge0; case (n = 0) => [-> /=|H]; 1: smt(expr0).
+  have {H n_ge0} n_gt0 : 1 <= n by smt().
+  apply (ler_trans (4 * n)%r); 2: smt().
+  rewrite ler_pdivr_mulr; 1: smt (divr_gt0 expr_gt0 mulr_gt0).
+  rewrite mulrC -ler_pdivr_mulr; 1: smt().
+  have -> : 1%r / (4 * n)%r = (1%r /(1 + 1)%r)^(1 + 1) * (1%r / n%r)
+    by rewrite !div1r expr2 -!invfM fromintD fromintM mulrDl mul1r -addrA.
+  have -> : (1%r - 1%r / (n + 1)%r) ^ n * (1%r / (n + 1)%r) =
+            (n%r / (n + 1)%r)^(n + 1) * (1%r / n%r) by smt.
+  by rewrite ler_wpmul2r; [smt(divr_ge0)|by apply foo_monotone].
 qed.
 
 end section.
