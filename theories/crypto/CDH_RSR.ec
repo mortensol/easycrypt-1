@@ -872,26 +872,20 @@ suff -> : p = Pr[Game(Gk', A).main() @ &m' :
 rewrite /p; byequiv => //. sim => /> /#.
 qed.
 
-(* TODO: inline this lemma - CD *)
-local lemma badG'_cdh &m :
-  Pr[Game(G',A).main() @ &m : G.bad] <=
-  q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) *
-  Pr[NCDH.Game(B(A)).main() @ &m : res].
-proof.
-have H1 := guess_bound &m; have H2 := Gk_Gk' &m; have H3 := A_B &m.
-have {H2 H3} H4 := ler_trans _ _ _ H2 H3.
-have {H1 H4} H5 := ler_trans _ _ _ H1 H4.
-rewrite -ler_pdivr_mull; 1: smt(divr_gt0 mulr_gt0 expr_gt0 pa_bound pb_bound q_ddh_ge1 expr0).
-rewrite invf_div. smt().
-qed.
-
 lemma G1G2_NCDH &m :
   `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res] | <=
   q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) *
   Pr[NCDH.Game(B(A)).main() @ &m : res] + DELTA.
 proof.
 apply (ler_trans _ _ _ (G1G2_Gbad &m) _).
-have H1 := G_G' &m; have H2 := badG'_cdh &m; smt().
+suff: Pr[Game(G',A).main() @ &m : G.bad] <=
+      q_ddh%r / ((1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb) *
+      Pr[NCDH.Game(B(A)).main() @ &m : res] by smt(G_G').
+have H1 := guess_bound &m; have H2 := Gk_Gk' &m; have H3 := A_B &m.
+have {H2 H3} H4 := ler_trans _ _ _ H2 H3.
+have {H1 H4} H5 := ler_trans _ _ _ H1 H4.
+rewrite -ler_pdivr_mull; 1: smt(divr_gt0 mulr_gt0 expr_gt0 pa_bound pb_bound q_ddh_ge1 expr0).
+rewrite invf_div. smt().
 qed.
 
 end section.
