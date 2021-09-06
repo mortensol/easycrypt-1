@@ -21,6 +21,8 @@ elim: s => [|x s IHs]; first by rewrite -set0E fcards0.
 rewrite oflist_cons fcardU fcard1 /=; smt(fcard_ge0).
 qed.
 
+(* The CDH Game for Nominal Groups, with and without the factor for exponentiation *)
+
 theory NCDH.
 
 module type Adversary = {
@@ -199,7 +201,7 @@ module G2 : CDH_RSR_Oracles = {
 
 (* Intermediate games:
 - G sets "bad" where G1 and G2 differ
-- G' behaves like G, but samples invertible exponents (i.e. from EU *)
+- once "bad" has been set, G no longer logs queries to oa/ob *)
 
 module G = {
   import var G1
@@ -241,6 +243,7 @@ module G = {
    }
 }.
 
+(* G' behaves like G, but samples invertible exponents (i.e. from EU *)
 module G' = {
   import var G1 G2
   include var G [-init]
@@ -254,7 +257,21 @@ module G' = {
   }
 }.
 
-(* Same behavior as G1, but defining a bad event equivalent to G *)
+(* Proof outline:
+
+1. |G1 - G2| = |G1b - G2b| <= G[bad] 
+2. G[bad] <= G'[bad] + "prob. of distinguishing dZ and duniform EU"
+3. Define a game Gk that samples ia/ib and k \in [1..q_ddh] and show
+   Stop if oa(i) or ob(j) gets logged where ia[i]/ib[j] is true
+   G'[bad] <= q_ddh / ((1-pa)^q_oa * pa * (1 - pb)^q_ob * pb) Gk[ bad set at k-th call /\ !stop]
+4. Define simulation S and an adversary B against the NCDH games    
+   Gk[ bad set at k-th call /\ !stop] <= S receives critical ddh call <= B wins NCDH game.
+*)
+
+
+(* The game G1b (resp. G2b) behave the same as G1 (resp. G2), but
+includes a bad event that is equivalent to the bad event in G *)
+
 module G1b = {
   import var G1 G2
   include var G [-ddh]
@@ -276,7 +293,6 @@ module G1b = {
   }
 }.
 
-(* Same behavior as G2, but defining a bad event equivalent to G *)
 module G2b = {
   import var G1 G2
   include var G [-oa,ob]
@@ -285,16 +301,22 @@ module G2b = {
   proc ob = G2.ob
 }.
 
+
+(* Inner theory, parametric in the probability of inserting the NCDH problem *)
 theory Inner.
 
 op pa,pb : real.
 axiom pa_bound : 0%r < pa && if q_oa = 0 then pa <= 1%r else pa < 1%r.
 axiom pb_bound : 0%r < pb && if q_ob = 0 then pb <= 1%r else pb < 1%r.
 
-(* the "simulation", called "A" in cryptoprim.pdf *)
-(* we have an event "stop" that corresponds to the simulation stoping,
-   i.e., oa(i) is queried but ia[i] is true, meaning we cannot actually
-   compute the correct return value *)
+(* the "simulation", called "A" in cryptoprim.pdf :
+
+We take gx and gy as parameters and use gx (rather than g) for
+oA(i) when ia[i] = true. In order for the simulation to remain in sync
+with the game G' (more precisely the intermediate game Gk' below), we
+need to align the randomness for a and b by multiplying/dividing by x
+(resp y) whenever ia[i] (resp ib[j]) is true. *)
+
 module S = {
   import var G1 (* var a, b : Z list *)
   var ia, ib : bool list (* inject a/b *)
@@ -355,20 +377,6 @@ module S = {
     if (!(0 <= i && i < na /\ 0 <= j && j < nb)) { r <- false; }
     return r;
   }
-}.
-
-(* Proof outline:
-
-1. |G1 - G2| <= G[bad]
-2. G[bad] <= G'[bad] + "prob. of distinguishing dZ and duniform EU"
-3. Define simulation S and an adversary B against the NCDH games
-3. G'[bad] <= P * NCDH.Game(B(A)).
-
-*)
-
-module type S_i = {
-  include CDH_RSR_Oracles
-  proc init (gx : G, gy : G) : unit
 }.
 
 (* the simulation game *)
@@ -499,7 +507,7 @@ local module Game' (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
   }
 }.
 
-local module Gk_bad : CDH_RSR_Oracles_i = {
+local module Gk_lazy : CDH_RSR_Oracles_i = {
   import var G1 G2 G
   include var Gk [-init]
   (* var k_bad, i_k, j_k, cddh : int *)
@@ -521,7 +529,7 @@ local lemma Game_Game' &m :
   Pr[Game(Gk,A).main() @ &m :
      G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] =
-  Pr[Game'(Gk_bad,A).main() @ &m :
+  Pr[Game'(Gk_lazy,A).main() @ &m :
      G.bad /\ Game'.k = Gk.k_bad /\ nstop Game'.ia Game'.ib G2.ca G2.cb /\
      nth false Game'.ia Gk.i_k /\ nth false Game'.ib Gk.j_k].
 proof.
@@ -539,9 +547,9 @@ call (: ={glob G1, G2.ca, G2.cb, G.bad} /\ ={cddh,k_bad,i_k,j_k}(Gk,Gk)).
 qed.
 
 
-(* hoare logic properties of Gk_bad *)
+(* hoare logic properties of Gk_lazy *)
 local lemma Gk_hoare :
-  hoare [Game(Gk_bad, A).main :
+  hoare [Game(Gk_lazy, A).main :
          true ==> 
          size G2.ca <= q_oa /\ size G2.cb <= q_ob /\ Gk.cddh <= q_ddh /\ 
          (G.bad => Gk.k_bad \in [1..q_ddh] /\ 
@@ -560,8 +568,9 @@ conseq (: _ ==> Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
   1: smt().
 - proc.
   seq 2 : (Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0); 1: by inline *; auto.
-  by call (A_bound Gk_bad).
+  by call (A_bound Gk_lazy).
 proc; inline *. 
+(* TODO: use #post once supported *)
 call (: Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\ 
                 (Gk.cddh <= q_ddh => 
                 (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\ 
@@ -649,7 +658,10 @@ apply ler_wpmul2r; 1:smt().
 apply ler_wiexpn2l; smt(fcard_oflist subsetIl subset_leq_fcard fcard_ge0).
 qed.
 
-(* Same as Gk, but bad is set only at the k-th dhh call (if set at all) *)
+(* Same as Gk, but bad is set only at the k-th dhh call (if set at
+all). Hence, the simulation S, which cannot check for the bad event,
+can simply record the k-th ddh query. *)
+
 local module Gk' : CDH_RSR_Oracles_i = {
   import var G1 G2 G
   include var Gk [-init,ddh]
@@ -669,7 +681,6 @@ local module Gk' : CDH_RSR_Oracles_i = {
     cddh <- cddh + 1;
     t <- m = exp g (nth' a i * nth' b j);
 
-    (* execute bad if neither was leaked and "false" is not the right answer *)
     if (0 <= i && i < na /\ 0 <= j && j < nb
       /\ !(i \in ca || j \in cb) /\ t /\ cddh = k /\ !bad) {
       bad <- true;
@@ -680,7 +691,6 @@ local module Gk' : CDH_RSR_Oracles_i = {
     return
       if 0 <= i && i < na /\ 0 <= j && j < nb
       then
-        (* answer honestly if a[i] or b[j] was leaked *)
         if i \in ca || j \in cb
         then t
         else false
@@ -688,7 +698,7 @@ local module Gk' : CDH_RSR_Oracles_i = {
   }
 }.
 
-(* should be an equality, but this should suffice *)
+(* should be an equality, but this suffices *)
 local lemma Gk_Gk' &m :
   Pr [Game(Gk,A).main() @ &m :
       G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
@@ -859,6 +869,8 @@ end section.
 
 end Inner.
 
+(* The optimal bound is obtained by setting pa = 1/(q_oa + 1) and likewise for pb *)
+
 lemma pa_bound :
   0%r < (1%r/(q_oa + 1)%r) &&
   if q_oa = 0 then (1%r/(q_oa + 1)%r) <= 1%r else (1%r/(q_oa + 1)%r) < 1%r.
@@ -875,8 +887,13 @@ clone import Inner as I with
   axiom pa_bound <- pa_bound, (* does anything break/change if we remove this? *)
   axiom pb_bound <- pb_bound.
 
-(* Wolfram Alpha says the derivative of this expression is
-   n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) *)
+(* 
+Wolfram Alpha says the derivative of (n/(n+1))^(n+1) is:
+   n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) 
+thus, it suffices to show n log(n / (n + 1)) + 1 > 0. 
+This term approaches 0 as n -> ∞. Hence, it suffices to show that its derivative
+   1/(n+1) + log (n/n+1)
+is strictly negative for n > 0. *) 
 axiom foo_monotone (n m : int) :
   0 <= n => n <= m => (n%r/(n+1)%r)^(n+1) <= (m%r/(m+1)%r)^(m+1).
 
