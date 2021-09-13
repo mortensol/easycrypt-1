@@ -6,7 +6,7 @@ import DBool.Biased.
 import StdOrder.RealOrder.
 import RField.
 
-(* Statistical distance - merge with SDist.ec *) 
+(* Statistical distance - merge with SDist.ec *)
 
 op sdist : 'a distr -> 'a distr -> real.
 
@@ -15,11 +15,11 @@ type a.
 op n : { int | 0 <= n } as n_ge0.
 op d1, d2 : a distr.
 
-module type Distinguisher = { 
+module type Distinguisher = {
   proc guess (x : a list) : bool
 }.
 
-module SampleDlist (A : Distinguisher) = { 
+module SampleDlist (A : Distinguisher) = {
   proc main(b : bool) = {
     var x,r;
     x <- witness;
@@ -30,7 +30,7 @@ module SampleDlist (A : Distinguisher) = {
   }
 }.
 
-axiom sdist_dlist &m (A <: Distinguisher) : 
+axiom sdist_dlist &m (A <: Distinguisher) :
   `| Pr[ SampleDlist(A).main(false) @ &m : res ] - Pr[ SampleDlist(A).main(true) @ &m : res ] | <= n%r * sdist d1 d2.
 
 end D.
@@ -47,8 +47,8 @@ rewrite supp_dlist // => -[? /allP H]; exact: H.
 qed.
 
 lemma fcard_oflist (s : 'a list) : card (oflist s) <= size s.
-proof. 
-elim: s => [|x s IHs]; first by rewrite -set0E fcards0. 
+proof.
+elim: s => [|x s IHs]; first by rewrite -set0E fcards0.
 rewrite oflist_cons fcardU fcard1 /=; smt(fcard_ge0).
 qed.
 
@@ -319,12 +319,12 @@ module G'' = {
 
 (* Proof outline:
 
-1. |G1 - G2| = |G1b - G2b| <= G[bad] 
+1. |G1 - G2| = |G1b - G2b| <= G[bad]
 2. G[bad] <= G'[bad] + "prob. of distinguishing dZ and duniform EU"
 3. Define a game Gk that samples ia/ib and k \in [1..q_ddh] and show
    Stop if oa(i) or ob(j) gets logged where ia[i]/ib[j] is true
    G'[bad] <= q_ddh / ((1-pa)^q_oa * pa * (1 - pb)^q_ob * pb) Gk[ bad set at k-th call /\ !stop]
-4. Define simulation S and an adversary B against the NCDH games    
+4. Define simulation S and an adversary B against the NCDH games
    Gk[ bad set at k-th call /\ !stop] <= S receives critical ddh call <= B wins NCDH game.
 *)
 
@@ -508,12 +508,12 @@ by auto => /> /#.
 qed.
 
 (** Expressing the games G, G' and G'' as distinguishers for statistical distance *)
-local module Ba : Da.Distinguisher = { 
+local module Ba : Da.Distinguisher = {
   import var G1 G2 G
 
   module O' = Count(G)
 
-  proc guess (a' : Z list) = { 
+  proc guess (a' : Z list) = {
     a <- a';
     b <$ dlist dZ nb;
     ca <- [];
@@ -525,12 +525,12 @@ local module Ba : Da.Distinguisher = {
   }
 }.
 
-local module Bb : Db.Distinguisher = { 
+local module Bb : Db.Distinguisher = {
   import var G1 G2 G
 
   module O' = Count(G)
 
-  proc guess (b' : Z list) = { 
+  proc guess (b' : Z list) = {
     a <$ dlist (duniform (elems EU)) na;
     b <- b';
     ca <- [];
@@ -546,21 +546,21 @@ local module Bb : Db.Distinguisher = {
 local lemma G_G' &m :
   `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
 proof.
-rewrite /DELTA. 
-have H1 : `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G'',A).main() @ &m : G.bad ] | 
+rewrite /DELTA.
+have H1 : `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G'',A).main() @ &m : G.bad ] |
           <= na%r * sdist dZ (duniform (elems EU)).
   have -> : Pr[ Game(G,A).main() @ &m : G.bad ] = Pr[ Da.SampleDlist(Ba).main(false) @ &m : res ].
     byequiv => //; proc; inline *.
     rcondt {2} 2; 1: (by auto); rcondf {2} 3; 1: by auto.
     wp; call(: ={glob G, glob G1, glob G2}); 1..5: by sim.
-    by auto. 
+    by auto.
   have -> : Pr[ Game(G'',A).main() @ &m : G.bad ] = Pr[ Da.SampleDlist(Ba).main(true) @ &m : res ].
     byequiv => //; proc; inline *.
     rcondf {2} 2; 1: (by auto); rcondt {2} 2; 1: by auto.
     wp; call(: ={glob G, glob G1, glob G2}); 1..5: by sim.
     by auto.
   exact (Da.sdist_dlist &m Ba).
-have H2 : `| Pr[ Game(G'',A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | 
+have H2 : `| Pr[ Game(G'',A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] |
           <= nb%r * sdist dZ (duniform (elems EU)).
   have -> : Pr[ Game(G'',A).main() @ &m : G.bad ] = Pr[ Db.SampleDlist(Bb).main(false) @ &m : res ].
     byequiv => //; proc; inline *.
@@ -674,112 +674,108 @@ qed.
 (* hoare logic properties of Gk_lazy *)
 local lemma Gk_hoare :
   hoare [Game(Gk_lazy, A).main :
-         true ==> 
-         size G2.ca <= q_oa /\ size G2.cb <= q_ob /\ Gk.cddh <= q_ddh /\ 
-         (G.bad => Gk.k_bad \in [1..q_ddh] /\ 
-                  !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\ 
-                  (0 <= Gk.i_k && Gk.i_k < na) /\ 
+         true ==>
+         size G2.ca <= q_oa /\ size G2.cb <= q_ob /\ Gk.cddh <= q_ddh /\
+         (G.bad => Gk.k_bad \in [1..q_ddh] /\
+                  !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
+                  (0 <= Gk.i_k && Gk.i_k < na) /\
                   (0 <= Gk.j_k && Gk.j_k < nb)) ].
 proof.
-conseq (: _ ==> Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\ 
-                (Gk.cddh <= q_ddh => 
-                (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\ 
-                (G.bad => Gk.k_bad \in [1..q_ddh] /\ 
-                  !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\ 
-                  (0 <= Gk.i_k && Gk.i_k < na) /\ 
-                  (0 <= Gk.j_k && Gk.j_k < nb)))))
+conseq (: _ ==> Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
+                (Gk.cddh <= q_ddh =>
+                  (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
+                  (G.bad => Gk.k_bad \in [1..q_ddh] /\
+                            !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
+                            (0 <= Gk.i_k && Gk.i_k < na) /\
+                            (0 <= Gk.j_k && Gk.j_k < nb)))))
        (: _ ==> Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh);
-  1: smt().
-- proc.
-  seq 2 : (Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0); 1: by inline *; auto.
-  by call (A_bound Gk_lazy).
-proc; inline *. 
-(* TODO: use #post once supported *)
-call (: Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\ 
-                (Gk.cddh <= q_ddh => 
-                (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\ 
-                (G.bad => Gk.k_bad \in [1..q_ddh] /\ 
-                  !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\ 
-                  (0 <= Gk.i_k && Gk.i_k < na) /\ 
-                  (0 <= Gk.j_k && Gk.j_k < nb))))); 
+  2: (by proc; seq 2 : (Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0);
+         [by inline *; auto|by call (A_bound Gk_lazy)]); 1: smt().
+proc; inline *.
+call (: Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
+        (Gk.cddh <= q_ddh =>
+                (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
+                (G.bad => Gk.k_bad \in [1..q_ddh] /\
+                          !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
+                          (0 <= Gk.i_k && Gk.i_k < na) /\
+                          (0 <= Gk.j_k && Gk.j_k < nb)))));
   1..5: by proc; inline *; auto => />; smt(supp_dinter).
 by auto => />.
 qed.
 
 local lemma guess_bound &m :
   1%r/q_ddh%r * (1%r-pa)^q_oa * (1%r- pb)^q_ob * pa * pb *
-  Pr [Game(G',A).main() @ &m : G.bad] <=
-  Pr [Game(Gk,A).main() @ &m :
-      G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
+  Pr[Game(G',A).main() @ &m : G.bad] <=
+  Pr[Game(Gk,A).main() @ &m :
+     G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
 proof.
 pose p := Pr[Game(G', A).main() @ &m : G.bad].
 pose c := (1%r-pa)^q_oa * pa * (1%r- pb)^q_ob * pb.
 rewrite Game_Game'; byphoare (_ : glob A = (glob A){m} ==> _) => //; proc.
-seq 1 : G.bad p (1%r/q_ddh%r * c) _ 0%r 
-        (size G2.ca <= q_oa /\ size G2.cb <= q_ob /\ 
-        (G.bad => Gk.k_bad \in [1..q_ddh] /\ 
-                  !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\ 
-                  (0 <= Gk.i_k && Gk.i_k < na) /\ 
-                  (0 <= Gk.j_k && Gk.j_k < nb)))
-  ; 4,5: by auto; smt().
-- call Gk_hoare; skip; smt().
+seq 1 : G.bad p (1%r/q_ddh%r * c) _ 0%r
+        (size G2.ca <= q_oa /\ size G2.cb <= q_ob /\
+        (G.bad => Gk.k_bad \in [1..q_ddh] /\
+                  !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
+                  (0 <= Gk.i_k && Gk.i_k < na) /\
+                  (0 <= Gk.j_k && Gk.j_k < nb)));
+  4,5: by auto; smt().
+- by call Gk_hoare; skip; smt().
 - call (: (glob A) = (glob A){m} ==> G.bad); 2: by auto.
   bypr => &m' gA; rewrite /p; byequiv => //; proc; inline *.
-    call (: ={glob G1, glob G2, glob Count, G.bad}); 
-  [sim|sim|sim|sim| |auto; smt()].
-  proc; inline*; auto; smt(). 
-seq 1 : (Game'.k = Gk.k_bad) (1%r/q_ddh%r) c _ 0%r 
-  (G.bad /\ 
-   size G2.ca <= q_oa /\ size G2.cb <= q_ob /\ 
-   !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\ 
-    (0 <= Gk.i_k && Gk.i_k < na) /\ (0 <= Gk.j_k && Gk.j_k < nb))
-  ; 1,4,5: by auto; smt().
-- rnd; skip => &m' /> *. 
-  rewrite (mu_eq _ _ (pred1 Gk.k_bad{m'})) // dinter1E; smt (supp_dinter).
-rewrite /c => {c p}; pose p := (fun b => b = false).
-pose IP := fun (cs : int list) (is : bool list) (n : int) =>
-           forall (i : int), i \in oflist cs `&` oflist (range 0 n) =>
-                            p (nth false is i).
-pose JP := fun (c : int) (is : bool list) (n : int) =>
-           forall (j : int), j \in fset1 c `&` oflist (range 0 n) =>
-                           ! p (nth false is j).
-have ? := pa_bound. have ? := pb_bound; have ? := na_ge0; have ? := nb_ge0.
-seq 1 : ((forall i, i \in G2.ca => nth false Game'.ia i = false) /\ 
-          nth false Game'.ia Gk.i_k)
-  ((1%r - pa) ^ q_oa * pa) ((1%r - pb) ^ q_ob * pb) _ 0%r
-  (G.bad /\ Game'.k = Gk.k_bad /\ size G2.cb <= q_ob /\ !
-    (Gk.j_k \in G2.cb) /\ (0 <= Gk.j_k && Gk.j_k < nb))
-  ; 1,4,5: by auto; smt().
-- rnd; skip => &m' /> _ s_ca _ ikNca _ ik_ge0 ik_ltna _ _.
-  rewrite (mu_eq_support _ _ 
-      (fun (x : bool list) => IP G2.ca{m'} x na /\ JP Gk.i_k{m'} x na)).
-    move => ia /= /(supp_dlist_size _ _ _ na_ge0) size_ia. rewrite /IP /JP /p. 
-    smt (fset1I in_filter mem_oflist mem_range nth_default nth_neg).
-  rewrite dlist_set2E //; [exact: dbiased_ll||||]; 
-    1..3: smt(mem_oflist mem_range in_fsetI in_fset1).
-  rewrite !dbiasedE /p /predC /= fset1I clamp_id 1:/#. 
-  rewrite mem_oflist mem_range ik_ge0 ik_ltna /= fcard1 expr1. 
-  apply ler_wpmul2r; 1:smt(). 
-  apply ler_wiexpn2l; smt(fcard_oflist subsetIl subset_leq_fcard fcard_ge0).
-seq 1 : ((forall j, j \in G2.cb => nth false Game'.ib j = false) /\ 
-          nth false Game'.ib Gk.j_k)
-  ((1%r - pb) ^ q_ob * pb) 1%r _ 0%r 
-  (G.bad /\ Game'.k = Gk.k_bad /\ 
-  (forall (i : int), i \in G2.ca => nth false Game'.ia i = false) /\ 
-                                    nth false Game'.ia Gk.i_k)
-  ; 1,3,4,5: by auto; smt().
-rnd; skip => &m' /> _ s_cb jkNca jk_ge0 jk_ltnb _ _.
-rewrite (mu_eq_support _ _ 
-    (fun (x : bool list) => IP G2.cb{m'} x nb /\ JP Gk.j_k{m'} x nb)).
-  move => ia /= /(supp_dlist_size _ _ _ nb_ge0) size_ia. rewrite /IP /JP /p. 
-  smt (fset1I in_filter mem_oflist mem_range nth_default nth_neg).
-rewrite dlist_set2E //; [exact: dbiased_ll||||]; 
-  1..3: smt(mem_oflist mem_range in_fsetI in_fset1).
-rewrite !dbiasedE /p /predC /= fset1I clamp_id 1:/#. 
-rewrite mem_oflist mem_range jk_ge0 jk_ltnb /= fcard1 expr1. 
-apply ler_wpmul2r; 1:smt(). 
-apply ler_wiexpn2l; smt(fcard_oflist subsetIl subset_leq_fcard fcard_ge0).
+  call (: ={glob G1, glob G2, glob Count, G.bad}); 1..4: (by sim);
+  [by proc; inline*; auto; smt()|by auto; smt()].
+- seq 1 : (Game'.k = Gk.k_bad) (1%r/q_ddh%r) c _ 0%r
+          (G.bad /\ size G2.ca <= q_oa /\ size G2.cb <= q_ob /\
+          !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
+          (0 <= Gk.i_k && Gk.i_k < na) /\ (0 <= Gk.j_k && Gk.j_k < nb));
+    1,4,5: by auto; smt().
+  + rnd; skip => &m' /> *.
+    by rewrite (mu_eq _ _ (pred1 Gk.k_bad{m'})) // dinter1E; smt (supp_dinter).
+  + rewrite /c => {c p}; pose p := (fun b => b = false).
+    pose IP := fun (cs : int list) (is : bool list) (n : int) =>
+                 forall (i : int), i \in oflist cs `&` oflist (range 0 n) =>
+                                     p (nth false is i).
+    pose JP := fun (c : int) (is : bool list) (n : int) =>
+                 forall (j : int), j \in fset1 c `&` oflist (range 0 n) =>
+                                   ! p (nth false is j).
+    have ? := pa_bound; have ? := pb_bound; have ? := na_ge0; have ? := nb_ge0.
+    seq 1 : ((forall i, i \in G2.ca => nth false Game'.ia i = false) /\
+                                       nth false Game'.ia Gk.i_k)
+            ((1%r - pa) ^ q_oa * pa) ((1%r - pb) ^ q_ob * pb) _ 0%r
+            (G.bad /\ Game'.k = Gk.k_bad /\ size G2.cb <= q_ob /\
+             ! (Gk.j_k \in G2.cb) /\ (0 <= Gk.j_k && Gk.j_k < nb));
+      1,4,5: by auto; smt().
+    * rnd; skip => {&m} &m /> _ s_ca _ ikNca _ ik_ge0 ik_ltna _ _.
+      rewrite (mu_eq_support _ _ (fun (x : bool list) =>
+                                    IP G2.ca{m} x na /\ JP Gk.i_k{m} x na));
+        1: by move => ia /= /(supp_dlist_size _ _ _ na_ge0) size_ia;
+              smt (fset1I in_filter mem_oflist mem_range nth_default nth_neg).
+      rewrite dlist_set2E //; 1: (by exact: dbiased_ll);
+        1..3: smt(mem_oflist mem_range in_fsetI in_fset1).
+      rewrite !dbiasedE /p /predC /= fset1I clamp_id 1: /#.
+      rewrite mem_oflist mem_range ik_ge0 ik_ltna /= fcard1 expr1.
+      apply ler_wpmul2r; 1: smt().
+      apply ler_wiexpn2l; smt(fcard_oflist subsetIl subset_leq_fcard fcard_ge0).
+    * seq 1 : ((forall j, j \in G2.cb => nth false Game'.ib j = false) /\
+               nth false Game'.ib Gk.j_k)
+              ((1%r - pb) ^ q_ob * pb) 1%r _ 0%r
+              (G.bad /\ Game'.k = Gk.k_bad /\
+               (forall (i : int), i \in G2.ca =>
+                                  nth false Game'.ia i = false) /\
+                                  nth false Game'.ia Gk.i_k);
+        1,3,4,5: by auto; smt().
+      rnd; skip => &m' /> _ s_cb jkNca jk_ge0 jk_ltnb _ _.
+      rewrite (mu_eq_support _ _ (fun (x : bool list) =>
+                                    IP G2.cb{m'} x nb /\ JP Gk.j_k{m'} x nb));
+        1: by move => ia /= /(supp_dlist_size _ _ _ nb_ge0) size_ia;
+              smt (fset1I in_filter mem_oflist mem_range nth_default nth_neg).
+      rewrite dlist_set2E //; 1: (by exact: dbiased_ll);
+        1..3: smt(mem_oflist mem_range in_fsetI in_fset1).
+      rewrite !dbiasedE /p /predC /= fset1I clamp_id 1: /#.
+      rewrite mem_oflist mem_range jk_ge0 jk_ltnb /= fcard1 expr1.
+      apply ler_wpmul2r; 1: smt().
+      apply ler_wiexpn2l; smt(fcard_oflist subsetIl subset_leq_fcard fcard_ge0).
 qed.
 
 (* Same as Gk, but bad is set only at the k-th dhh call (if set at
@@ -1011,15 +1007,64 @@ clone import Inner as I with
   axiom pa_bound <- pa_bound, (* does anything break/change if we remove this? *)
   axiom pb_bound <- pb_bound.
 
-(* 
-Wolfram Alpha says the derivative of (n/(n+1))^(n+1) is:
-   n^n (n + 1)^(-n - 1) (n log(n) - n log(n + 1) + 1) 
-thus, it suffices to show n log(n / (n + 1)) + 1 > 0. 
-This term approaches 0 as n -> ∞. Hence, it suffices to show that its derivative
-   1/(n+1) + log (n/n+1)
-is strictly negative for n > 0. *) 
-axiom foo_monotone (n m : int) :
+lemma foo_monotone (n m : int) :
   0 <= n => n <= m => (n%r/(n+1)%r)^(n+1) <= (m%r/(m+1)%r)^(m+1).
+proof.
+suff nP : forall n, 0 <= n =>
+                    (n%r / (n + 1)%r) ^ (n + 1) <=
+                    ((n + 1)%r / (n + 1 + 1)%r) ^ (n + 1 + 1).
+- move => n_ge0; rewrite StdOrder.IntOrder.ler_eqVlt; move => [<- /#|mP].
+  have {mP} [q] : (exists q, m - n = q /\ 0 < q) by smt ().
+  have [p] : exists p, p = q - 1 by smt().
+  rewrite eq_sym subr_eq => ->; rewrite subr_eq addrC.
+  move => {q} [-> pP]; have {pP} pP : 0 <= p by smt().
+  elim: p pP; 1: smt().
+  move => i i_ge0 iP; apply (ler_trans _ _ _ iP).
+  apply (ler_trans (((n+i+1)%r/((n+i+1)+1)%r)^((n+i+1)+1))); 1: smt().
+  have {i_ge0 n_ge0} n_ge0 : 0<= n + i + 1 by smt().
+  by apply (ler_trans _ _ _ (nP _ n_ge0)); smt().
+- move => {m n} n; rewrite StdOrder.IntOrder.ler_eqVlt; move => [<-|n_gt0];
+    1: by rewrite add0r mul0r exprSr // !expr1; smt(mulr_ge0).
+  have -> : ((n + 1)%r / (n + 1 + 1)%r) ^ (n + 1 + 1) =
+            (n%r / (n + 1)%r) ^ (n + 1) * ((n + 1)%r / (n + 2)%r) *
+            ((n + 1)%r ^2 / (n%r * (n + 2)%r)) ^ (n + 1).
+  + rewrite mulrAC -exprMn; 1: smt().
+    suff -> : n%r / (n + 1)%r * ((n + 1)%r ^ 2 / (n%r * (n + 2)%r)) =
+              (n + 1)%r / (n + 2)%r by smt(exprSr).
+    by rewrite expr2; algebra; smt(expr2).
+  have {1}-> : (n%r/(n+1)%r)^(n+1) = (n%r/(n+1)%r)^(n+1)*1%r by smt().
+  rewrite -subr_ge0 -!mulrA -mulrBr mulr_ge0; 1: smt(expr_gt0).
+  rewrite subr_ge0 -ler_pdivr_mull; 1: smt().
+  rewrite -ler_pdivr_mull; 1: smt().
+  apply (ler_trans (1%r + 1%r / (n + 1)%r));
+    1: by rewrite -subr_ge0 le0r; left; algebra; smt().
+  have -> : (n + 1)%r ^ 2 / (n%r * (n + 2)%r) = 1%r + 1%r / (n%r * (n + 2)%r)
+    by algebra; smt(expr2).
+  apply (ler_trans (1%r + (n + 1)%r / (n%r * (n + 2)%r))).
+  + suff : 1%r / (n + 1)%r <= (n + 1)%r / (n%r * (n + 2)%r) by smt().
+    rewrite -ler_pdivl_mulr; 1: smt().
+    apply (ler_trans ((n + 1)%r ^ 2 / (n%r * (n + 2)%r))).
+    * move: (subr_sqr_1 (n + 1)%r); rewrite subr_eq => ->.
+      rewrite ler_pdivl_mulr ?mul1r; 1: smt().
+      suff: n%r * (n + 2)%r <= ((n + 1)%r - 1%r) * ((n + 1)%r + 1%r); 1: smt().
+      by rewrite -fromintD -fromintB; smt().
+    * by rewrite -subr_ge0 le0r; left; algebra; smt(expr2).
+  + rewrite Binomial.BCR.binomial; 1: smt().
+    rewrite 2?rangeSr; 1,2: smt().
+    rewrite !StdBigop.Bigreal.BRA.big_rcons /predT /=.
+    rewrite -addrA Binomial.binn; 1: smt().
+    apply ler_paddl.
+    * apply StdBigop.Bigreal.sumr_ge0_seq.
+      move => a aP _; rewrite mulr_ge0; 1: smt(Binomial.ge0_bin).
+      by rewrite expr1z mul1r; smt(expr_gt0).
+    * have -> : n + 1 - n = 1 by algebra.
+      rewrite !expr1z expr0 expr1 !mul1r.
+      suff -> : (Binomial.bin (n + 1) n)%Binomial = n + 1 by smt().
+      have {n_gt0} n_ge0 : 0 <= n by smt().
+      elim: n n_ge0; 1: smt(Binomial.bin0).
+      move => n n_ge0 nP; rewrite Binomial.binSn; 1,2: smt().
+      by rewrite nP Binomial.binn; smt().
+qed.
 
 section.
 
