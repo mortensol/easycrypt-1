@@ -42,7 +42,7 @@ axiom exp_inv_f  : forall a, a^(f * inv f) = a.
 axiom exp_inj    : injective_on EU(exp g).
 axiom exp_inj'   : forall x, injective_on EU(fun z => exp g (x*z)).
 
-axiom img_exp    : forall x, image (fun z => exp g (x*z)) EU = image (exp g) EU.
+axiom img_exp    : forall x, x \in EU => image (fun z => exp g (x*z)) EU = image (exp g) EU.
 
 axiom Emult x y  : x \in EU => y \in EU => x * y \in EU.
 axiom Einv x     : x \in EU => inv x \in EU. 
