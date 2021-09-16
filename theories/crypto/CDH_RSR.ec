@@ -1,5 +1,5 @@
 require import AllCore List Distr DBool DInterval DList.
-require import FinType FSet NominalGroup.
+require import FinType FSet NominalGroup PROM.
 
 import Distr.MRat.
 import DBool.Biased.
@@ -34,10 +34,68 @@ axiom sdist_dlist &m (A <: Distinguisher) :
   `| Pr[ SampleDlist(A).main(false) @ &m : res ] - Pr[ SampleDlist(A).main(true) @ &m : res ] | <= n%r * sdist d1 d2.
 
 end D.
-print D.
-
 
 clone import NominalGroup.NominalGroup as N.
+
+op e : Z.
+axiom e_EU : e \in EU.
+op nth' (zs : Z list) = nth e zs.
+
+op elog (x : G) = choiceb (fun a => a \in EU /\ x = exp g a) e.
+
+op elogr (y : Z) (b : G) = choiceb (fun x => x \in EU /\ b = exp g (y*x)) e.
+
+lemma exprK (x y : Z) : x \in EU => y \in EU => elogr y (exp g (y*x)) = x.
+proof. 
+move => x_EU y_EU; rewrite /elogr /=.
+have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g (y*x) = exp g (y*a)) e _; 1: by exists x.
+apply (exp_inj' y) => //. by rewrite -E2.
+qed.
+
+(* we only get one cancelation law *)
+lemma expK (x : Z) : x \in EU => elog (exp g x) = x.
+proof. 
+move => x_EU; rewrite /elog /=.
+have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g x = exp g a) e _; 1: by exists x.
+by apply exp_inj => //; rewrite -E2.
+qed.
+
+abstract theory Test.
+
+module T = {
+
+  proc f () = { 
+    var a;
+    a <$ duniform (elems EU); 
+    return (a,exp g a);
+  }
+
+  proc g () = { 
+    var ga;
+    ga <$ dmap (duniform (elems EU)) (exp g); 
+    return (elog ga,ga);
+  }
+}.
+
+equiv foo : T.f ~ T.g : true ==> ={res}.
+proof.
+proc.
+rnd (exp g) (elog); skip => />. split => [|_]. 
+  move => ? /supp_dmap [x [/supp_duniform ? ->]]; rewrite expK ?memE //.
+split => [|_]. 
+  move => ? /supp_dmap [x [/supp_duniform x_EU ->]]; rewrite dmap1E /(\o) /= expK ?memE //.
+  rewrite (mu_eq_support _ _ (pred1 x)) // /pred1 => y /supp_duniform y_EU /=.
+admitted.
+
+end Test.  
+
+lemma elog_EU x : elog x \in EU.
+proof. 
+rewrite /elog. case (exists a, a \in EU /\ x = exp g a) => [E|nE].
+  by have /= := choicebP (fun a => a \in EU /\ x = exp g a) e E.
+by rewrite choiceb_dfl 1:/# e_EU.
+qed.
+
 
 lemma dlist_EU n x xs : xs \in dlist (duniform (elems EU)) n => x \in xs => x \in EU.
 proof.
@@ -176,9 +234,6 @@ module Count (O : CDH_RSR_Oracles) = {
   }
 }.
 
-op e : Z.
-axiom e_EU : e \in EU.
-op nth' (zs : Z list) = nth e zs.
 
 (* The acutal CDH_RSR game: initialize oracles and counters and
 dispatach to adversary *)
@@ -363,7 +418,7 @@ module G2b = {
 
 
 (* Inner theory, parametric in the probability of inserting the NCDH problem *)
-theory Inner.
+abstract theory Inner.
 
 op pa,pb : real.
 axiom pa_bound : 0%r < pa && if q_oa = 0 then pa <= 1%r else pa < 1%r.
