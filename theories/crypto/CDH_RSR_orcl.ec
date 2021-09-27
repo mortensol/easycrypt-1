@@ -1,4 +1,4 @@
-require import AllCore List Distr DBool DInterval DList.
+require import AllCore List Distr DBool DInterval DList SmtMap.
 require import FinType FSet NominalGroup PROM.
 
 import Distr.MRat.
@@ -31,7 +31,9 @@ module SampleDlist (A : Distinguisher) = {
 }.
 
 axiom sdist_dlist &m (A <: Distinguisher) :
-  `| Pr[ SampleDlist(A).main(false) @ &m : res ] - Pr[ SampleDlist(A).main(true) @ &m : res ] | <= n%r * sdist d1 d2.
+  `| Pr[SampleDlist(A).main(false) @ &m : res] -
+     Pr[SampleDlist(A).main(true ) @ &m : res] | <=
+  n%r * sdist d1 d2.
 
 end D.
 
@@ -43,42 +45,43 @@ op nth' (zs : Z list) = nth e zs.
 
 op elog (x : G) = choiceb (fun a => a \in EU /\ x = exp g a) e.
 
-op elogr (y : Z) (b : G) = choiceb (fun x => x \in EU /\ b = exp g (y*x)) e.
+op elogr (y : Z) (b : G) = choiceb (fun x => x \in EU /\ b = exp g (y * x)) e.
 
-lemma exprK (x y : Z) : x \in EU => y \in EU => elogr y (exp g (y*x)) = x.
-proof. 
+lemma exprK (x y : Z) : x \in EU => y \in EU => elogr y (exp g (y * x)) = x.
+proof.
 move => x_EU y_EU; rewrite /elogr /=.
-have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g (y*x) = exp g (y*a)) e _; 1: by exists x.
-apply (exp_inj' y) => //. by rewrite -E2.
+have := choicebP (fun a : Z => a \in EU /\ exp g (y * x) = exp g (y * a)) e _;
+[by exists x | move => [E1 E2]].
+by apply (exp_inj' y) => //; rewrite -E2.
 qed.
 
 (* we only get one cancelation law *)
 lemma expK (x : Z) : x \in EU => elog (exp g x) = x.
-proof. 
+proof.
 move => x_EU; rewrite /elog /=.
-have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g x = exp g a) e _; 1: by exists x.
-by apply exp_inj => //; rewrite -E2.
+have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g x = exp g a) e _;
+[by exists x | by apply exp_inj => //; rewrite -E2].
 qed.
 
 lemma elog_EU x : elog x \in EU.
-proof. 
-rewrite /elog. case (exists a, a \in EU /\ x = exp g a) => [E|nE].
-  by have /= := choicebP (fun a => a \in EU /\ x = exp g a) e E.
-by rewrite choiceb_dfl 1:/# e_EU.
+proof.
+rewrite /elog; case (exists a, a \in EU /\ x = exp g a) => [E | nE].
+- by have /= := choicebP (fun a => a \in EU /\ x = exp g a) e E.
+by rewrite choiceb_dfl ?e_EU // /#.
 qed.
 
-
-lemma dlist_EU n x xs : xs \in dlist (duniform (elems EU)) n => x \in xs => x \in EU.
+lemma dlist_EU n x xs :
+  xs \in dlist (duniform (elems EU)) n => x \in xs => x \in EU.
 proof.
-move => xs_d x_xs. rewrite memE -supp_duniform.
-move: xs_d; case (0 <= n) => Hn; last by rewrite supp_dlist0; smt().
-rewrite supp_dlist // => -[? /allP H]; exact: H.
+move => xs_d x_xs; rewrite memE -supp_duniform.
+move: xs_d; case (0 <= n) => Hn; 2: by rewrite supp_dlist0; smt().
+by rewrite supp_dlist // => -[? /allP H]; exact: H.
 qed.
 
 lemma fcard_oflist (s : 'a list) : card (oflist s) <= size s.
 proof.
-elim: s => [|x s IHs]; first by rewrite -set0E fcards0.
-rewrite oflist_cons fcardU fcard1 /=; smt(fcard_ge0).
+elim: s => [|x s IHs]; 1: by rewrite -set0E fcards0.
+by rewrite oflist_cons fcardU fcard1 /=; smt(fcard_ge0).
 qed.
 
 (* The CDH Game for Nominal Groups, with and without the factor for exponentiation *)
@@ -86,76 +89,76 @@ qed.
 theory NCDH.
 
 module type Adversary = {
-  proc solve(gx gy: G): G
+  proc solve (gx gy : G) : G
 }.
 
 module Game (A:Adversary) = {
-  proc main(): bool = {
+  proc main () : bool = {
   var x, y, r;
 
   x <$ duniform (elems EU);
   y <$ duniform (elems EU);
   r <@ A.solve(exp g x, exp g y);
-    return (r = exp g (x * y));
+  return (r = exp g (x * y));
   }
 }.
 
 module Game' (A:Adversary) = {
-  proc main(): bool = {
+  proc main () : bool = {
   var x, y, r;
 
   x <$ duniform (elems EU);
   y <$ duniform (elems EU);
-  r <@ A.solve(g^x, g^y);
-    return (r = g^(x * y));
+  r <@ A.solve(g ^ x, g ^ y);
+  return (r = g ^ (x * y));
   }
 }.
 
 module B (A : Adversary) = {
-  proc solve (gx gy: G) : G = {
+  proc solve (gx gy : G) : G = {
     var r;
 
-    r <@ A.solve(gx^inv f,gy^inv f);
-    return (r^f);
+    r <@ A.solve(gx ^ inv f, gy ^ inv f);
+    return (r ^ f);
   }
 }.
 
 (* If A wins against the "factor game", B(A) wins against the game w/o factors *)
 lemma unfactor (A <: Adversary) :
-  equiv[ Game(A).main ~ Game'(B(A)).main : ={glob A} ==> res{1} => res{2}].
+  equiv[Game(A).main ~ Game'(B(A)).main : ={glob A} ==> res{1} => res{2}].
 proof.
 proc; inline *; auto.
-call (:true) => //. auto; rewrite /exp => />; smt(expM exp_inv_f mulA mulC).
+by call (: true) => //; auto; rewrite /exp => />; smt(mulA mulC powM pow_inv_f).
 qed.
 
 end NCDH.
 
-op na : { int | 0 <= na } as na_ge0.
-op nb : { int | 0 <= nb } as nb_ge0.
-op q_oa : { int | 0 <= q_oa } as q_oa_ge0.
-op q_ob : { int | 0 <= q_ob } as q_ob_ge0.
-op q_ddh : { int | 1 <= q_ddh } as q_ddh_ge1.
+op na :    {int | 0 <= na}    as na_ge0.
+op nb :    {int | 0 <= nb}    as nb_ge0.
+op q_oa :  {int | 0 <= q_oa}  as q_oa_ge0.
+op q_ob :  {int | 0 <= q_ob}  as q_ob_ge0.
+op q_ddh : {int | 1 <= q_ddh} as q_ddh_ge1.
 
 clone D as Da with
-  type a <- Z,
-  op n <- na,
-  op d1 <- dZ,
-  op d2 <- duniform (elems EU),
+  type a      <- Z,
+  op n        <- na,
+  op d1       <- dZ,
+  op d2       <- duniform (elems EU),
   axiom n_ge0 <- na_ge0.
 
 clone D as Db with
-  type a <- Z,
-  op n <- nb,
-  op d1 <- dZ,
-  op d2 <- duniform (elems EU),
+  type a      <- Z,
+  op n        <- nb,
+  op d1       <- dZ,
+  op d2       <- duniform (elems EU),
   axiom n_ge0 <- nb_ge0.
 
 module type CDH_RSR_Oracles = {
-  proc oA(i : int) : G
-  proc oB(j : int) : G
-  proc oa(j : int) : Z
-  proc ob(j : int) : Z
-  proc ddh(g:G,i:int,j:int) : bool
+  proc oA  (i : int) : G
+  proc oB  (j : int) : G
+  proc oa  (j : int) : Z
+  proc ob  (j : int) : Z
+  proc ddh (g : G, i : int, j : int) : bool
 }.
 
 module type CDH_RSR_Oracles_i = {
@@ -164,7 +167,7 @@ module type CDH_RSR_Oracles_i = {
 }.
 
 module type Adversary (O : CDH_RSR_Oracles) = {
-  proc guess() : bool
+  proc guess () : bool
 }.
 
 (* Counting wrapper for CDH_RSR Oracles *)
@@ -196,7 +199,7 @@ module Count (O : CDH_RSR_Oracles) = {
     return r;
   }
 
-  proc ddh (m : G, i,j : int) = {
+  proc ddh (m, i, j) = {
     var r;
 
     cddh <- cddh + 1;
@@ -205,14 +208,12 @@ module Count (O : CDH_RSR_Oracles) = {
   }
 }.
 
-
-
 (* The actual CDH_RSR game: initialize oracles and counters and
 dispatach to adversary *)
 module Game (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
   module O' = Count(O)
 
-  proc main() = {
+  proc main () = {
     var r;
     O.init();
     O'.init();
@@ -226,56 +227,61 @@ cryptoprim.pdf *)
 
 require import PROM.
 
-clone import FullRO as FRO with 
-  type in_t  <- int,
-  type out_t <- Z,
-  op dout <- fun _ => dZ,
-  type d_in_t <- unit,
+clone import FullRO as FROZ with
+  type in_t    <- int,
+  type out_t   <- Z,
+  op dout      <- fun _ => dZ,
+  type d_in_t  <- unit,
   type d_out_t <- bool.
 
-clone MkRO as RA.
-clone MkRO as RB.
-module OA = RA.RO.
-module OB = RB.RO.
+clone FROZ.MkRO as RAZ.
+clone FROZ.MkRO as RBZ.
+module OAZ = RAZ.RO.
+module OBZ = RBZ.RO.
 
 module G1 : CDH_RSR_Oracles = {
-  
   proc init () = {
-    OA.init();
-    OB.init();
+    OAZ.init();
+    OBZ.init();
   }
 
-  proc oa (i : int) = { 
+  proc oa (i : int) = {
     var a;
-    a <@ OA.get(i);
-    return a; 
+
+    a <@ OAZ.get(i);
+    return a;
   }
 
-  proc ob (j : int) = { 
+  proc ob (j : int) = {
     var b;
-    b <@ OB.get(j);
+
+    b <@ OBZ.get(j);
     return b;
-  } 
+  }
 
-  proc oA (i : int) = { 
+  proc oA (i : int) = {
     var a;
-    a <@ OA.get(i);
-    return exp g a; 
+
+    a <@ OAZ.get(i);
+    return exp g a;
   }
 
-  proc oB (j : int) = { 
+  proc oB (j : int) = {
     var b;
-    b <@ OB.get(j);
-    return exp g b; 
+
+    b <@ OBZ.get(j);
+    return exp g b;
   }
 
-  proc ddh(m, i, j) = {
+  proc ddh (m, i, j) = {
     var a, b, r;
-    a <- e; b <- e;
+
+    a <- e;
+    b <- e;
     r <- false;
     if (0 <= i < na /\ 0 <= j < nb) {
-      a <- OA.get(i);
-      b <- OB.get(j);
+      a <- OAZ.get(i);
+      b <- OBZ.get(j);
       r <- m = exp g (a * b);
     }
     return r;
@@ -285,7 +291,7 @@ module G1 : CDH_RSR_Oracles = {
 module G2 : CDH_RSR_Oracles = {
   include G1 [oA, oB]
 
-  var ca,cb : int list
+  var ca, cb : int list
 
   proc init () = {
     G1.init();
@@ -293,26 +299,31 @@ module G2 : CDH_RSR_Oracles = {
     cb <- [];
   }
 
-  proc oa (i : int) = { 
+  proc oa (i : int) = {
     var a;
-    ca <- i::ca; 
-    a <@ OA.get(i);
+
+    ca <- i :: ca;
+    a <@ OAZ.get(i);
     return a;
   }
 
-  proc ob (j : int) = { 
+  proc ob (j : int) = {
     var b;
-    cb <- j::cb; 
-    b <@ OB.get(j);
+
+    cb <- j :: cb;
+    b <@ OBZ.get(j);
     return b;
   }
 
-  proc ddh(m, i, j) = {
+  proc ddh (m, i, j) = {
     var a, b, r;
-    r <- false; a <- e; b <- e;
+
+    a <- e;
+    b <- e;
+    r <- false;
     if (0 <= i < na /\ 0 <= j < nb) {
-      a <- OA.get(i);
-      b <- OB.get(j);
+      a <- OAZ.get(i);
+      b <- OBZ.get(j);
       if (i \in ca \/ j \in cb) {
         r <- m = exp g (a * b);
       }
@@ -326,7 +337,7 @@ module G2 : CDH_RSR_Oracles = {
 - once "bad" has been set, G no longer logs queries to oa/ob *)
 
 module G = {
-  include var G2 [-ddh,init,oa,ob]
+  include var G2 [oA, oB]
   var bad : bool
 
   proc init () = {
@@ -336,65 +347,116 @@ module G = {
 
   proc oa (i : int) = {
     var a;
-    if (!bad) ca <- i::ca;
-    a <@ OA.get(i);
+
+    if (!bad) ca <- i :: ca;
+    a <@ OAZ.get(i);
     return a;
   }
 
   proc ob (j : int) = {
     var b;
-    if (!bad) cb <- j::cb;
-    b <@ OB.get(j);
+
+    if (!bad) cb <- j :: cb;
+    b <@ OBZ.get(j);
     return b;
   }
 
-  proc ddh(m : G, i,j : int) = {
-    var a, b, r;
-    r <- false; a <- e; b <- e;
+  proc ddh (m, i, j) = {
+    var a, b, r, t;
+
+    a <- e;
+    b <- e;
+    r <- false;
+    t <- false;
     if (0 <= i < na /\ 0 <= j < nb) {
-      a <@ OA.get(i);
-      b <@ OB.get(j);
+      a <@ OAZ.get(i);
+      b <@ OBZ.get(j);
+      t <- m = exp g (a * b);
       if (i \in ca \/ j \in cb) {
-        r <- m = exp g (a * b); 
+        r <- t;
       } else {
-        bad <- bad \/ m = exp g (a * b); 
+        bad <- bad \/ t;
       }
     }
     return r;
   }
-
 }.
 
-
-(*
 (* G' behaves like G, but samples invertible exponents (i.e. from EU *)
+
+clone import FullRO as FROEU with
+  type in_t   <- int,
+  type out_t  <- Z,
+  op dout     <- fun _ => duniform (elems EU),
+  type d_in_t <- unit,
+  type d_out_t <- bool.
+
+clone FROEU.MkRO as RAEU.
+clone FROEU.MkRO as RBEU.
+module OAEU = RAEU.RO.
+module OBEU = RBEU.RO.
+
 module G' = {
-  import var G1 G2
-  include var G [-init]
+  import var G2 G
 
   proc init () = {
-    a <$ dlist (duniform (elems EU)) na;
-    b <$ dlist (duniform (elems EU)) nb;
-    ca <- [];
-    cb <- [];
+    OAEU.init();
+    OBEU.init();
+    ca  <- [];
+    cb  <- [];
     bad <- false;
   }
-}.
 
-(* G' behaves like G, but samples invertible exponents (i.e. from EU *)
-module G'' = {
-  import var G1 G2
-  include var G [-init]
+  proc oa (i : int) = {
+    var a;
 
-  proc init () = {
-    a <$ dlist (duniform (elems EU)) na;
-    b <$ dlist dZ nb;
-    ca <- [];
-    cb <- [];
-    bad <- false;
+    if (!bad) ca <- i :: ca;
+    a <@ OAEU.get(i);
+    return a;
+  }
+
+  proc ob (j : int) = {
+    var b;
+
+    if (!bad) cb <- j :: cb;
+    b <@ OBEU.get(j);
+    return b;
+  }
+
+  proc oA (i : int) = {
+    var a;
+
+    a <@ OAEU.get(i);
+    return exp g a;
+  }
+
+  proc oB (j : int) = {
+    var b;
+
+    b <@ OBEU.get(j);
+    return exp g b;
+  }
+
+  proc ddh (m, i, j) = {
+    var a, b, r, t;
+
+    a <- e;
+    b <- e;
+    r <- false;
+    t <- false;
+    if (0 <= i < na /\ 0 <= j < nb) {
+      a <@ OAEU.get(i);
+      b <@ OBEU.get(j);
+      t <- m = exp g (a * b);
+      if (i \in ca \/ j \in cb) {
+        r <- t;
+      } else {
+        bad <- bad \/ t;
+      }
+    }
+    return r;
   }
 }.
-
 
 (* Proof outline:
 
@@ -407,44 +469,11 @@ module G'' = {
    Gk[ bad set at k-th call /\ !stop] <= S receives critical ddh call <= B wins NCDH game.
 *)
 
-
-(* The game G1b (resp. G2b) behave the same as G1 (resp. G2), but
-includes a bad event that is equivalent to the bad event in G *)
-
-module G1b = {
-  import var G1 G2
-  include var G [-ddh]
-
-  proc ddh(m : G, i,j : int) = {
-    var t;
-
-    t <- m = exp g (nth' a i * nth' b j);
-
-    (* execute bad if neither was leaked and "false" is not the right answer *)
-    if (0 <= i && i < na /\ 0 <= j && j < nb
-      /\ !(i \in ca || j \in cb) /\ t)
-    { bad <- true; }
-
-    return
-      if 0 <= i && i < na /\ 0 <= j && j < nb
-      then t
-      else false;
-  }
-}.
-
-module G2b = {
-  import var G1 G2
-  include var G [-oa,ob]
-
-  proc oa = G2.oa
-  proc ob = G2.ob
-}.
-
-
 (* Inner theory, parametric in the probability of inserting the NCDH problem *)
+
 abstract theory Inner.
 
-op pa,pb : real.
+op pa, pb : real.
 axiom pa_bound : 0%r < pa && if q_oa = 0 then pa <= 1%r else pa < 1%r.
 axiom pb_bound : 0%r < pb && if q_ob = 0 then pb <= 1%r else pb < 1%r.
 
@@ -456,6 +485,7 @@ with the game G' (more precisely the intermediate game Gk' below), we
 need to align the randomness for a and b by multiplying/dividing by x
 (resp y) whenever ia[i] (resp ib[j]) is true. *)
 
+(*
 module S = {
   import var G1 (* var a, b : Z list *)
   var ia, ib : bool list (* inject a/b *)
@@ -518,7 +548,6 @@ module S = {
   }
 }.
 
-
 module S = {
   import var G1 (* var a, b : Z list *)
   var ia, ib : bool list (* inject a/b *)
@@ -566,24 +595,21 @@ module S = {
 
     if (0 <= i && i < na /\ 0 <= j && j < nb) {
       if (i \in ca) { (* i in ca => !nth false ia i *)
-        if (nth false ib j) r <- m = gy^(nth' b j) ^ nth' a i;  
+        if (nth false ib j) r <- m = gy^(nth' b j) ^ nth' a i;
                                  m = exp g (nth' b j * nth' a i);
         else                r <- m = exp g (nth' b j * nth' a i);
       } else if (j \in cb) { (* j in cb => !nth false ib j *)
-        if (nth false ia i) r <- m = gx^(nth' a i) ^ nth' b j; 
-                                 m = exp g (nth' b j * nth' a i);  
+        if (nth false ia i) r <- m = gx^(nth' a i) ^ nth' b j;
+                                 m = exp g (nth' b j * nth' a i);
         else                r <- m = exp g (nth' b j * nth' a i);
       } else { (* !(i \in ca) /\ !(j \in cb) *)
         if (cddh = k) { m_crit <- m^(inv (nth' a i) * inv(nth' b j));
                         bad <- m^(inv (nth' a i) * inv(nth' b j)) = exp g (x * y);
                                m = exp g (y * nth' b j) ^ (x * nth' a i)
                                m = gy^(nth' b j) ^ (x * nth' a i) (* rnd rule to replace gy^(nth' b j) by exp g (nth' b j) *)
-                               m = (exp g (nth' b j)) ^ (x * nth' a i) 
+                               m = (exp g (nth' b j)) ^ (x * nth' a i)
                                m = (exp g ( x * nth' a i)) ^ (nth' b j)   (* rnd rule to replace gx^(nth' a i) by exp g (nth' a i) *)
                                m = exp g ((nth' a i) * (nth' b j)
-
-                
-                      
       }
     }
     return r;
@@ -599,95 +625,112 @@ module S = {
                         bad <- m^(inv (nth' a i) * inv(nth' b j)) = exp g (x * y);
                                m = exp g (y * nth' b j) ^ (x * nth' a i)
                                m = gy^(nth' b j) ^ (x * nth' a i) (* rnd rule to replace gy^(nth' b j) by exp g (nth' b j) *)
-                               m = (exp g (nth' b j)) ^ (x * nth' a i) 
+                               m = (exp g (nth' b j)) ^ (x * nth' a i)
                                m = (exp g (nth' a i)) ^ (nth' b j)   (* rnd rule to replace gy^(nth' b j) by exp g (nth' b j) *)
                                m = exp g ((nth' a i) * (nth' b j)
-
-                
-                      
       }
     }
 }.
+*)
 
+clone import FullRO as FROG with
+  type in_t   <- int,
+  type out_t  <- G,
+  op dout     <- fun _ => dmap (duniform (elems EU)) (exp g),
+  type d_in_t <- unit,
+  type d_out_t <- bool.
 
-
-
-
-
-
+clone FROG.MkRO as RAG.
+clone FROG.MkRO as RBG.
+module OAG = RAG.RO.
+module OBG = RBG.RO.
 
 module Sx = {
-  import var G1 (* var a, b : Z list *)
-  var ia, ib : bool list (* inject a/b *)
-  import var G2 (* var ca, cb : int list / call logs *)
-  var gx,gy : G
-  var m_crit : G
+  import var G2
   var cddh, k : int
+  var ia, ib : bool list (* inject a/b *)
+  var gx, gy : G
+  var m_crit : G
 
   proc init (x' : Z, y' : Z) = {
-    ia <$ dlist (dbiased pa) na;
-    ib <$ dlist (dbiased pb) nb;
-    a <$ dlist (duniform (elems EU)) na;
-    b <$ dlist (duniform (elems EU)) nb;
-    ca <- [];
-    cb <- [];
-    gx <- exp g x';
-    gy <- exp g y';
-    k <$ [1..q_ddh];
+    OAG.init();
+    OBG.init();
+    ca   <- [];
+    cb   <- [];
     cddh <- 0;
+    k    <$ [1..q_ddh];
+    ia   <$ dlist (dbiased pa) na;
+    ib   <$ dlist (dbiased pb) nb;
+    gx   <- exp g x';
+    gy   <- exp g y';
   }
 
   proc oa (i : int) = {
-    if (cddh < k) { ca <- i :: ca; }
-    return (nth' a i);
+    var a;
+
+    if (cddh < k) ca <- i :: ca;
+    a <@ OAG.get(i);
+    return (elog a);
   }
 
   proc ob (j : int) = {
-    if (cddh < k) { cb <- j :: cb; }
-    return (nth' b j);
+    var b;
+
+    if (cddh < k) cb <- j :: cb;
+    b <@ OBG.get(j);
+    return (elog b);
   }
 
   proc oA (i : int) = {
-    return (if nth false ia i then gx^(nth' aout i) else exp g (nth' ain i));
+    var a;
+
+    a <@ OAG.get(i);
+    return (if nth false ia i then a ^ (elog gx) else a);
   }
 
   proc oB (j : int) = {
-    return (if nth false ib j then gy^(nth' bout j) else exp g (nth' bin j));
+    var b;
+
+    b <@ OBG.get(j);
+    return (if nth false ib j then b ^ (elog gy) else b);
   }
 
-  proc ddh (m:G,i:int,j:int) = {
-    var r : bool;
+  proc ddh (m, i, j) = {
+    var a, b, r;
 
-    cddh <- cddh + 1;
+    a <- g;
+    b <- g;
     r <- false;
-
-    if (i \in ca) {
-      r <- m = (if nth false ib j then gy^(nth' bout j) else exp g (nth' bin j))^nth' ain i;
+    cddh <- cddh + 1;
+    if (0 <= i < na /\ 0 <= j < nb) {
+      a <@ OAG.get(i);
+      b <@ OBG.get(j);
+      if (i \in ca \/ j \in cb) {
+        if (i \in ca) {
+          r <- m = (if nth false ib j then b ^ (elog gy) else b) ^ (elog a);
+        }
+        if (i \in cb) {
+          r <- m = (if nth false ia i then a ^ (elog gx) else a) ^ (elog b);
+        }
+      } else {
+        (* record k-th query *)
+        if (cddh = k) {
+          m_crit <- m ^ (inv (elog a) * inv (elog b));
+        }
+      }
     }
-    if (j \in cb) {
-      r <- m = (if nth false ia i then gx^(nth' aout i) else exp g (nth' ain i))^nth' bin j;
-    }
-
-    (* record k-th query *)
-    if (0 <= i && i < na /\ 0 <= j && j < nb /\ !(i \in ca) /\ !(j \in cb) /\ cddh = k) {
-      m_crit <- m^(inv (elogr x (gx^(nth' aout i))) * inv(nth' bout j));
-    }
-
-    if (!(0 <= i && i < na /\ 0 <= j && j < nb)) { r <- false; }
     return r;
   }
 }.
 
-
-x * aout
-
 (* the simulation game *)
-module GameS (A : Adversary) = {
-  module O' = Count(S)
 
-  proc main(gx:G, gy:G) = {
+module GameSx (A : Adversary) = {
+  module O' = Count(Sx)
+
+  proc main(x : Z, y : Z) = {
     var r;
-    S.init(gx,gy);
+    Sx.init(x, y);
     O'.init();
     r <@ A(O').guess();
     return r;
@@ -695,21 +738,30 @@ module GameS (A : Adversary) = {
 }.
 
 (* adversary against CDH problem for nominal groups *)
+(*
 module B (A : Adversary) : NCDH.Adversary = {
   proc solve(gx gy : G) : G = {
     GameS(A).main(gx,gy);
     return S.m_crit;
   }
 }.
+*)
 
 op DELTA = (na + nb)%r * sdist dZ (duniform (elems EU)).
-*)
+
 axiom dZ_ll : is_lossless dZ.
 hint exact random : dZ_ll.
 
+lemma dEU_ll : is_lossless (duniform (elems EU)).
+proof. by smt(duniform_ll e_EU). qed.
+hint exact random : dEU_ll.
+
+lemma dG_ll : is_lossless (dmap (duniform (elems EU)) (exp g)).
+proof. by smt(dEU_ll dmap_ll). qed.
+
 section.
 
-declare module A : Adversary {G1,G2,G,Count}.
+declare module A : Adversary {G1, G2, G, Sx, Count, OAEU, OBEU, OAG, OBG}.
 
 axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.oA =>
@@ -727,78 +779,82 @@ axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
 local module G1b = {
   import var G2
   include var G [-ddh]
-  
-  proc ddh(m, i, j) = {
+
+  proc ddh (m, i, j) = {
     var a, b, r;
-    a <- e; b <- e;
+
+    a <- e;
+    b <- e;
     r <- false;
     if (0 <= i < na /\ 0 <= j < nb) {
-      a <- OA.get(i);
-      b <- OB.get(j);
+      a <- OAZ.get(i);
+      b <- OBZ.get(j);
       r <- m = exp g (a * b);
-      bad <- bad \/ (r /\ !(i \in ca \/ j \in cb)); 
+      bad <- bad \/ (r /\ !(i \in ca \/ j \in cb));
     }
     return r;
   }
 }.
 
 local module G2b = {
-  include G [-oa,ob]
-  include G2 [oa,ob]
+  include G  [-oa, ob]
+  include G2 [ oa, ob]
 }.
 
 local lemma G1G2_Gbad &m :
-  `| Pr[ Game(G1,A).main() @ &m : res ] - Pr[ Game(G2,A).main() @ &m : res ] | <=
-  Pr[ Game(G,A).main() @ &m : G.bad ].
+  `| Pr[Game(G1, A).main() @ &m : res] - Pr[Game(G2, A).main() @ &m : res] | <=
+  Pr[Game(G, A).main() @ &m : G.bad].
 proof.
 (* Introduce bad events into G1 and G2 *)
-have -> : Pr[ Game(G1,A).main() @ &m : res ] = Pr[ Game(G1b,A).main() @ &m : res ].
-+ by byequiv => //; proc; inline *; sim.
-have -> : Pr[ Game(G2,A).main() @ &m : res ] = Pr[ Game(G2b,A).main() @ &m : res ].
-+ by byequiv => //; proc; inline *; sim. 
+have -> : Pr[Game(G1, A).main() @ &m : res] = Pr[Game(G1b, A).main() @ &m : res].
+- by byequiv => //; proc; inline *; sim.
+have -> : Pr[Game(G2, A).main() @ &m : res] = Pr[Game(G2b, A).main() @ &m : res].
+- byequiv => //; proc; inline *.
+  call (: ={glob G2, glob Count}); try by (sim || auto).
+  by proc; inline *; sp; if; auto.
 (* we can continue logging oa/ob queries once bad happens *)
 have -> : Pr[Game(G, A).main() @ &m : G.bad] = Pr[Game(G2b, A).main() @ &m : G.bad].
-  byequiv => //; proc; inline *.
-  call (: G.bad, ={G.bad, glob G2,glob Count}, ={G.bad});
-   try by (sim /> || (move => *; conseq />; islossless)).
-  + exact: A_ll.
+- byequiv => //; proc; inline *.
+  call (: G.bad, ={glob G2, glob Count, G.bad}, ={G.bad});
+    try by (sim /> || (move => *; conseq />; islossless)).
+  + by exact: A_ll.
   + proc; inline G.oa G2b.oa.
-    by wp; call (: ={glob OA}); [sim | auto].
+    by wp; call (: ={glob OAZ}); [sim | auto].
   + proc; inline G.ob G2b.ob.
-    by wp; call (: ={glob OB}); [sim | auto].     
-  + by conseq (: _ ==> ={G.bad,glob G2,glob Count, res}) => //; sim.
+    by wp; call (: ={glob OBZ}); [sim | auto].
+  + by conseq (: _ ==> ={G.bad, glob G2, glob Count, res}) => //; sim.
   + move=> *; proc.
     inline G.ddh; sp; if; auto.
-    by conseq (: true); 1: smt(); islossless.
+    by conseq (: true); [smt() | islossless].
   + move=> *; proc.
     inline G2b.ddh; sp; if; auto.
-    by conseq (: true); 1: smt(); islossless.
-  by auto => /> /#.
-byequiv (_ : ={glob A} ==> ={G.bad} /\ (!G.bad{2} => ={res})) : G.bad => //; 2: smt().
-proc; inline *.
-call (_ : G.bad, ={G.bad,glob G2,glob Count}, ={G.bad});
- try by (sim /> || (move => *; conseq />; islossless)).
-+ exact: A_ll.
-+ proc; inline G1b.oa G2.oa; wp.
-  by call (: ={glob OA}); [sim | auto].
-+ proc; inline G1b.ob G2.ob; wp.
-  by call (: ={glob OB}); [sim | auto].
-+ proc; inline G1b.ddh G2b.ddh; sp.
+    by conseq (: true); [smt() | islossless].
+  + by auto => /> /#.
+byequiv (_ : ={glob A} ==> ={G.bad} /\ (!G.bad{2} => ={res})) : G.bad => //;
+[proc; inline * | smt()].
+call (_ : G.bad, ={G.bad, glob G2, glob Count}, ={G.bad});
+  try by (sim /> || (move => *; conseq />; islossless)).
+- by exact: A_ll.
+- proc; inline G1b.oa G2.oa; wp.
+  call (: ={glob OAZ}); [sim | auto].
+- proc; inline G1b.ob G2.ob; wp.
+  by call (: ={glob OBZ}); [sim | auto].
+- proc; inline G1b.ddh G2b.ddh; sp.
   if => //; 2: by auto.
-  wp; call(: ={glob OB});1: by sim.
-  call(: ={glob OA});1: by sim.
+  wp; call(: ={glob OBZ}); 1: by sim.
+  call(: ={glob OAZ}); 1: by sim.
   by auto => /> /#.
-+ move=> *; proc.
+- move=> *; proc.
   inline G1b.ddh; sp; if; auto.
   by conseq (: true); 1: smt(); islossless.
-+ move=> *; proc.
+- move=> *; proc.
   inline G2b.ddh; sp; if; auto.
   by conseq (: true); 1: smt(); islossless.
-auto => /> /#.
+- by auto => /> /#.
 qed.
 
-
 (** Expressing the games G, G' and G'' as distinguishers for statistical distance *)
+(*
 local module Ba : Da.Distinguisher = {
   import var G1 G2 G
 
@@ -832,11 +888,14 @@ local module Bb : Db.Distinguisher = {
     return G.bad;
   }
 }.
+*)
 
 (* what about res, do we care? *)
 local lemma G_G' &m :
-  `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] | <= DELTA.
+  `| Pr[Game(G, A).main() @ &m : G.bad] - Pr[Game(G', A).main() @ &m : G.bad] | <= DELTA.
 proof.
+admitted.
+(*
 rewrite /DELTA.
 have H1 : `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G'',A).main() @ &m : G.bad ] |
           <= na%r * sdist dZ (duniform (elems EU)).
@@ -866,73 +925,75 @@ have H2 : `| Pr[ Game(G'',A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m 
   exact (Db.sdist_dlist &m Bb).
 smt().
 qed.
+*)
 
 local module Gk : CDH_RSR_Oracles_i = {
-  import var G1 G2 G
-  include var G' [-init,ddh]
-  var k, k_bad, i_k, j_k, cddh : int
-  var ia,ib : bool list
+  import var G2 G
+  include var G' [-init, ddh]
+  var cddh, i_k, j_k, k, k_bad : int
+  var ia, ib : bool list
 
-  proc init() = {
-    ia <$ dlist (dbiased pa) na;
-    ib <$ dlist (dbiased pb) nb;
+  proc init () = {
     G'.init();
-    cddh <- 0;
+    k     <$ [1..q_ddh];
     k_bad <- -1;
-    i_k <- -1;
-    j_k <- -1;
-    k <$ [1..q_ddh];
+    i_k   <- -1;
+    j_k   <- -1;
+    cddh  <- 0;
+    ia    <$ dlist (dbiased pa) na;
+    ib    <$ dlist (dbiased pb) nb;
   }
 
-  proc ddh(m : G, i,j : int) = {
-    var t;
+  proc ddh(m, i, j) = {
+    var a, b, r, t;
+
+    a <- e;
+    b <- e;
+    r <- false;
+    t <- false;
     cddh <- cddh + 1;
-    t <- m = exp g (nth' a i * nth' b j);
-
-    (* execute bad if neither was leaked and "false" is not the right answer *)
-    if (0 <= i && i < na /\ 0 <= j && j < nb
-      /\ !(i \in ca || j \in cb) /\ t /\ !bad) {
-      bad <- true;
-      k_bad <- cddh;
-      i_k <- i;
-      j_k <- j;
+    if (0 <= i < na /\ 0 <= j < nb) {
+      a <@ OAEU.get(i);
+      b <@ OBEU.get(j);
+      t <- m = exp g (a * b);
+      if (i \in ca \/ j \in cb) {
+        r <- t;
+      } else {
+          if (t /\ ! bad) {
+            bad <- true;
+            k_bad <- cddh;
+            i_k <- i;
+            j_k <- j;
+        }
+      }
     }
-
-    return
-      if 0 <= i && i < na /\ 0 <= j && j < nb
-      then
-        (* answer honestly if a[i] or b[j] was leaked *)
-        if i \in ca || j \in cb
-        then t
-        else false
-      else false;
-   }
+    return r;
+  }
 }.
 
 (* Variant of Game, where the samling for Gk is done at the end *)
 local module Game' (O : CDH_RSR_Oracles_i ) (A : Adversary) = {
   var k : int
-  var ia,ib : bool list
+  var ia, ib : bool list
 
-  proc main() = {
+  proc main () = {
     Game(O, A).main();
-    k <$ [1..q_ddh];
+    k  <$ [1..q_ddh];
     ia <$ dlist (dbiased pa) na;
     ib <$ dlist (dbiased pb) nb;
   }
 }.
 
 local module Gk_lazy : CDH_RSR_Oracles_i = {
-  import var G1 G2 G
+  import var G2 G
   include var Gk [-init]
-  (* var k_bad, i_k, j_k, cddh : int *)
 
   proc init() = {
     G'.init();
-    cddh <- 0;
     k_bad <- -1;
-    i_k <- -1;
-    j_k <- -1;
+    i_k   <- -1;
+    j_k   <- -1;
+    cddh  <- 0;
   }
 }.
 
@@ -948,19 +1009,16 @@ local lemma Game_Game' &m :
      G.bad /\ Game'.k = Gk.k_bad /\ nstop Game'.ia Game'.ib G2.ca G2.cb /\
      nth false Game'.ia Gk.i_k /\ nth false Game'.ib Gk.j_k].
 proof.
-byequiv => //; proc; inline *; swap{1} [1..2] 14; swap{1} 10 4.
-seq 12 12 : (={glob A, glob G1, glob G2, glob Count, G.bad} /\
-             ={cddh,k_bad,i_k,j_k}(Gk,Gk)); 1: by auto.
-auto; auto.
-call (: ={glob G1, G2.ca, G2.cb, G.bad} /\ ={cddh,k_bad,i_k,j_k}(Gk,Gk)).
-- by proc.
-- by proc.
+byequiv => //; proc; inline *; swap{2} 13 3.
+call (: ={glob G', glob Count, G2.ca, G2.cb, G.bad} /\
+        ={cddh, i_k, j_k, k_bad}(Gk,Gk)).
+- proc; call (: ={glob OAEU}); [sim | auto].
+- proc; call (: ={glob OBEU}); [sim | auto].
 - by proc; inline *; auto.
 - by proc; inline *; auto.
-- by proc; inline *; auto.
+- by proc; inline *; sp; if; auto.
 - by auto => />.
 qed.
-
 
 (* hoare logic properties of Gk_lazy *)
 local lemma Gk_hoare :
@@ -969,16 +1027,14 @@ local lemma Gk_hoare :
          size G2.ca <= q_oa /\ size G2.cb <= q_ob /\ Gk.cddh <= q_ddh /\
          (G.bad => Gk.k_bad \in [1..q_ddh] /\
                   !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
-                  (0 <= Gk.i_k && Gk.i_k < na) /\
-                  (0 <= Gk.j_k && Gk.j_k < nb)) ].
+                  (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb))].
 proof.
 conseq (: _ ==> Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
                 (Gk.cddh <= q_ddh =>
                   (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
                   (G.bad => Gk.k_bad \in [1..q_ddh] /\
                             !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
-                            (0 <= Gk.i_k && Gk.i_k < na) /\
-                            (0 <= Gk.j_k && Gk.j_k < nb)))))
+                            (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb)))))
        (: _ ==> Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh);
   2: (by proc; seq 2 : (Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0);
          [by inline *; auto|by call (A_bound Gk_lazy)]); 1: smt().
@@ -988,10 +1044,17 @@ call (: Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
                 (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
                 (G.bad => Gk.k_bad \in [1..q_ddh] /\
                           !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
-                          (0 <= Gk.i_k && Gk.i_k < na) /\
-                          (0 <= Gk.j_k && Gk.j_k < nb)))));
-  1..5: by proc; inline *; auto => />; smt(supp_dinter).
-by auto => />.
+                          (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb))))).
+- by proc; call (: true); auto.
+- by proc; call (: true); auto.
+- proc; inline Gk_lazy.oa; sp; wp.
+  by call (: true); auto => /#.
+- proc; inline Gk_lazy.ob; sp; wp.
+  by call (: true); auto => /#.
+- proc; inline Gk_lazy.ddh; sp; if; auto; 2 :smt().
+  call (: true); auto.
+  by call (: true); auto; smt(supp_dinter).
+- by auto => />.
 qed.
 
 local lemma guess_bound &m :
@@ -1002,7 +1065,7 @@ local lemma guess_bound &m :
      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
 proof.
 pose p := Pr[Game(G', A).main() @ &m : G.bad].
-pose c := (1%r-pa)^q_oa * pa * (1%r- pb)^q_ob * pb.
+pose c := (1%r-pa) ^ q_oa * pa * (1%r- pb) ^ q_ob * pb.
 rewrite Game_Game'; byphoare (_ : glob A = (glob A){m} ==> _) => //; proc.
 seq 1 : G.bad p (1%r/q_ddh%r * c) _ 0%r
         (size G2.ca <= q_oa /\ size G2.cb <= q_ob /\
@@ -1014,8 +1077,8 @@ seq 1 : G.bad p (1%r/q_ddh%r * c) _ 0%r
 - by call Gk_hoare; skip; smt().
 - call (: (glob A) = (glob A){m} ==> G.bad); 2: by auto.
   bypr => &m' gA; rewrite /p; byequiv => //; proc; inline *.
-  call (: ={glob G1, glob G2, glob Count, G.bad}); 1..4: (by sim);
-  [by proc; inline*; auto; smt()|by auto; smt()].
+  call (: ={glob G', glob Count, G2.ca, G2.cb, G.bad}); 1..4: (by sim);
+  [by proc; inline *; auto; sp; if; auto => /# | by auto; smt()].
 - seq 1 : (Game'.k = Gk.k_bad) (1%r/q_ddh%r) c _ 0%r
           (G.bad /\ size G2.ca <= q_oa /\ size G2.cb <= q_ob /\
           !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
@@ -1074,41 +1137,46 @@ all). Hence, the simulation S, which cannot check for the bad event,
 can simply record the k-th ddh query. *)
 
 local module Gk' : CDH_RSR_Oracles_i = {
-  import var G1 G2 G
-  include var Gk [-init,ddh]
+  import var G2 G
+  include var Gk [-init, ddh]
 
-  proc init() = {
-    ia <$ dlist (dbiased pa) na;
-    ib <$ dlist (dbiased pb) nb;
+  proc init () = {
     G'.init();
-    cddh <- 0;
-    i_k <- -1;
-    j_k <- -1;
-    k <$ [1..q_ddh];
+    k     <$ [1..q_ddh];
+    i_k   <- -1;
+    j_k   <- -1;
+    cddh  <- 0;
+    ia    <$ dlist (dbiased pa) na;
+    ib    <$ dlist (dbiased pb) nb;
   }
 
-  proc ddh(m : G, i,j : int) = {
-    var t;
+  proc ddh (m, i, j) = {
+    var a, b, r, t;
+
+    a <- e;
+    b <- e;
+    r <- false;
+    t <- false;
     cddh <- cddh + 1;
-    t <- m = exp g (nth' a i * nth' b j);
-
-    if (0 <= i && i < na /\ 0 <= j && j < nb
-      /\ !(i \in ca || j \in cb) /\ t /\ cddh = k /\ !bad) {
-      bad <- true;
-      i_k <- i;
-      j_k <- j;
+    if (0 <= i < na /\ 0 <= j < nb) {
+      a <@ OAEU.get(i);
+      b <@ OBEU.get(j);
+      t <- m = exp g (a * b);
+      if (i \in ca \/ j \in cb) {
+        r <- t;
+      } else {
+          if (t /\ cddh = k /\ ! bad) {
+            bad <- true;
+            i_k <- i;
+            j_k <- j;
+        }
+      }
     }
-
-    return
-      if 0 <= i && i < na /\ 0 <= j && j < nb
-      then
-        if i \in ca || j \in cb
-        then t
-        else false
-      else false;
+    return r;
   }
 }.
 
+(*
 local module Gk' : CDH_RSR_Oracles_i = {
   import var G1 G2 G
   include var Gk [-init,ddh]
@@ -1128,33 +1196,30 @@ local module Gk' : CDH_RSR_Oracles_i = {
     var r;
     cddh <- cddh + 1;
 
-   
     if (0 <= i && i < na /\ 0 <= j && j < nb) {
-      if (i \in ca || j \in cb) { 
-        t <- m = exp g (nth' a i * nth' b j);     
+      if (i \in ca || j \in cb) {
+        t <- m = exp g (nth' a i * nth' b j);
         r <- t;
       } else {
-        if (cddh = k) { 
-          bad <- m = exp g (nth' a i * nth' b j); 
+        if (cddh = k) {
+          bad <- m = exp g (nth' a i * nth' b j);
                    = exp g (nth' a i) ^ nth' b j
                    = exp g (x * nth' a i) ^ nth' b j   (* rnd *)
-                   = exp g (nth' b j) ^ (x * nth' a i) 
+                   = exp g (nth' b j) ^ (x * nth' a i)
                  m = exp g (y * nth' b j) ^ (x * nth' a i)  (* rnd *)
                  m^(inv a * inv b) = exp g (x * y)
-
-        } 
-        r <- false 
+        }
+        r <- false
       }
-    } else { 
-      r <- false; 
+    } else {
+      r <- false;
     }
 
     return r;
- } 
+ }
 
     t <- m = exp g (nth' a i * nth' b j);
 
-    
     if (0 <= i && i < na /\ 0 <= j && j < nb
       /\ !(i \in ca || j \in cb) /\ t /\ cddh = k /\ !bad) {
       bad <- true;
@@ -1171,24 +1236,302 @@ local module Gk' : CDH_RSR_Oracles_i = {
       else false;
   }
 }.
+*)
 
 (* should be an equality, but this suffices *)
 local lemma Gk_Gk' &m :
-  Pr [Game(Gk,A).main() @ &m :
-      G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
-  Pr [Game(Gk',A).main() @ &m :
-      G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
-      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
+  Pr[Game(Gk,A).main() @ &m :
+     G.bad /\ Gk.k = Gk.k_bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
+  Pr[Game(Gk',A).main() @ &m :
+     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
 proof.
-byequiv => //. proc; inline *. symmetry.
+byequiv => //; proc; inline *; symmetry.
 call (: G.bad /\ Gk.k <> Gk.k_bad,
-  ={glob G1,glob G2,G.bad} /\ ={cddh,k,ia,ib,i_k,j_k}(Gk,Gk)
-  /\ (G.bad <=> Gk.k = Gk.k_bad){2});
-  try by move => *; proc; inline *; auto => />.
-- exact A_ll.
-- move => *; proc; inline *; auto => /> /#.
-- auto => />; smt(supp_dinter).
+        ={glob G', G2.ca, G2.cb, G.bad} /\
+        ={cddh, i_k, j_k, k}(Gk,Gk) /\
+        (G.bad <=> Gk.k = Gk.k_bad){2});
+  try by (sim /> || (move => *; conseq />; islossless)).
+- by exact A_ll.
+- by proc; inline *; sp; if; auto => /#.
+- move => {&m} &m; proc; inline *; sp; if; auto; smt(dEU_ll).
+- by auto => />; smt(supp_dinter).
+qed.
+
+local module Gkx : CDH_RSR_Oracles_i = {
+  import var G2 G Gk
+
+  proc init () = {
+    OAG.init();
+    OBG.init();
+    ca  <- [];
+    cb  <- [];
+    bad <- false;
+    k     <$ [1..q_ddh];
+    i_k   <- -1;
+    j_k   <- -1;
+    cddh  <- 0;
+    ia    <$ dlist (dbiased pa) na;
+    ib    <$ dlist (dbiased pb) nb;
+  }
+
+  proc oa (i : int) = {
+    var a;
+
+    if (!bad) ca <- i :: ca;
+    a <@ OAG.get(i);
+    return (elog a);
+  }
+
+  proc ob (j : int) = {
+    var b;
+
+    if (!bad) cb <- j :: cb;
+    b <@ OBG.get(j);
+    return (elog b);
+  }
+
+  proc oA (i : int) = {
+    var a;
+
+    a <@ OAG.get(i);
+    return a;
+  }
+
+  proc oB (j : int) = {
+    var b;
+
+    b <@ OBG.get(j);
+    return b;
+  }
+
+  proc ddh (m, i, j) = {
+    var a, b, r, t;
+
+    a <- g;
+    b <- g;
+    r <- false;
+    t <- false;
+    cddh <- cddh + 1;
+    if (0 <= i < na /\ 0 <= j < nb) {
+      a <@ OAG.get(i);
+      b <@ OBG.get(j);
+      t <- m = a ^ (elog b);
+      if (i \in ca \/ j \in cb) {
+        r <- t;
+      } else {
+          if (t /\ cddh = k /\ ! bad) {
+            bad <- true;
+            i_k <- i;
+            j_k <- j;
+        }
+      }
+    }
+    return r;
+  }
+}.
+
+(* add lemma to avoid duplication *)
+local lemma Gk'_Gkx &m :
+  Pr[Game(Gk',A).main() @ &m :
+     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
+  Pr[Game(Gkx,A).main() @ &m :
+     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k].
+proof.
+byequiv => //; proc; inline *.
+call (: map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+        map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+        (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+        (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+        ={G2.ca, G2.cb, G.bad} /\ ={cddh, i_k, j_k, k}(Gk,Gk)).
+- proc; inline *; sp.
+  seq 1 1 : (={x} /\ exp g r{1} = r{2} /\ r{1} \in EU /\
+             map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+             map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+             (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+             (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+             ={G2.ca, G2.cb, G.bad} /\ ={cddh, i_k, j_k, k}(Gk,Gk));
+    2: by if; auto => />; smt(get_setE get_set_sameE mapE map_set).
+  rnd (exp g) (elog); auto => /> *.
+  split; 1: smt(expK supp_dmap supp_duniform).
+  move => ?; split; 2: smt(expK supp_dmap supp_duniform).
+  move => ? /supp_dmap [x [/supp_duniform x_EU ->]].
+  rewrite dmap1E /(\o) /= expK ?memE // (mu_eq_support _ _ (pred1 x)) //.
+  by rewrite /pred1 => y /supp_duniform y_EU /=; smt(exp_inj).
+- proc; inline *; sp.
+  seq 1 1 : (={x} /\ exp g r{1} = r{2} /\ r{1} \in EU /\
+             map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+             map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+             (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+             (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+             ={G2.ca, G2.cb, G.bad} /\ ={cddh, i_k, j_k, k}(Gk,Gk));
+    2: by if; auto => />; smt(get_setE get_set_sameE mapE map_set).
+  rnd (exp g) (elog); auto => /> *.
+  split; 1: smt(expK supp_dmap supp_duniform).
+  move => ?; split; 2: smt(expK supp_dmap supp_duniform).
+  move => ? /supp_dmap [x [/supp_duniform x_EU ->]].
+  rewrite dmap1E /(\o) /= expK ?memE // (mu_eq_support _ _ (pred1 x)) //.
+  by rewrite /pred1 => y /supp_duniform y_EU /=; smt(exp_inj).
+- proc; inline *; sp 3 3.
+  seq 2 2 : (={x} /\ exp g r0{1} = r0{2} /\ r0{1} \in EU /\
+             map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+             map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+             (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+             (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+             ={G2.ca, G2.cb, G.bad} /\ ={cddh, i_k, j_k, k}(Gk,Gk));
+      2: by if; auto => />; smt(expK get_setE get_set_sameE mapE map_set).
+  rnd (exp g) (elog); auto => /> *.
+  split; 1: smt(expK supp_dmap supp_duniform).
+  move => ?; split; 2: smt(expK supp_dmap supp_duniform).
+  move => ? /supp_dmap [x [/supp_duniform x_EU ->]].
+  rewrite dmap1E /(\o) /= expK ?memE // (mu_eq_support _ _ (pred1 x)) //.
+  by rewrite /pred1 => y /supp_duniform y_EU /=; smt(exp_inj).
+- proc; inline *; sp 3 3.
+  seq 2 2 : (={x} /\ exp g r0{1} = r0{2} /\ r0{1} \in EU /\
+             map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+             map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+             (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+             (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+             ={G2.ca, G2.cb, G.bad} /\ ={cddh, i_k, j_k, k}(Gk,Gk));
+    2: by if; auto => />; smt(expK get_setE get_set_sameE mapE map_set).
+  rnd (exp g) (elog); auto => /> *.
+  split; 1: smt(expK supp_dmap supp_duniform).
+  move => ?; split; 2: smt(expK supp_dmap supp_duniform).
+  move => ? /supp_dmap [x [/supp_duniform x_EU ->]].
+  rewrite dmap1E /(\o) /= expK ?memE // (mu_eq_support _ _ (pred1 x)) //.
+  by rewrite /pred1 => y /supp_duniform y_EU /=; smt(exp_inj).
+- proc; inline *; sp; if; 1,3: by auto.
+  seq 8 8 : (exp g a{1} = a{2} /\ a{1} \in EU /\
+             exp g b{1} = b{2} /\ b{1} \in EU /\
+             map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+             map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+             (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+             (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+             ={G2.ca, G2.cb, G.bad, i0, j0, m0, r0} /\
+             ={cddh, i_k, j_k, k}(Gk,Gk));
+    2: by sp 1 1; if; auto; smt(expK expM).
+  seq 4 4 : (exp g a{1} = a{2} /\ a{1} \in EU /\
+             map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+             map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+             (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+             (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+             ={G2.ca, G2.cb, G.bad, i0, j0, m0, r0} /\
+             ={cddh, i_k, j_k, k}(Gk,Gk)).
+  + seq 2 2 : (={x} /\ exp g r1{1} = r1{2} /\ r1{1} \in EU /\
+               map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+               map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+               (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+               (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+               ={G2.ca, G2.cb, G.bad, i0, j0, m0, r0} /\
+               ={cddh, i_k, j_k, k}(Gk,Gk));
+      2: by if; auto => />; smt(get_setE get_set_sameE mapE map_set).
+    rnd (exp g) (elog); auto => /> *.
+    split; 1: smt(expK supp_dmap supp_duniform).
+    move => ?; split; 2: smt(expK supp_dmap supp_duniform).
+    move => ? /supp_dmap [x [/supp_duniform x_EU ->]].
+    rewrite dmap1E /(\o) /= expK ?memE // (mu_eq_support _ _ (pred1 x)) //.
+    by rewrite /pred1 => y /supp_duniform y_EU /=; smt(exp_inj).
+  + seq 2 2 : (={x0} /\ exp g r2{1} = r2{2} /\ r2{1} \in EU /\
+               exp g a{1} = a{2} /\ a{1} \in EU /\
+               map (fun _ => exp g) OAEU.m{1} = OAG.m{2} /\
+               map (fun _ => exp g) OBEU.m{1} = OBG.m{2} /\
+               (forall r, r \in OAEU.m => oget (OAEU.m.[r]) \in EU){1} /\
+               (forall r, r \in OBEU.m => oget (OBEU.m.[r]) \in EU){1} /\
+               ={G2.ca, G2.cb, G.bad, i0, j0, m0, r0} /\
+               ={cddh, i_k, j_k, k}(Gk,Gk));
+      2: by if; auto => />; smt(get_setE get_set_sameE mapE map_set).
+    rnd (exp g) (elog); auto => /> *.
+    split; 1: smt(expK supp_dmap supp_duniform).
+    move => ?; split; 2: smt(expK supp_dmap supp_duniform).
+    move => ? /supp_dmap [x [/supp_duniform x_EU ->]].
+    rewrite dmap1E /(\o) /= expK ?memE // (mu_eq_support _ _ (pred1 x)) //.
+    by rewrite /pred1 => y /supp_duniform y_EU /=; smt(exp_inj).
+- by auto => />; smt(map_empty mem_empty).
+qed.
+
+local lemma Gkx_Sx &m x y : x \in EU => y \in EU =>
+  Pr[Game(Gkx,A).main() @ &m :
+     G.bad /\ nstop Gk.ia Gk.ib G2.ca G2.cb /\
+     nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
+  Pr[GameSx(A).main(x, y) @ &m : Sx.m_crit = exp g (x * y)].
+proof.
+move => x_EU y_EU; byequiv => //; proc; inline *; symmetry.
+call (: ! nstop Gk.ia Gk.ib G2.ca G2.cb \/
+        ! (G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k) \/
+        Gk.k <= Gk.cddh,
+
+        ={G2.ca, G2.cb} /\ ={cddh, k, ia, ib}(Sx, Gk) /\
+        (Sx.gx = exp g x /\ Sx.gy = exp g y){1} /\
+        (map (fun i a => if nth false Sx.ia i then a ^ (elog Sx.gx)
+                         else a) OAG.m){1} = OAG.m{2} /\
+        (map (fun j b => if nth false Sx.ib j then b ^ (elog Sx.gy)
+                         else b) OBG.m){1} = OBG.m{2} /\
+        (G.bad{2} => Sx.m_crit{1} = exp g (x * y)) /\
+        (G.bad <=> Gk.k <= Gk.cddh){2},
+
+        ! (nstop Gk.ia Gk.ib G2.ca G2.cb){2} \/
+        ! (G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k){2} \/
+        (Sx.k <= Sx.cddh /\ Sx.m_crit = exp g (x * y)){1} \/
+        (Gk.k <= Gk.cddh /\ !G.bad){2}).
+- by exact A_ll.
+- proc; inline *; wp.
+  rnd (fun r => if nth false Sx.ia i then r ^ (elog Sx.gx) else r){1}
+      (fun r => if nth false Sx.ia i then r ^ (inv (elog Sx.gx)) else r){1}.
+  auto => /> &m1 &m2 *.
+  split; 1: smt(expK mulC powM pow_inv supp_dmap supp_duniform).
+  move => *; split.
+move => ? /supp_dmap [z [/supp_duniform z_EU ->]].
+rewrite expK // ?dmap_duniform; 1: smt(exp_inj).
+case: (nth false Gk.ia{m2} i{m2}) => _ //.
+rewrite !duniform1E -expM.
+suff: exp g (z * inv x) \in map (exp g) (elems EU) by smt(mapP).
+print image.
+suff: exp g (z * inv x) \in image (fun x => exp g (z * x)) EU.
+move => ?; suff: exp g (z * inv x) \in image (exp g) EU; smt(imageP img_exp mapP).
+rewrite imageP /=.
+admit.
+move => _ ? /supp_dmap [z [/supp_duniform z_EU ->]].
+split.
+rewrite expK // -expM.
+suff : dmap (duniform (elems EU)) (exp g) =
+       dmap (duniform (elems EU)) (fun x => exp g (z * x))
+  by smt(supp_dmap supp_duniform).
+rewrite ?dmap_duniform; 1,2: smt(exp_inj exp_inj').
+apply eq_duniformP => e.
+split; move => ?; suff : e \in image (exp g) EU; smt(imageP img_exp mapP).
+move => *.
+split.
+smt(expK mulC powM pow_inv supp_dmap supp_duniform).
+smt(get_setE get_set_sameE mapE map_set).
+
+- by move => *; proc; call (: true); auto; smt(dG_ll).
+- by move => *; proc; call (: true); auto; smt(dG_ll).
+
+admit.
+
+- by move => *; proc; call (: true); auto; smt(dG_ll).
+- by move => *; proc; call (: true); auto; smt(dG_ll).
+
+admit.
+
+- by move => *; proc; inline Sx.oa; wp; call (: true); auto; smt(dG_ll).
+- by move => *; proc; inline Gkx.oa; wp; call (: true); auto; smt(dG_ll).
+
+admit.
+
+- by move => *; proc; inline Sx.ob; wp; call (: true); auto; smt(dG_ll).
+- by move => *; proc; inline Gkx.ob; wp; call (: true); auto; smt(dG_ll).
+
+admit.
+
+- move => *; proc; inline Sx.ddh; wp; sp 8; if; wp; 2: by auto; smt(dG_ll).
+  by call (: true); [ | call (: true)]; auto; smt(dG_ll).
+- move => *; proc; inline Gkx.ddh; wp; sp 9; if; wp; 2: by auto; smt(dG_ll).
+  by call (: true); [ | call (: true)]; auto; smt(dG_ll).
+- by auto; smt(map_empty).
 qed.
 
 local lemma guess_S &m x y : x \in EU => y \in EU =>

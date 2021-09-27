@@ -46,7 +46,7 @@ op elog (x : G) = choiceb (fun a => a \in EU /\ x = exp g a) e.
 op elogr (y : Z) (b : G) = choiceb (fun x => x \in EU /\ b = exp g (y*x)) e.
 
 lemma exprK (x y : Z) : x \in EU => y \in EU => elogr y (exp g (y*x)) = x.
-proof. 
+proof.
 move => x_EU y_EU; rewrite /elogr /=.
 have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g (y*x) = exp g (y*a)) e _; 1: by exists x.
 apply (exp_inj' y) => //. by rewrite -E2.
@@ -54,7 +54,7 @@ qed.
 
 (* we only get one cancelation law *)
 lemma expK (x : Z) : x \in EU => elog (exp g x) = x.
-proof. 
+proof.
 move => x_EU; rewrite /elog /=.
 have [E1 E2] := choicebP (fun a : Z => a \in EU /\ exp g x = exp g a) e _; 1: by exists x.
 by apply exp_inj => //; rewrite -E2.
@@ -64,15 +64,15 @@ abstract theory Test.
 
 module T = {
 
-  proc f () = { 
+  proc f () = {
     var a;
-    a <$ duniform (elems EU); 
+    a <$ duniform (elems EU);
     return (a,exp g a);
   }
 
-  proc g () = { 
+  proc g () = {
     var ga;
-    ga <$ dmap (duniform (elems EU)) (exp g); 
+    ga <$ dmap (duniform (elems EU)) (exp g);
     return (elog ga,ga);
   }
 }.
@@ -80,9 +80,9 @@ module T = {
 equiv foo : T.f ~ T.g : true ==> ={res}.
 proof.
 proc.
-rnd (exp g) (elog); skip => />. split => [|_]. 
+rnd (exp g) (elog); skip => />. split => [|_].
   move => ? /supp_dmap [x [/supp_duniform ? ->]]; rewrite expK ?memE //.
-split => [|_]. 
+split => [|_].
   move => ? /supp_dmap [x [/supp_duniform x_EU ->]]; rewrite dmap1E /(\o) /= expK ?memE //.
   rewrite (mu_eq_support _ _ (pred1 x)) // /pred1 => y /supp_duniform y_EU /=.
 case (y = x) => [ -> // | heq].
@@ -94,30 +94,31 @@ qed.
 
 module Tx = {
 
-  proc f () = { 
+  proc f () = {
     var a;
-    a <$ duniform (elems EU); 
+    a <$ duniform (elems EU);
     return (a,exp g a);
   }
 
-  proc g (x:Z) = { 
+  proc g (x:Z) = {
     var ga;
-    ga <$ dmap (duniform (elems EU)) (fun p => exp g (x * p)); 
+    ga <$ dmap (duniform (elems EU)) (fun p => exp g (x * p));
     return (elogr x ga,ga);
   }
 }.
 
+(*
 equiv foo' : T.f ~ Tx.g : x{2} \in EU ==> ={res}.
 proof.
 proc.
-rnd (fun p => exp g (x{2} * p)) (elogr x{2}); skip => /> &2 hx. 
-split => [|_]. 
+rnd (fun p => exp g (x{2} * p)) (elogr x{2}); skip => /> &2 hx.
+split => [|_].
   move => ? /supp_dmap [p [/supp_duniform ? ->]] /=.
   by rewrite exprK 1:memE.
-split => [|_]. 
-  move => ? /supp_dmap [p [/supp_duniform p_EU ->]]. 
+split => [|_].
+  move => ? /supp_dmap [p [/supp_duniform p_EU ->]].
   rewrite dmap1E /(\o) /= exprK // ?memE //.
-  
+
   rewrite (mu_eq_support _ _ (pred1 x{2})) // /pred1 => y /supp_duniform y_EU /=.
 case (y = x) => [ -> // | heq].
 by apply/negbTE; move: heq; apply /contra/exp_inj; rewrite memE.
@@ -125,13 +126,12 @@ move=> p hp; split.
 + by apply (dmap_supp _ (exp g)).
 by move=> _; rewrite expK 2:// memE -supp_duniform.
 qed.
+*)
 
-
-
-end Test.  
+end Test.
 
 lemma elog_EU x : elog x \in EU.
-proof. 
+proof.
 rewrite /elog. case (exists a, a \in EU /\ x = exp g a) => [E|nE].
   by have /= := choicebP (fun a => a \in EU /\ x = exp g a) e E.
 by rewrite choiceb_dfl 1:/# e_EU.
@@ -412,7 +412,6 @@ module G'' = {
   }
 }.
 
-
 (* Proof outline:
 
 1. |G1 - G2| = |G1b - G2b| <= G[bad]
@@ -423,7 +422,6 @@ module G'' = {
 4. Define simulation S and an adversary B against the NCDH games
    Gk[ bad set at k-th call /\ !stop] <= S receives critical ddh call <= B wins NCDH game.
 *)
-
 
 (* The game G1b (resp. G2b) behave the same as G1 (resp. G2), but
 includes a bad event that is equivalent to the bad event in G *)
@@ -456,7 +454,6 @@ module G2b = {
   proc oa = G2.oa
   proc ob = G2.ob
 }.
-
 
 (* Inner theory, parametric in the probability of inserting the NCDH problem *)
 abstract theory Inner.
@@ -535,7 +532,7 @@ module S = {
   }
 }.
 
-
+(*
 module S = {
   import var G1 (* var a, b : Z list *)
   var ia, ib : bool list (* inject a/b *)
@@ -583,24 +580,21 @@ module S = {
 
     if (0 <= i && i < na /\ 0 <= j && j < nb) {
       if (i \in ca) { (* i in ca => !nth false ia i *)
-        if (nth false ib j) r <- m = gy^(nth' b j) ^ nth' a i;  
+        if (nth false ib j) r <- m = gy^(nth' b j) ^ nth' a i;
                                  m = exp g (nth' b j * nth' a i);
         else                r <- m = exp g (nth' b j * nth' a i);
       } else if (j \in cb) { (* j in cb => !nth false ib j *)
-        if (nth false ia i) r <- m = gx^(nth' a i) ^ nth' b j; 
-                                 m = exp g (nth' b j * nth' a i);  
+        if (nth false ia i) r <- m = gx^(nth' a i) ^ nth' b j;
+                                 m = exp g (nth' b j * nth' a i);
         else                r <- m = exp g (nth' b j * nth' a i);
       } else { (* !(i \in ca) /\ !(j \in cb) *)
         if (cddh = k) { m_crit <- m^(inv (nth' a i) * inv(nth' b j));
                         bad <- m^(inv (nth' a i) * inv(nth' b j)) = exp g (x * y);
                                m = exp g (y * nth' b j) ^ (x * nth' a i)
                                m = gy^(nth' b j) ^ (x * nth' a i) (* rnd rule to replace gy^(nth' b j) by exp g (nth' b j) *)
-                               m = (exp g (nth' b j)) ^ (x * nth' a i) 
+                               m = (exp g (nth' b j)) ^ (x * nth' a i)
                                m = (exp g ( x * nth' a i)) ^ (nth' b j)   (* rnd rule to replace gx^(nth' a i) by exp g (nth' a i) *)
                                m = exp g ((nth' a i) * (nth' b j)
-
-                
-                      
       }
     }
     return r;
@@ -616,22 +610,12 @@ module S = {
                         bad <- m^(inv (nth' a i) * inv(nth' b j)) = exp g (x * y);
                                m = exp g (y * nth' b j) ^ (x * nth' a i)
                                m = gy^(nth' b j) ^ (x * nth' a i) (* rnd rule to replace gy^(nth' b j) by exp g (nth' b j) *)
-                               m = (exp g (nth' b j)) ^ (x * nth' a i) 
+                               m = (exp g (nth' b j)) ^ (x * nth' a i)
                                m = (exp g (nth' a i)) ^ (nth' b j)   (* rnd rule to replace gy^(nth' b j) by exp g (nth' b j) *)
                                m = exp g ((nth' a i) * (nth' b j)
-
-                
-                      
       }
     }
 }.
-
-
-
-
-
-
-
 
 module Sx = {
   import var G1 (* var a, b : Z list *)
@@ -694,9 +678,7 @@ module Sx = {
     return r;
   }
 }.
-
-
-x * aout
+*)
 
 (* the simulation game *)
 module GameS (A : Adversary) = {
@@ -929,7 +911,6 @@ call (: ={glob G1, G2.ca, G2.cb, G.bad} /\ ={cddh,k_bad,i_k,j_k}(Gk,Gk)).
 - by auto => />.
 qed.
 
-
 (* hoare logic properties of Gk_lazy *)
 local lemma Gk_hoare :
   hoare [Game(Gk_lazy, A).main :
@@ -1077,6 +1058,7 @@ local module Gk' : CDH_RSR_Oracles_i = {
   }
 }.
 
+(*
 local module Gk' : CDH_RSR_Oracles_i = {
   import var G1 G2 G
   include var Gk [-init,ddh]
@@ -1096,33 +1078,30 @@ local module Gk' : CDH_RSR_Oracles_i = {
     var r;
     cddh <- cddh + 1;
 
-   
     if (0 <= i && i < na /\ 0 <= j && j < nb) {
-      if (i \in ca || j \in cb) { 
-        t <- m = exp g (nth' a i * nth' b j);     
+      if (i \in ca || j \in cb) {
+        t <- m = exp g (nth' a i * nth' b j);
         r <- t;
       } else {
-        if (cddh = k) { 
-          bad <- m = exp g (nth' a i * nth' b j); 
+        if (cddh = k) {
+          bad <- m = exp g (nth' a i * nth' b j);
                    = exp g (nth' a i) ^ nth' b j
                    = exp g (x * nth' a i) ^ nth' b j   (* rnd *)
-                   = exp g (nth' b j) ^ (x * nth' a i) 
+                   = exp g (nth' b j) ^ (x * nth' a i)
                  m = exp g (y * nth' b j) ^ (x * nth' a i)  (* rnd *)
                  m^(inv a * inv b) = exp g (x * y)
-
-        } 
-        r <- false 
+        }
+        r <- false
       }
-    } else { 
-      r <- false; 
+    } else {
+      r <- false;
     }
 
     return r;
- } 
+ }
 
     t <- m = exp g (nth' a i * nth' b j);
 
-    
     if (0 <= i && i < na /\ 0 <= j && j < nb
       /\ !(i \in ca || j \in cb) /\ t /\ cddh = k /\ !bad) {
       bad <- true;
@@ -1139,6 +1118,7 @@ local module Gk' : CDH_RSR_Oracles_i = {
       else false;
   }
 }.
+*)
 
 (* should be an equality, but this suffices *)
 local lemma Gk_Gk' &m :
