@@ -46,6 +46,16 @@ axiom img_exp    : forall x, x \in EU =>
                              image (fun z => exp g (x * z)) EU =
                              image (exp g) EU.
 
+lemma expM a x y : exp a (x * y) = (exp a x) ^ y.
+proof. by rewrite /exp -!powM -!mulA (mulC y). qed.
+
+lemma exp_inv x y : x \in EU => exp g (x * inv x * y) = exp g y.
+proof. 
+move => x_EU; rewrite /exp.
+have -> : x * inv x * y * inv f = (x * inv x) * (y * inv f) by smt(mulA mulC).
+by rewrite powM pow_inv.
+qed.
+
 (* to remove *)
 axiom Emult x y  : x \in EU => y \in EU => x * y \in EU.
 axiom Einv x     : x \in EU => inv x \in EU.
@@ -59,7 +69,5 @@ qed.
 lemma invK' a x   : a \in EU => x \in EU => a * inv x * x = a.
 proof. by rewrite -mulA (mulC _ x) mulA; exact: invK. qed.
 
-lemma expM a x y : exp a (x * y) = (exp a x) ^ y.
-proof. by rewrite /exp -!powM -!mulA (mulC y). qed.
 
 end NominalGroup.

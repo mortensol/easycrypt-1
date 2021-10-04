@@ -1804,7 +1804,87 @@ local lemma Gkxy_S &m x y :
      nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k] <=
   Pr [GameS(A).main(exp g x, exp g y) @ &m : S.m_crit = exp g (x * y)].
 proof.
-admitted.
+move => x_EU y_EU.
+byequiv => //=; symmetry; proc; inline*.
+call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/
+        !(G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k) \/
+        Gk.k <= Gk.cddh, 
+  ={G2.ca,G2.cb, OAEU.m, OBEU.m} /\ ={ia,ib,cddh,k}(S,Gk) /\ 
+  Gkxy.x{2} = x /\ Gkxy.y{2} = y /\  
+  S.gx{1} = exp g x /\ S.gy{1} = exp g y /\
+  (G.bad{2} => S.m_crit{1} = exp g (x * y)) /\
+  (G.bad <=> Gk.k <= Gk.cddh){2} /\
+  (forall i, i \in OAEU.m => oget (OAEU.m.[i]) \in EU){2} /\ 
+  (forall j, j \in OBEU.m => oget (OBEU.m.[j]) \in EU){2}, 
+  !(nstop Gk.ia Gk.ib G2.ca G2.cb){2} \/
+  !(G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k){2} \/
+  (S.k <= S.cddh /\ S.m_crit{1} = exp g (x * y)){1} \/
+  (Gk.k <= Gk.cddh /\ !G.bad){2}).
+- exact A_ll.
+- proc. inline *; auto => />. 
+  smt(get_setE get_set_sameE expM expM supp_duniform memE).
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- proc. inline *; auto => />. 
+  smt(get_setE get_set_sameE expM expM supp_duniform memE).
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- proc; inline *; auto => />. 
+  smt(get_setE get_set_sameE expM expM supp_duniform memE).
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- proc; inline *; auto => />. 
+  smt(get_setE get_set_sameE expM expM supp_duniform memE).
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- move => *; proc; inline *; auto => />; smt(dEU_ll). 
+- proc. sp 1 1. inline S.ddh Gkxy(RAEU.RO, RBEU.RO).ddh.
+  sp 7 8; if; [smt()| |auto; smt()].
+  seq 2 2 : 
+    (={G2.ca,G2.cb, OAEU.m, OBEU.m} /\ ={ia,ib,cddh,k}(S,Gk) /\ 
+    Gkxy.x{2} = x /\ Gkxy.y{2} = y /\ S.gx{1} = exp g x /\ S.gy{1} = exp g y /\ 
+    (={m0,i0,j0,a,b,r0}) /\ !G.bad{2} /\
+    (forall i, i \in OAEU.m => oget (OAEU.m.[i]) \in EU){2} /\ 
+    (forall j, j \in OBEU.m => oget (OBEU.m.[j]) \in EU){2} /\ 
+    (nstop Gk.ia Gk.ib G2.ca G2.cb){2} /\ 
+    (Gk.cddh <= Gk.k){2} /\ a{2} \in EU /\ b{2} \in EU).
+  + inline *; auto => />; smt(get_setE get_set_sameE supp_duniform memE).
+  auto => /> &2 Nbad iEU jEU iF jF cddh_le_k a_EU b_EU.
+  move: (i0{2}) (j0{2}) (G2.ca{2}) (G2.cb{2}) iF jF => i j ca cb iF jF.
+  (case: (i \in ca) => [i_ca|iNca]); (case: (j \in cb) => [j_cb|jNcb] /=).
+  + by rewrite iF // jF //= -expM.
+  + rewrite iF //; smt(expM mulA mulC).
+  + rewrite jF //; smt(expM mulA mulC).
+  rewrite -implybE -!expM =>[cddh_k [-> ->] /=].
+  have -> : x * a{2} * (y * b{2}) * (inv a{2} * inv b{2}) = 
+            (a{2} * inv a{2}) * (b{2} * inv b{2} * (x * y)) by smt(mulA mulC).
+  by rewrite !exp_inv. 
+- move => &2 H. 
+  conseq (: _ ==> true) (: _ ==> _) => //; 2: by islossless.
+  proc; inline Count(S).ddh S.ddh. sp; elim* => cddh Ccddh. 
+  if; 2: by auto; smt(). 
+  seq 2 : 
+   (S.cddh = cddh + 1 /\
+    (! nstop Gk.ia{2} Gk.ib{2} G2.ca{2} G2.cb{2} \/
+     ! (G.bad{2} => nth false Gk.ia{2} Gk.i_k{2} /\ nth false Gk.ib{2} Gk.j_k{2}) \/
+    S.k <= cddh /\ S.m_crit = exp g (x * y) \/ Gk.k{2} <= Gk.cddh{2} /\ !G.bad{2})).
+  + inline *; auto => />; smt(get_setE get_set_sameE supp_duniform memE).
+  auto => />. smt().
+- move => &1.
+  conseq (: _ ==> true) (: _ ==> _) => //; 2: by islossless.
+  proc; inline Count(Gkxy(RAEU.RO, RBEU.RO)).ddh Gkxy(RAEU.RO, RBEU.RO).ddh.
+  sp; elim* => cddh Ccddh. 
+  if; 2: by auto; smt(). 
+  seq 2 : 
+    ( Gk.cddh = cddh + 1 /\
+    (! nstop Gk.ia Gk.ib G2.ca G2.cb \/ 
+     ! (G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k) \/ Gk.k <= cddh) /\
+    (! nstop Gk.ia Gk.ib G2.ca G2.cb \/
+     ! (G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k) \/
+    S.k{1} <= S.cddh{1} /\ S.m_crit{1} = exp g (x * y) \/ Gk.k <= cddh /\ !G.bad)).
+  + inline *; auto => />; smt(get_setE get_set_sameE supp_duniform memE).
+  auto => />. smt().
+- wp. swap{1} 4 5. swap{1} 3 5. auto => />; smt(mem_empty supp_dinter).
+qed.
 
 local lemma A_B &m :
   Pr[Game(Gk'(OAEU, OBEU), A).main() @ &m :
