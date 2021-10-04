@@ -195,7 +195,7 @@ lemma unfactor (A <: Adversary) :
   equiv[ Game(A).main ~ Game'(B(A)).main : ={glob A} ==> res{1} => res{2}].
 proof.
 proc; inline *; auto.
-call (:true) => //. auto; rewrite /exp => />; smt(expM exp_inv_f mulA mulC).
+call (:true) => //. auto; rewrite /exp => />; smt(expM pow_inv_f mulA mulC).
 qed.
 
 end NCDH.
@@ -1182,7 +1182,7 @@ call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/
   move => /> 4? => Ha Hb _ HEU. split; 2: smt(expM mulA mulC).
   rewrite oraE negb_or => -[iNca jNcb]. rewrite iNca jNcb /=.
   move => G2 _ _. rewrite -implybE => -[Hia Hib].
-  rewrite Ha Hb Hia Hib /= -expM'. smt(mulA mulC invK Emult).
+  rewrite Ha Hb Hia Hib /= -expM. smt(mulA mulC invK Emult).
 - move => *; proc; inline *; auto => />. smt().
 - move => *; proc; inline *; auto => />. smt().
 (* main goal: establishing the invariant *)

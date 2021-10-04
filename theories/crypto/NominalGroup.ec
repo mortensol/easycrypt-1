@@ -50,7 +50,7 @@ lemma expM a x y : exp a (x * y) = (exp a x) ^ y.
 proof. by rewrite /exp -!powM -!mulA (mulC y). qed.
 
 lemma exp_inv x y : x \in EU => exp g (x * inv x * y) = exp g y.
-proof. 
+proof.
 move => x_EU; rewrite /exp.
 have -> : x * inv x * y * inv f = (x * inv x) * (y * inv f) by smt(mulA mulC).
 by rewrite powM pow_inv.

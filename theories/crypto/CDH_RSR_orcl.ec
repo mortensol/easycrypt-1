@@ -1926,8 +1926,8 @@ lemma pb_bound :
 proof. smt. qed.
 
 clone import Inner as I with
-  op pa <- (1%r/(q_oa + 1)%r)
-  op pb <- (1%r/(q_ob + 1)%r)
+  op pa <- (1%r/(q_oa + 1)%r),
+  op pb <- (1%r/(q_ob + 1)%r),
   axiom pa_bound <- pa_bound, (* does anything break/change if we remove this? *)
   axiom pb_bound <- pb_bound.
 
@@ -1994,7 +1994,7 @@ section.
 
 declare module A : Adversary {G1, G2, G, S, Sx, Count, OAEU, OBEU, OAG, OBG}.
 
-axiom A_ll : forall (O <: CDH_RSR_Oracles{A})
+axiom A_ll : forall (O <: CDH_RSR_Oracles{A}),
   islossless O.oA =>
   islossless O.oB =>
   islossless O.oa =>
@@ -2002,7 +2002,7 @@ axiom A_ll : forall (O <: CDH_RSR_Oracles{A})
   islossless O.ddh =>
   islossless A(O).guess.
 
-axiom A_bound : forall (O <: CDH_RSR_Oracles{A})
+axiom A_bound : forall (O <: CDH_RSR_Oracles{A}),
   hoare [A(Count(O)).guess :
          Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0 ==>
          Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh].
@@ -2014,7 +2014,7 @@ lemma G1G2_NCDH &m :
 proof.
 have H := I.G1G2_NCDH (<:A) A_ll A_bound &m.
 apply (ler_trans _ _ _ H) => {H}.
-suff Hmax : forall (n : int)
+suff Hmax : forall (n : int),
               0 <= n =>
               1%r/((1%r-1%r/(n+1)%r)^n*(1%r/(n+1)%r)) <= (max 1 (4*n))%r.
 - rewrite ler_add2r ler_wpmul2r; 1: smt.
