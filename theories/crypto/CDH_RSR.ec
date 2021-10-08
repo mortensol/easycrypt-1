@@ -1168,7 +1168,7 @@ call (: !nstop Gk.ia Gk.ib G2.ca G2.cb \/
   (Gk.k <= Gk.cddh /\ !G.bad){2}
   ); try by move => *; proc; inline*; auto. (* 11 goals left *)
 - exact A_ll.
-- proc; inline *; auto => /> &1 &2. smt(mulA mulC expM).
+- proc; inline *. auto => /> &1 &2. smt(mulA mulC expM).
 - proc; inline *; auto => /> &1 &2. smt(mulA mulC expM).
 - proc; inline *; auto => /> &1 &2. smt().
 - move => &1; proc; inline *; auto => />. smt().

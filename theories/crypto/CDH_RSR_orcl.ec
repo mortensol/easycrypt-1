@@ -1118,29 +1118,27 @@ local lemma Gk_hoare :
                   (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb))].
 proof.
 conseq (: _ ==> Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
-                (Gk.cddh <= q_ddh =>
-                  (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
-                  (G.bad => Gk.k_bad \in [1..q_ddh] /\
-                            !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
-                            (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb)))))
+                size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
+                (G.bad => (Gk.cddh <= q_ddh => Gk.k_bad \in [1..q_ddh]) /\
+                          !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
+                          (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb)))
        (: _ ==> Count.ca <= q_oa /\ Count.cb <= q_ob /\ Count.cddh <= q_ddh);
   2: (by proc; seq 2 : (Count.ca = 0 /\ Count.cb = 0 /\ Count.cddh = 0);
          [by inline *; auto|by call (A_bound Gk_lazy)]); 1: smt().
 proc; inline *.
 call (: Count.cddh = Gk.cddh /\ 0 <= Gk.cddh /\
-        (Gk.cddh <= q_ddh =>
-                (size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
-                (G.bad => Gk.k_bad \in [1..q_ddh] /\
-                          !(Gk.i_k \in G2.ca) /\ !(Gk.j_k \in G2.cb) /\
-                          (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb))))).
+        size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
+        (G.bad => (Gk.cddh <= q_ddh => Gk.k_bad \in [1..q_ddh]) /\
+                  ! (Gk.i_k \in G2.ca) /\ ! (Gk.j_k \in G2.cb) /\
+                  (0 <= Gk.i_k < na) /\ (0 <= Gk.j_k < nb))).
 - by proc; call (: true); auto.
 - by proc; call (: true); auto.
 - proc; inline Gk_lazy.oa; sp; wp.
   by call (: true); auto => /#.
 - proc; inline Gk_lazy.ob; sp; wp.
   by call (: true); auto => /#.
-- proc; inline Gk_lazy.ddh; sp; if; auto; 2 :smt().
-  call (: true); auto.
+- proc; inline Gk_lazy.ddh; sp; if; auto; 2: smt().
+  call (: true); 1: by auto.
   by call (: true); auto; smt(supp_dinter).
 - by auto => />.
 qed.

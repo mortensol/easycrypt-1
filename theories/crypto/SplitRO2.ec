@@ -114,7 +114,7 @@ equiv RO_split :
   MainDT(D, RO).distinguish ~ MainDT(D, RO_DOMt(ROT.RO, ROF.RO)).distinguish :
   ={arg, glob D} ==>
   ={res, glob D} /\ RO.m{1} = union_map ROT.RO.m{2} ROF.RO.m{2} /\
-  (forall x, x \in ROT.RO.m{2} => RO_DOMt.test{2} x ) /\
+  (forall x, x \in ROT.RO.m{2} =>   RO_DOMt.test{2} x ) /\
   (forall x, x \in ROF.RO.m{2} => ! RO_DOMt.test{2} x).
 proof.
   proc.
