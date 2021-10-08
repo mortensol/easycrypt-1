@@ -246,28 +246,32 @@ module G1 : CDH_RSR_Oracles  = {
   proc oa (i : int) = {
     var a;
 
-    a <@ OAZ.get(i);
+    a <- e;
+    if (0 <= i < na) a <@ OAZ.get(i);
     return a;
   }
 
   proc ob (j : int) = {
     var b;
 
-    b <@ OBZ.get(j);
+    b <- e;
+    if (0 <= j < nb) b <@ OBZ.get(j);
     return b;
   }
 
   proc oA (i : int) = {
     var a;
 
-    a <@ OAZ.get(i);
+    a <- e;
+    if (0 <= i < na) a <@ OAZ.get(i);
     return exp g a;
   }
 
   proc oB (j : int) = {
     var b;
 
-    b <@ OBZ.get(j);
+    b <- e;
+    if (0 <= j < nb) b <@ OBZ.get(j);
     return exp g b;
   }
 
@@ -299,16 +303,22 @@ module G2 : CDH_RSR_Oracles = {
   proc oa (i : int) = {
     var a;
 
-    ca <- i :: ca;
-    a <@ OAZ.get(i);
+    a <- e;
+    if (0 <= i < na) { 
+      ca <- i :: ca;
+      a <@ OAZ.get(i);
+    }
     return a;
   }
 
   proc ob (j : int) = {
     var b;
 
-    cb <- j :: cb;
-    b <@ OBZ.get(j);
+    b <- e;
+    if (0 <= j < nb) { 
+      cb <- j :: cb;
+      b <@ OBZ.get(j);
+    }
     return b;
   }
 
@@ -347,30 +357,38 @@ module G (OA : FROZ.RO, OB : FROZ.RO) : CDH_RSR_Oracles = {
   proc oa (i : int) = {
     var a;
 
-    ca <- i :: ca;
-    a <@ OA.get(i);
+    a <- e;
+    if (0 <= i < na) { 
+      ca <- i :: ca;
+      a <@ OA.get(i);
+    }
     return a;
   }
 
   proc ob (j : int) = {
     var b;
 
-    cb <- j :: cb;
-    b <@ OB.get(j);
+    b <- e;
+    if (0 <= j < nb) { 
+      cb <- j :: cb;
+      b <@ OB.get(j);
+    }
     return b;
   }
 
   proc oA (i : int) = {
     var a;
 
-    a <@ OA.get(i);
+    a <- e;
+    if (0 <= i < na) a <@ OA.get(i);
     return exp g a;
   }
 
   proc oB (j : int) = {
     var b;
 
-    b <@ OB.get(j);
+    b <- e;
+    if (0 <= j < nb) b <@ OB.get(j);
     return exp g b;
   }
 
@@ -483,30 +501,42 @@ module S = {
   proc oa (i : int) = {
     var a;
 
-    if (cddh < k) ca <- i :: ca;
-    a <@ OAEU.get(i);
+    a <- e;
+    if (0 <= i < na) {
+      if (!nth false ia i){
+        ca <- i :: ca;
+        a <@ OAEU.get(i);
+      }
+    }
     return a;
   }
 
   proc ob (j : int) = {
     var b;
 
-    if (cddh < k) cb <- j :: cb;
-    b <@ OBEU.get(j);
+    b <- e;
+    if (0 <= j < nb) {
+      if (!nth false ib j){
+        cb <- j :: cb;
+        b <@ OBEU.get(j);
+      }
+    }
     return b;
   }
 
   proc oA (i : int) = {
     var a;
 
-    a <@ OAEU.get(i);
+    a <- e;
+    if (0 <= i < na) a <@ OAEU.get(i);
     return (if nth false ia i then gx ^ a else exp g a);
   }
 
   proc oB (j : int) = {
     var b;
 
-    b <@ OBEU.get(j);
+    b <- e;
+    if (0 <= j < nb) b <@ OBEU.get(j);
     return (if nth false ib j then gy ^ b else exp g b);
   }
 
@@ -908,8 +938,8 @@ have -> : Pr[Game(G(OAZ, OBZ), A).main() @ &m : G.bad] =
   call (: G.bad, ={OAZ.m, OBZ.m, G2.ca, G2.cb, G.bad}, ={G.bad});
     2..7, 9, 10, 12, 13: by (sim /> || (move => *; conseq />; islossless)).
   + by exact: A_ll.
-  + by proc; inline *; auto.
-  + by proc; inline *; auto.
+  + by proc; inline *; sp; if;1:smt(); auto.
+  + by proc; inline *; sp; if;1:smt(); auto.
   + by conseq (: _ ==> ={OAZ.m, OBZ.m, G2.ca, G2.cb, G.bad, res}) => //; sim.
   + move=> *; proc.
     inline G(OAZ, OBZ).ddh; sp; if; auto.
@@ -923,8 +953,8 @@ byequiv (_ : ={glob A} ==> ={G.bad} /\ (! G.bad{2} => ={res})) : G.bad => //;
 call (_ : G.bad, ={OAZ.m, OBZ.m, G2.ca, G2.cb, G.bad}, ={G.bad});
   2..7, 9, 10, 12, 13: by (sim /> || (move => *; conseq />; islossless)).
 - by exact: A_ll.
-- by proc; inline *; auto.
-- by proc; inline *; auto.
+- by proc; inline *; sp; if;1:smt(); auto. 
+- by proc; inline *; sp; if;1:smt(); auto.
 - proc; inline G1b.ddh G2b.ddh; sp.
   if => //; 2: by auto.
   wp; call(: ={OBZ.m}); 1: by sim.
@@ -1035,9 +1065,11 @@ local module Gk (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
     var a;
 
     a <- e;
-    if (bad => i <> i_k) {
-      ca <- i :: ca;
-      a <@ OA.get(i);
+    if (0 <= i < na) {
+      if (i <> i_k) {
+        ca <- i :: ca;
+        a <@ OA.get(i);
+      }
     }
     return a;
   }
@@ -1046,9 +1078,11 @@ local module Gk (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
     var b;
 
     b <- e;
-    if (bad => j <> j_k) {
-      cb <- j :: cb;
-      b <@ OB.get(j);
+    if (0 <= j < nb) {
+      if (j <> j_k) {
+        cb <- j :: cb;
+        b <@ OB.get(j);
+      }
     }
     return b;
   }
@@ -1096,12 +1130,13 @@ local module Gk_bad (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
     var a;
 
     a <- e;
-    if (bad => i <> i_k) {
-      ca <- i :: ca;
-      a <@ OA.get(i);
-    }
-    else {
-      query_k <- true;
+    if (0 <= i < na) {
+      if (i <> i_k) {
+        ca <- i :: ca;
+        a <@ OA.get(i);
+      } else {
+        query_k <- true;
+      }
     }
     return a;
   }
@@ -1110,12 +1145,13 @@ local module Gk_bad (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
     var b;
 
     b <- e;
-    if (bad => j <> j_k) {
-      cb <- j :: cb;
-      b <@ OB.get(j);
-    }
-    else {
-      query_k <- true;
+    if (0 <= j < nb) {
+      if (j <> j_k) {
+        cb <- j :: cb;
+        b <@ OB.get(j);
+      } else {
+        query_k <- true;
+      }
     }
     return b;
   }
@@ -1282,12 +1318,14 @@ seq 14 : G.bad p (1%r / q_ddh%r * c) _ 0%r
           size G2.ca <= Count.ca /\ size G2.cb <= Count.cb /\
           (G.bad => (Gk.cddh <= q_ddh => Gk_bad.k_bad \in [1..q_ddh]) /\
                     0 <= Gk.i_k < na /\ 0 <= Gk.j_k < nb) /\
-          ! (Gk.i_k \in G2.ca) /\ ! (Gk.j_k \in G2.cb));
-    1, 2: (by proc; call (: true)); 4: by inline *; auto.
-  + proc; inline Gk_bad(OAEU, OBEU).oa; sp; wp; if; 2: by auto; smt().
+          ! (Gk.i_k \in G2.ca) /\ ! (Gk.j_k \in G2.cb)); 
+    1,2 : (by proc; sp;if; 2: (by auto); call (: true)); 4: by inline *; auto.
+  + proc; inline Gk_bad(OAEU, OBEU).oa; sp; wp. 
+    if; 2: by auto; smt(). if; 2: by auto; smt().
     call (: true); auto => /> *; split => [/# | ].
     admit.
-  + proc; inline Gk_bad(OAEU, OBEU).ob; sp; wp; if; 2: by auto; smt().
+  + proc; inline Gk_bad(OAEU, OBEU).ob; sp; wp. 
+    if; 2: by auto; smt(). if; 2: by auto; smt().
     call (: true); auto => /> *; split => [/# | ].
     admit.
   + proc; inline Gk_bad(OAEU, OBEU).ddh; sp; wp; if; 2: by auto; smt().
@@ -1305,12 +1343,16 @@ seq 14 : G.bad p (1%r / q_ddh%r * c) _ 0%r
           ={OAEU.m, OBEU.m, G2.ca, G2.cb, G.bad},
 
           G.bad{2});
-    2..7, 9, 12: (by move => *; proc; inline *; auto; smt(dEU_ll));
-    3, 5..8: by move => *; proc; inline *; sp; if; auto; smt(dEU_ll).
+    2..7, 9, 12: (by move => *; proc; inline *; sp; if; auto; smt(dEU_ll)).
   + by exact A_ll.
-  + by proc; inline *; sp; if{2}; auto; smt().
-  + by proc; inline *; sp; if{2}; auto; smt().
-  + by auto; smt().
+  + admit.
+  + by move => *; proc; inline *; sp; if; 2: (by auto); if; auto; smt(dEU_ll).
+  + admit.
+  + by move => *; proc; inline *; sp; if; 2: (by auto); if; auto; smt(dEU_ll).
+  + by proc; inline *; sp; if; 1,3: (by auto); auto; smt().
+  + move => *; proc; inline *; sp; if; 2: (by auto); auto; smt(dEU_ll).
+  + move => *; proc; inline *; sp; if; 2: (by auto); auto; smt(dEU_ll).  
+  + auto; smt().
 - seq 1 : (Gk.k = Gk_bad.k_bad) (1%r / q_ddh%r) c _ 0%r
           (G.bad /\ size G2.ca <= q_oa /\ size G2.cb <= q_ob /\
            0 <= Gk.i_k && Gk.i_k < na /\ 0 <= Gk.j_k && Gk.j_k < nb /\
@@ -1861,30 +1903,42 @@ local module Gkxy (OA : FROEU.RO, OB : FROEU.RO) = {
   proc oa (i : int) = {
     var a;
 
-    if (! bad) ca <- i :: ca;
-    a <@ OA.get(i);
+    a <- e;
+    if (0 <= i < na) {
+      if (!nth false ia i) {
+        ca <- i :: ca;
+        a <@ OA.get(i);
+      }
+    }
     return a;
   }
 
   proc ob (j : int) = {
     var b;
 
-    if (! bad) cb <- j :: cb;
-    b <@ OB.get(j);
+    b <- e;
+    if (0 <= j < nb) {
+      if (!nth false ib j) {
+        cb <- j :: cb;
+        b <@ OB.get(j);
+      }
+    }
     return b;
   }
 
   proc oA (i : int) = {
     var a;
 
-    a <@ OA.get(i);
+    a <- e;
+    if (0 <= i < na) a <@ OA.get(i);
     return (exp g (if (nth false ia i) then x * a else a));
   }
 
   proc oB (j : int) = {
     var b;
 
-    b <@ OB.get(j);
+    b <- e;
+    if (0 <= j < nb) b <@ OB.get(j);
     return (exp g (if (nth false ib j) then y * b else b));
   }
 
@@ -1970,11 +2024,26 @@ call (: ! (nstop Gk.ia G2.ca Gk.i_k /\ nstop Gk.ib G2.cb Gk.j_k) \/
         ! (nstop Gk.ia G2.ca Gk.i_k /\ nstop Gk.ib G2.cb Gk.j_k){2} \/
         ! (G.bad => nth false Gk.ia Gk.i_k /\ nth false Gk.ib Gk.j_k){2} \/
         (S.k <= S.cddh /\ S.m_crit = exp g (x * y)){1} \/
-        (Gk.k <= Gk.cddh /\ ! G.bad){2});
-  2, 5, 8, 11: (by proc; inline *; auto;
-                   smt(expM get_setE get_set_sameE supp_duniform memE));
-  2..9:  by move => *; proc; inline *; auto => />; smt(dEU_ll).
+        (Gk.k <= Gk.cddh /\ ! G.bad){2}); 
+  
+  2, 5 : by proc; inline *; sp; if; auto; smt(expM get_setE get_set_sameE supp_duniform memE).
+
+
+     
+(* (by proc; inline *; auto; *)
+(*                    smt(expM get_setE get_set_sameE supp_duniform memE)). *)
+  (* 2..9:  by move => *; proc; inline *; auto => />; smt(dEU_ll). *)
 - by exact A_ll.
+- by move => *; proc; inline *; sp; if; auto => />; smt(dEU_ll). 
+- by move => *; proc; inline *; sp; if; auto => />; smt(dEU_ll). 
+- by move => *; proc; inline *; sp; if; auto => />; smt(dEU_ll). 
+- by move => *; proc; inline *; sp; if; auto => />; smt(dEU_ll). 
+- by  proc; inline *; sp; if; [|if; auto|]; auto; smt(expM get_setE get_set_sameE supp_duniform memE).
+- by move => *; proc; inline *; sp; if; auto; if; auto => />; smt(dEU_ll). 
+- by move => *; proc; inline *; sp; if; auto; if; auto => />; smt(dEU_ll). 
+- by  proc; inline *; sp; if; [|if; auto|]; auto; smt(expM get_setE get_set_sameE supp_duniform memE).
+- by move => *; proc; inline *; sp; if; auto; if; auto => />; smt(dEU_ll). 
+- by move => *; proc; inline *; sp; if; auto; if; auto => />; smt(dEU_ll). 
 - proc; inline S.ddh Gkxy(RAEU.RO, RBEU.RO).ddh.
   sp 8 9; if; [smt() | | auto; smt()].
   seq 2 2 : (={m0, i0, j0, a, b, r0} /\ a{2} \in EU /\ b{2} \in EU /\
