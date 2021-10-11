@@ -6,36 +6,71 @@ import DBool.Biased.
 import StdOrder.RealOrder.
 import RField.
 
+(* rangeset - move into Fset.ec *)
+
+lemma uniq_card_oflist (s : 'a list) : uniq s => card (oflist s) = size s.
+proof. by rewrite /card => /oflist_uniq/perm_eq_size => <-. qed.
+
+op rangeset (m n : int) = oflist (range m n).
+
+lemma card_rangeset m n : card (rangeset m n) = max 0 (n - m).
+proof. by rewrite uniq_card_oflist ?range_uniq size_range. qed.
+
+lemma mem_rangeset m n i : i \in rangeset m n <=> m <= i && i < n.
+proof. by rewrite mem_oflist mem_range. qed.
+
 (* Statistical distance - merge with SDist.ec *)
 
 op sdist : 'a distr -> 'a distr -> real.
 
 theory D.
-type a.
-op n : { int | 0 <= n } as n_ge0.
-op d1, d2 : a distr.
+type in_t, out_t.
+op d1, d2 : out_t distr.
 
-module type Distinguisher = {
-  proc guess (x : a list) : bool
-}.
+clone FullRO as D1 with
+  type in_t    <- in_t,
+  type out_t   <- out_t,
+  op dout      <- fun _ => d1,
+  type d_in_t  <- unit,
+  type d_out_t <- bool.
 
-module SampleDlist (A : Distinguisher) = {
-  proc main(b : bool) = {
-    var x, r;
+clone FullRO as D2 with
+  type in_t    <- in_t,
+  type out_t   <- out_t,
+  op dout      <- fun _ => d2,
+  type d_in_t  <- unit,
+  type d_out_t <- bool.
 
-    x <- witness;
-    if (! b) { x <$ dlist d1 n; }
-    if (  b) { x <$ dlist d2 n; }
-    r <@ A.guess(x);
+module Wrap (O : D1.RO) : D1.RO = {
+  var dom : in_t fset
+
+  proc init() = { 
+    dom <- fset0 ; 
+    O.init(); 
+  }
+
+  proc get(x) = { 
+    var r;
+
+    dom <- dom `|` fset1 x; 
+    r <@ O.get(x); 
     return r;
   }
+
+  proc set = O.set
+  proc rem = O.rem
+  proc sample = O.sample
 }.
-
-axiom sdist_dlist &m (A <: Distinguisher) :
-  `| Pr[SampleDlist(A).main(false) @ &m : res] -
-     Pr[SampleDlist(A).main(true ) @ &m : res] | <=
-  n%r * sdist d1 d2.
-
+  
+(* TODO: the type [D1.RO] exposes [rem], so the distinguisher can
+repeatedly call [get] on the same index and obtain different
+results. The axiom below only works without [rem]. *)
+axiom sdist_orcl (D <: D1.RO_Distinguisher) &m (I : in_t fset) : 
+  (forall (O <: D1.RO{Wrap,D}), 
+   hoare [ D1.MainD(D,Wrap(O)).distinguish : true ==> Wrap.dom \subset I ]) => 
+  `| Pr [D1.MainD(D,D1.RO).distinguish() @ &m : res] - 
+     Pr [D1.MainD(D,D2.RO).distinguish() @ &m : res] | 
+  <= (card I)%r * sdist d1 d2.
 end D.
 
 clone import NominalGroup.NominalGroup as N.
@@ -138,20 +173,6 @@ op nb :    {int | 0 <= nb}    as nb_ge0.
 op q_oa :  {int | 0 <= q_oa}  as q_oa_ge0.
 op q_ob :  {int | 0 <= q_ob}  as q_ob_ge0.
 op q_ddh : {int | 1 <= q_ddh} as q_ddh_ge1.
-
-clone D as Da with
-  type a      <- Z,
-  op n        <- na,
-  op d1       <- dZ,
-  op d2       <- duniform (elems EU),
-  axiom n_ge0 <- na_ge0.
-
-clone D as Db with
-  type a      <- Z,
-  op n        <- nb,
-  op d1       <- dZ,
-  op d2       <- duniform (elems EU),
-  axiom n_ge0 <- nb_ge0.
 
 module type CDH_RSR_Oracles = {
   proc oA  (i : int) : G
@@ -970,80 +991,88 @@ call (_ : G.bad, ={OAZ.m, OBZ.m, G2.ca, G2.cb, G.bad}, ={G.bad});
 qed.
 
 (** Expressing the games G, G' and G'' as distinguishers for statistical distance *)
-(*
-local module Ba : Da.Distinguisher = {
-  import var G1 G2 G
 
-  module O' = Count(G)
+local clone import D as D_Z_EU with
+  type in_t   <- int,
+  type out_t  <- Z,
+  op d1       <- dZ,
+  op d2       <- duniform (elems EU).
 
-  proc guess (a' : Z list) = {
-    a <- a';
-    b <$ dlist dZ nb;
-    ca <- [];
-    cb <- [];
-    bad <- false;
-    O'.init();
-    A(O').guess();
+
+(* O is initialized both by Game and by MainD *)
+local module DisA(O : FROZ.RO) = { 
+  proc distinguish () = {
+    Game(G(O,OBZ),A).main();
     return G.bad;
   }
 }.
 
-local module Bb : Db.Distinguisher = {
-  import var G1 G2 G
-
-  module O' = Count(G)
-
-  proc guess (b' : Z list) = {
-    a <$ dlist (duniform (elems EU)) na;
-    b <- b';
-    ca <- [];
-    cb <- [];
-    bad <- false;
-    O'.init();
-    A(O').guess();
+local module DisB(O : FROZ.RO) = { 
+  proc distinguish () = {
+    Game(G(OAEU,O),A).main();
     return G.bad;
   }
 }.
-*)
 
-(* what about res, do we care? *)
 local lemma G_G' &m :
   `| Pr[Game(G(OAZ, OBZ), A).main() @ &m : G.bad] -
-     Pr[Game(G',          A).main() @ &m : G.bad] | <=
-  DELTA.
+     Pr[Game(G',          A).main() @ &m : G.bad] | <= DELTA.
 proof.
-admitted.
-(*
-rewrite /DELTA.
-have H1 : `| Pr[ Game(G,A).main() @ &m : G.bad ] - Pr[ Game(G'',A).main() @ &m : G.bad ] |
-          <= na%r * sdist dZ (duniform (elems EU)).
-  have -> : Pr[ Game(G,A).main() @ &m : G.bad ] = Pr[ Da.SampleDlist(Ba).main(false) @ &m : res ].
-    byequiv => //; proc; inline *.
-    rcondt {2} 2; 1: (by auto); rcondf {2} 3; 1: by auto.
-    wp; call(: ={glob G, glob G1, glob G2}); 1..5: by sim.
+rewrite /DELTA. 
+have H1 : `| Pr[Game(G(OAZ,  OBZ), A).main() @ &m : G.bad] - 
+             Pr[Game(G(OAEU, OBZ), A).main() @ &m : G.bad] | 
+             <= na%r * sdist dZ (duniform (elems EU)).
+- have -> : Pr[Game(G(OAZ,  OBZ), A).main() @ &m : G.bad] = 
+            Pr[D1.MainD(DisA,D1.RO).distinguish() @ &m : res].
+  + byequiv => //; proc; inline *; auto. 
+    call(: ={m}(OAZ,D1.RO) /\ ={G2.ca,G2.cb,G.bad,RBZ.RO.m}); 1..5: by sim.
     by auto.
-  have -> : Pr[ Game(G'',A).main() @ &m : G.bad ] = Pr[ Da.SampleDlist(Ba).main(true) @ &m : res ].
-    byequiv => //; proc; inline *.
-    rcondf {2} 2; 1: (by auto); rcondt {2} 2; 1: by auto.
-    wp; call(: ={glob G, glob G1, glob G2}); 1..5: by sim.
+  have -> : Pr[Game(G(OAEU,  OBZ), A).main() @ &m : G.bad] = 
+            Pr[D1.MainD(DisA,D2.RO).distinguish() @ &m : res].
+  + byequiv => //; proc; inline *; auto. 
+    call(: ={m}(OAEU,D2.RO) /\ ={G2.ca,G2.cb,G.bad,RBZ.RO.m}); 1..5: by sim.
+    by auto.  
+  have dist := sdist_orcl DisA &m (rangeset 0 na) _; last first.
+    by apply (ler_trans _ _ _ dist);rewrite card_rangeset; smt(na_ge0).
+  move => O; proc; inline *; auto. 
+  call(: Wrap.dom \subset rangeset 0 na) => //. 
+  + proc; inline*; sp; if; 2: (by auto); wp; call(:true); auto. 
+    smt(in_fsetU in_fset1 mem_rangeset).
+  + proc; inline*; sp; if; by auto. 
+  + proc; inline*; sp; if; 2: (by auto); wp; call(:true); auto. 
+    smt(in_fsetU in_fset1 mem_rangeset).
+  + proc; inline*; sp; if; by auto. 
+  + proc; inline*; sp; if; 2: (by auto); wp; rnd; wp. 
+    call (: true); auto; smt(in_fsetU in_fset1 mem_rangeset).
+  + by inline *; wp; call(: true); wp; call(: true); auto; smt(in_fset0).
+have H2 : `| Pr[Game(G(OAEU, OBZ), A).main() @ &m : G.bad] - 
+             Pr[Game(G(OAEU, OBEU), A).main() @ &m : G.bad] | 
+             <= nb%r * sdist dZ (duniform (elems EU)).
+- have -> : Pr[Game(G(OAEU,  OBZ), A).main() @ &m : G.bad] = 
+            Pr[D1.MainD(DisB,D1.RO).distinguish() @ &m : res].
+  + byequiv => //; proc; inline *; auto. 
+    call(: ={m}(OBZ,D1.RO) /\ ={G2.ca,G2.cb,G.bad,OAEU.m}); 1..5: by sim.
     by auto.
-  exact (Da.sdist_dlist &m Ba).
-have H2 : `| Pr[ Game(G'',A).main() @ &m : G.bad ] - Pr[ Game(G',A).main() @ &m : G.bad ] |
-          <= nb%r * sdist dZ (duniform (elems EU)).
-  have -> : Pr[ Game(G'',A).main() @ &m : G.bad ] = Pr[ Db.SampleDlist(Bb).main(false) @ &m : res ].
-    byequiv => //; proc; inline *.
-    rcondt {2} 2; 1: (by auto); rcondf {2} 3; 1: by auto.
-    wp; call(: ={glob G, glob G1, glob G2}); 1..5: by sim.
-    by swap {2} 4 -3; auto.
-  have -> :  Pr[ Game(G',A).main() @ &m : G.bad ] = Pr[ Db.SampleDlist(Bb).main(true) @ &m : res ].
-    byequiv => //; proc; inline *.
-    rcondf {2} 2; 1: (by auto); rcondt {2} 2; 1: by auto.
-    wp; call(: ={glob G, glob G1, glob G2}); 1..5: by sim.
-    by swap {2} 4 -3; auto.
-  exact (Db.sdist_dlist &m Bb).
-smt().
+  have -> : Pr[Game(G(OAEU, OBEU), A).main() @ &m : G.bad] = 
+            Pr[D1.MainD(DisB,D2.RO).distinguish() @ &m : res].
+  + byequiv => //; proc; inline *; auto. 
+    call(: ={m}(OBEU,D2.RO) /\ ={G2.ca,G2.cb,G.bad,OAEU.m}); 1..5: by sim.
+    by auto.  
+  have dist := sdist_orcl DisB &m (rangeset 0 nb) _; last first.
+    by apply (ler_trans _ _ _ dist);rewrite card_rangeset; smt(nb_ge0).
+  move => O; proc; inline *; auto. 
+  call(: Wrap.dom \subset rangeset 0 nb) => //. 
+  + proc; inline*; sp; if; by auto. 
+  + proc; inline*; sp; if; 2: (by auto); wp; call(:true); auto. 
+    smt(in_fsetU in_fset1 mem_rangeset).
+  + proc; inline*; sp; if; by auto. 
+  + proc; inline*; sp; if; 2: (by auto); wp; call(:true); auto. 
+    smt(in_fsetU in_fset1 mem_rangeset).
+  + proc; inline*; sp; if; 2: (by auto); wp.
+    call (: true); auto; smt(in_fsetU in_fset1 mem_rangeset).
+  + by inline *; wp; call(: true); wp; call(: true); auto; smt(in_fset0).
+by smt().
 qed.
-*)
 
 local module Gk (OA : FROEU.RO, OB : FROEU.RO) : CDH_RSR_Oracles_i = {
   import var G2 G
